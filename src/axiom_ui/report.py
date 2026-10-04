@@ -30,8 +30,15 @@ _LABELS = {
     "cash_delta_minor": "现金变动（元）", "total_fees_minor": "总费用（元）",
     "turnover_minor": "成交额（元）",
     "market_state": "市场状态", "state_reason": "状态来源原因",
+    "execution_admission": "Owner 执行依据",
     "reason": "Owner 原因", "status": "Owner 状态",
 }
+_PROFILE_FIELDS = (
+    "contract_version", "execution", "approximation", "unknown_status_policy",
+    "lot_size", "settlement_sessions", "commission_rate", "minimum_commission_minor",
+    "tax_rate", "slippage_bps", "participation_rate", "decision_time_utc", "limitation",
+)
+_PROFILE_INTEGER_FIELDS = ("lot_size", "settlement_sessions", "minimum_commission_minor")
 _CSS = """
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#11171f;color:#e2e9f2}
 body{margin:0}main{max-width:1280px;margin:auto;padding:24px}h1{font-size:25px;margin:8px 0}
@@ -154,6 +161,23 @@ def _render(run: Any, *, evidence_kind: str, generated_at: str | None, shareable
     orders = wire.get("orders")
     _require(orders is None or (type(orders) is list and all(type(row) is dict for row in orders)),
              "malformed orders rows")
+    plan = wire.get("plan")
+    profile = plan.get("profile") if type(plan) is dict else None
+    _require(profile is None or type(profile) is dict, "malformed saved execution profile")
+    profile_view = ({k: profile[k] for k in _PROFILE_FIELDS if k in profile}
+                    if profile is not None else None)
+    for key, value in (profile_view or {}).items():
+        expected = int if key in _PROFILE_INTEGER_FIELDS else str
+        _require(value is None or type(value) is expected, f"saved profile {key} must be scalar {expected.__name__}")
+    profile_approximate = (profile or {}).get("unknown_status_policy") == "etf_daily_observed"
+    order_approximate = any(row.get("execution_admission") == "ETF_OBSERVED_DAILY_ASSUMPTION"
+                            for row in orders or [])
+    approximation_notice = ('''<div class="banner"><strong>ETF 日线近似 · 显式实验假设</strong>
+<p>Owner profile 允许按日线开盘价、全天成交量及限价作执行近似。UNKNOWN 市场状态仍按原值保存，
+不证明实际开盘流动性。该结果是模拟实验；执行参数与逐单 execution_admission 见下方。</p></div>''' if profile_approximate else
+'''<div class="banner"><strong>委托含 ETF 日线近似执行依据 · Profile 未匹配</strong>
+<p>Owner 委托记录了 ETF_OBSERVED_DAILY_ASSUMPTION，但未提供对应的 etf_daily_observed profile。
+仅展示逐单保存值，不推断执行参数；结果不能证明实际开盘流动性。</p></div>''' if order_approximate else "")
     blocked = any(row.get("reason") == "UNKNOWN_MARKET_STATUS" for row in orders or [])
     execution_notice = ('''<div class="banner"><strong>执行阻断 · 市场状态缺证（UNKNOWN_MARKET_STATUS）</strong>
 <p>Owner 记录了状态缺证的委托。cash-only / 零成交结果不构成收益验收；
@@ -187,9 +211,11 @@ COMPLETE 仅表示 Owner 保存状态。订单原因与状态来源见委托表�
 <body><main><div class="eyebrow">AXIOM / 只读证据报告</div><h1>运行与账户 · 模拟回测</h1>
 <div class="banner"><strong>{banner}</strong><p>只展示 Owner 已传入的净值、持仓、意图、委托与成交。所有指标来自保存产物。</p></div>
 {execution_notice}
+{approximation_notice}
 <div class="cards">{cards}</div><p class="muted">实验 ID 未提供时只保留 signal_ref 关联，不推断实验身份。
 金额按 CNY 整数分格式化为元；悬停金额可见原始分值。价格原样显示，数量为基金份额。</p>
-<section class="limits"><h2>实验假设与限制</h2><ul>{limits}</ul></section>
+<section class="limits"><h2>实验假设与限制</h2><ul>{limits}</ul>
+<details><summary>Owner 保存的执行参数</summary><pre>{_text(profile_view)}</pre></details></section>
 <nav aria-label="报告栏目">{links}<a href="#versions">数据与实现版本</a></nav>
 <section id="versions"><h2>固定引用与版本</h2><p class="muted">Data 身份以 market_ref 及保存 plan 的输入引用为准；不解析 current/latest。</p>
 <pre>{escape(_json(refs))}</pre>{inputs}</section>{table_html}

@@ -35,6 +35,10 @@ Owner orders with `UNKNOWN_MARKET_STATUS` produce a prominent execution-block
 notice. Cash-only/zero-fill output is not return acceptance. `market_state`,
 `state_reason`, order status and reason are retained, without granting a proxy
 permission to trade from prices or volume.
+An owner profile with `unknown_status_policy=etf_daily_observed` is explicitly
+labelled as an ETF daily simulation approximation. Its saved execution parameters
+and per-order `execution_admission` are shown; the original unknown market state
+remains visible. The UI never chooses or changes this policy.
 For an approved sharing destination, add `--shareable` to omit the frozen
 market/signal input plan and full JSON payload while retaining saved result
 tables, fixed refs, versions and limitations. This option does not publish or

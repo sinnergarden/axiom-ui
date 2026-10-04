@@ -104,6 +104,35 @@ class ReportTests(unittest.TestCase):
         self.assertIn("status_source_missing", html)
         self.assertEqual(self.run, original)
 
+    def test_daily_approximation_retains_unknown_state_and_saved_profile(self):
+        self.run["plan"]["profile"] = {
+            "unknown_status_policy": "etf_daily_observed",
+            "approximation": "daily_volume_proxy", "lot_size": 100,
+            "extra_raw_input": "RAW_PROFILE_INPUT_EXCLUDED",
+        }
+        self.run["orders"][0].update(
+            execution_admission="ETF_OBSERVED_DAILY_ASSUMPTION",
+            market_state="unknown_status", state_reason="status_source_missing")
+        original = deepcopy(self.run)
+        html = render_sample_report(self.run, shareable=True, generated_at=GENERATED)
+        self.assertLess(html.index("ETF 日线近似 · 显式实验假设"), html.index('<div class="cards">'))
+        self.assertIn("etf_daily_observed", html)
+        self.assertIn("ETF_OBSERVED_DAILY_ASSUMPTION", html)
+        self.assertIn("unknown_status", html)
+        self.assertIn("daily_volume_proxy", html)
+        self.assertNotIn("RAW_PROFILE_INPUT_EXCLUDED", html)
+        self.assertEqual(self.run, original)
+
+    def test_shareable_profile_rejects_nested_values_and_does_not_infer_policy(self):
+        self.run["plan"]["profile"] = {"execution": {"raw_market": [1, 2]}}
+        with self.assertRaisesRegex(ProjectionError, "must be scalar"):
+            render_sample_report(self.run, shareable=True, generated_at=GENERATED)
+        self.run["plan"].pop("profile")
+        self.run["orders"][0]["execution_admission"] = "ETF_OBSERVED_DAILY_ASSUMPTION"
+        html = render_sample_report(self.run, shareable=True, generated_at=GENERATED)
+        self.assertIn("Profile 未匹配", html)
+        self.assertNotIn("Owner profile 允许", html)
+
     def test_cli_keeps_source_bytes_and_refuses_overwrite(self):
         before = SAMPLE.read_bytes()
         with tempfile.TemporaryDirectory() as folder:

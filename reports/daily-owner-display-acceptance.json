@@ -1,0 +1,95 @@
+{
+  "schema_version": "ui_daily_owner_display_acceptance_v1",
+  "generated_at": "2026-10-04T13:11:53.133103+08:00",
+  "reader": "axiom_engine.runtime.load_backtest_run",
+  "owner_files_unchanged": true,
+  "backtest_calls": 0,
+  "owner_save_calls": 0,
+  "reader_calls": 4,
+  "engine_commit": "381fe6c2d5e9024a3a62832c6e479b4ff04e2fc6",
+  "engine_source_matches_commit": true,
+  "original_ui_source_unchanged": true,
+  "unit_tests_passed": 14,
+  "independent_review": "passed; scalar-profile privacy and missing-profile evidence claims fixed and re-reviewed",
+  "reports": [
+    {
+      "role": "daily",
+      "owner_artifact": "etf_rotation.daily.backtest.json",
+      "html_artifact": "Axiom_UI_real_daily_approximation.html",
+      "run_id": "sha256:c2bed666e2509ed1a8747bfae23f5d94a39f6d6db9227cd2a67f181ffcc3d77b",
+      "content_digest": "sha256:21ca7a5e9a7b3aea5435d85d58955dcbe5f3c6cfcb83c788b3372cf3bed4247c",
+      "implementation_ref": "sha256:ddffc7c21628ed3d569a1986142191fc0c263476a5321d66c42115d01567b27a",
+      "source_before": {
+        "sha256": "5807a34335c99892a4fdb392023d44b174210b9cc2d0f3890adbb5f1e39f955a",
+        "mtime_ns": 1791090409056623676,
+        "size_bytes": 717749
+      },
+      "html_sha256": "c57733dc7f4e2dd322c602a1a34fd051c72570bcb8177b3c480ca5ccb3107269",
+      "sessions": 65,
+      "orders": 10,
+      "fills": 10,
+      "final_nav_minor": 921364,
+      "total_fees_minor": 2526,
+      "committed_sequence": 85,
+      "table_rows_equal": true,
+      "no_active_elements": true,
+      "raw_inputs_omitted": true,
+      "full_private_payload_retained": true,
+      "source_after": {
+        "sha256": "5807a34335c99892a4fdb392023d44b174210b9cc2d0f3890adbb5f1e39f955a",
+        "mtime_ns": 1791090409056623676,
+        "size_bytes": 717749
+      }
+    },
+    {
+      "role": "strict",
+      "owner_artifact": "strict.blocked.backtest.json",
+      "html_artifact": "Axiom_UI_strict_control.html",
+      "run_id": "sha256:6db153261ab0f6c933959aac448b66b6fbef7162d57d8ad8dcdc4031747b95ea",
+      "content_digest": "sha256:57fd894a5be98e309fbaa085c35f6046096cad5f14fd395f8ff46d2705ea9b78",
+      "implementation_ref": "sha256:ddffc7c21628ed3d569a1986142191fc0c263476a5321d66c42115d01567b27a",
+      "source_before": {
+        "sha256": "65330f5dee6c7e83035f11d2bf00f0c1088f96684d2a017a2584176c2d2126ea",
+        "mtime_ns": 1791090409056353507,
+        "size_bytes": 670567
+      },
+      "html_sha256": "0ca62fa582c4d0f7dd6496705e89bf124f409b6b371711196764819518acfb29",
+      "sessions": 65,
+      "orders": 14,
+      "fills": 0,
+      "final_nav_minor": 1000000,
+      "total_fees_minor": 0,
+      "committed_sequence": 69,
+      "table_rows_equal": true,
+      "no_active_elements": true,
+      "raw_inputs_omitted": true,
+      "full_private_payload_retained": true,
+      "source_after": {
+        "sha256": "65330f5dee6c7e83035f11d2bf00f0c1088f96684d2a017a2584176c2d2126ea",
+        "mtime_ns": 1791090409056353507,
+        "size_bytes": 670567
+      }
+    }
+  ],
+  "historical_artifacts_preserved": {
+    "historical_blocked": {
+      "sha256": "33183b66fa10a65003d2903c32957c1d20b68fc2bfedbb24427e3073bd8cbe6d",
+      "mtime_ns": 1791088872860527284,
+      "size_bytes": 670109
+    },
+    "synthetic": {
+      "sha256": "f94aca41b77bd58d2bbf1d6b98eee1d36b32679c0fdbe0c619ab87f71fae8d24",
+      "mtime_ns": 1791088872860712660,
+      "size_bytes": 20330
+    }
+  },
+  "index_artifact": "Axiom_UI_index.html",
+  "index_sha256": "decb5e8450572bec9393da79fca04df3b486a1e4681634bf5cd1150f92934296",
+  "limits": [
+    "Daily observed execution is an explicit simulation approximation, UNKNOWN is retained.",
+    "Default strict control has zero fills; not strategy-return acceptance.",
+    "Browser file protocol prevented screenshot QA.",
+    "No Data reads or simulation/metric recomputation by UI.",
+    "GitHub public creation and Library uploads rejected by automatic approval review; no external files created."
+  ]
+}

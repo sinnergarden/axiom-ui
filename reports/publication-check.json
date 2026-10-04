@@ -1,6 +1,6 @@
 {
   "schema_version": "ui_publication_check_v1",
-  "unit_tests_passed": 12,
+  "unit_tests_passed": 14,
   "raw_owner_inputs_in_public_repo": false,
   "machine_paths_in_public_tree": false,
   "reports": [
@@ -21,7 +21,29 @@
       "shareable_bytes": 24085,
       "raw_inputs_omitted": true,
       "original_owner_unchanged": true
+    },
+    {
+      "owner_artifact": "etf_rotation.daily.backtest.json",
+      "shareable_html": "Axiom_UI_real_daily_approximation.html",
+      "source_sha256": "5807a34335c99892a4fdb392023d44b174210b9cc2d0f3890adbb5f1e39f955a",
+      "shareable_sha256": "c57733dc7f4e2dd322c602a1a34fd051c72570bcb8177b3c480ca5ccb3107269",
+      "shareable_bytes": 123334,
+      "raw_inputs_omitted": true,
+      "original_owner_unchanged": true
+    },
+    {
+      "owner_artifact": "strict.blocked.backtest.json",
+      "shareable_html": "Axiom_UI_strict_control.html",
+      "source_sha256": "65330f5dee6c7e83035f11d2bf00f0c1088f96684d2a017a2584176c2d2126ea",
+      "shareable_sha256": "0ca62fa582c4d0f7dd6496705e89bf124f409b6b371711196764819518acfb29",
+      "shareable_bytes": 59315,
+      "raw_inputs_omitted": true,
+      "original_owner_unchanged": true
     }
   ],
-  "note": "Shareable exports omit raw market/signal plan and full payload; private local reports retain those inputs."
+  "note": "Shareable exports omit raw market/signal plan and full payload; private local reports retain those inputs.",
+  "index_artifact": "Axiom_UI_index.html",
+  "index_sha256": "decb5e8450572bec9393da79fca04df3b486a1e4681634bf5cd1150f92934296",
+  "github_publication": "not_created; automatic approval review rejected",
+  "library_upload": "not_uploaded; automatic approval review rejected"
 }
