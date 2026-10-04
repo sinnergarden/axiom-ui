@@ -60,6 +60,15 @@ requests, and retains raw references and exact amounts in its local projection.
 Integer values are serialized as decimal text for browser precision; `≈` marks
 abbreviated display, and the saved decimal stays in details/tooltips.
 
+The same public evaluation loader accepts saved v1 and v2 reports. V2 adds the
+owner's annualization window and account/CSI300 CAGR alongside cumulative return
+and maximum drawdown. The page preserves each leg's availability, null and reason;
+v1 gains no invented annualization. A partial evaluation can retain available
+CAGR, and a completed short sample can retain unavailable CAGR. Date selection
+never changes these saved metrics or their scope. The UI performs no CAGR or
+day-count calculation, does not annualize drawdown, and adds no Sharpe. CSI300
+remains a price index excluding dividends; simulated CAGR is not a forecast.
+
 ```sh
 PYTHONPATH=src python3 -m axiom_ui examples/synthetic_workbench.json --sample --workbench --output /tmp/axiom-workbench-sample.html
 
@@ -106,4 +115,6 @@ to the user's authorized private destination; never include it in a public repo
 or public deployment. `--shareable` is supported only by the older static report. Public source includes
 only hand-written synthetic UI fixtures, tests and sanitized acceptance notes.
 Canonical requirements and financial definitions remain in
-[axiom-docs](https://github.com/sinnergarden/axiom-docs/blob/81c7f0c7626cb3e81e6b5a0e528b2b2c6550f82d/docs/ui-workbench-read-contract.md).
+[axiom-docs](https://github.com/sinnergarden/axiom-docs/blob/81fdeab265723c54e78218cabff2cf2f5ae02e5b/docs/ui-workbench-read-contract.md).
+The saved v2 financial contract is
+[Trade §11.2](https://github.com/sinnergarden/axiom-docs/blob/81fdeab265723c54e78218cabff2cf2f5ae02e5b/docs/design/04_axiom_trade.md#long-history-evaluation).

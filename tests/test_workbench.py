@@ -20,6 +20,28 @@ def payload(html):
     return json.loads(re.search(r'<script type="application/json" id="workbench-data">(.*?)</script>', html, re.S)[1])
 
 
+def saved_v2(entry):
+    """Handwritten UI shape fixture, not an Engine evaluation or return proof."""
+    run, evaluation = entry["run"], entry["evaluation"]
+    run["initial_nav_minor"] = 1000000
+    evaluation.update(contract_version="evaluation_report_v2", evaluation_version="axiom.evaluation/2")
+    evaluation["period_metrics"] = {
+        "window": {"anchor_session": "2026-03-27", "end_session": "2026-04-30",
+                   "elapsed_calendar_days": 34, "day_count": "actual_actual_calendar_year_split",
+                   "year_segments": [{"year": 2026, "days": 34, "year_days": 365}],
+                   "year_fraction": "0.09315068493150684931506849315068493150685"},
+        "account": {"cagr_status": "INSUFFICIENT_SPAN", "cagr": None,
+                    "cagr_reason": "YEAR_FRACTION_BELOW_ONE", "initial_nav_minor": 1000000,
+                    "final_nav_minor": run["nav"][-1]["nav_minor"],
+                    "total_return": run["metrics"]["total_return"],
+                    "max_drawdown": run["metrics"]["max_drawdown"]},
+        "benchmark": {"cagr_status": "INSUFFICIENT_SPAN", "cagr": None,
+                      "cagr_reason": "YEAR_FRACTION_BELOW_ONE", "anchor_close": "4000",
+                      "end_close": "4040", "total_return": "0.01", "max_drawdown": "-0.00744"},
+    }
+    return evaluation
+
+
 class WorkbenchTests(unittest.TestCase):
     def setUp(self):
         self.sample = json.loads(SAMPLE.read_text())
@@ -37,6 +59,72 @@ class WorkbenchTests(unittest.TestCase):
         self.assertEqual(wire["run"]["fills"][0]["price"], "10.00")
         self.assertIs(wire["evaluation"]["episodes"][0]["statistics_eligible"], True)
         self.assertEqual(self.sample, before)
+
+    def test_v1_and_v2_preserve_saved_periods_null_and_independent_status(self):
+        self.assertNotIn("period_metrics", payload(self.render())["views"][0]["evaluation"])
+        evaluation = saved_v2(self.sample["runs"][0])
+        evaluation["status"] = "COMPLETE"
+        before = deepcopy(self.sample)
+        projected = payload(self.render())["views"][0]["evaluation"]
+        self.assertIsNone(projected["period_metrics"]["account"]["cagr"])
+        self.assertEqual(projected["period_metrics"]["account"]["cagr_reason"], "YEAR_FRACTION_BELOW_ONE")
+        self.assertEqual(projected["period_metrics"]["window"]["elapsed_calendar_days"], "34")
+        self.assertEqual(self.sample, before)
+        # Display qualification is the saved owner status, independent of PARTIAL
+        # monthly/top-level output; no calculation or threshold inference in UI.
+        evaluation["status"] = "PARTIAL"
+        evaluation["period_metrics"]["account"].update(
+            cagr_status="AVAILABLE", cagr="0.12345678901234567890123456789", cagr_reason=None)
+        projected = payload(self.render())["views"][0]["evaluation"]
+        self.assertEqual(projected["period_metrics"]["account"]["cagr"], "0.12345678901234567890123456789")
+        self.assertIsNone(projected["period_metrics"]["benchmark"]["cagr"])
+
+    def test_v2_rejects_malformed_periods_and_wrong_saved_endpoints(self):
+        evaluation = saved_v2(self.sample["runs"][0])
+        baseline = deepcopy(evaluation)
+        mutations = [
+            lambda e: e.pop("period_metrics"),
+            lambda e: e.update(evaluation_version="axiom.evaluation/1"),
+            lambda e: e["period_metrics"]["window"].update(end_session="wrong"),
+            lambda e: e["period_metrics"]["account"].update(initial_nav_minor=1),
+            lambda e: e["period_metrics"]["account"].update(final_nav_minor=1),
+            lambda e: e["period_metrics"]["benchmark"].update(end_close="99"),
+            lambda e: e["period_metrics"]["benchmark"].pop("anchor_close"),
+            lambda e: e["period_metrics"]["account"].update(cagr="0"),
+            lambda e: e["period_metrics"]["account"].update(cagr_status="AVAILABLE", cagr=None),
+        ]
+        for i, mutate in enumerate(mutations):
+            with self.subTest(case=i):
+                self.sample["runs"][0]["evaluation"] = deepcopy(baseline)
+                mutate(self.sample["runs"][0]["evaluation"])
+                with self.assertRaises(ProjectionError):
+                    self.render()
+        self.sample["runs"][0]["evaluation"] = deepcopy(baseline)
+        e = self.sample["runs"][0]["evaluation"]
+        e["benchmark"]["series"][-1].update(close=None, valid=False, missing_reason="missing close")
+        e["period_metrics"]["benchmark"].update(end_close=None, cagr_status="MISSING_BOUNDARY", cagr_reason="END_CLOSE_MISSING")
+        projected = payload(self.render())["views"][0]["evaluation"]
+        self.assertIsNone(projected["period_metrics"]["benchmark"]["end_close"])
+        self.assertEqual(projected["period_metrics"]["benchmark"]["cagr_reason"], "END_CLOSE_MISSING")
+        e["contract_version"] = "evaluation_report_v1"
+        with self.assertRaisesRegex(ProjectionError, "v1 must not acquire"):
+            self.render()
+
+    def test_v2_uses_same_public_loaders_without_computing_or_mutating(self):
+        entry = self.sample["runs"][0]
+        saved_v2(entry)
+        baseline = deepcopy(entry)
+        calls, runtime = [], ModuleType("axiom_engine.runtime")
+        runtime.load_backtest_run = lambda path: calls.append(("load_run", str(path))) or entry["run"]
+        runtime.load_backtest_evaluation = lambda path: calls.append(("load_evaluation", str(path))) or entry["evaluation"]
+        def forbidden(*args, **kwargs):
+            self.fail("UI must not execute or save owner computation")
+        runtime.run_backtest = runtime.evaluate_backtest_run = runtime.save_backtest_evaluation = forbidden
+        with patch.dict(sys.modules, {"axiom_engine.runtime": runtime}):
+            html = render_saved_workbench(["run.json"], evaluation_paths=["v2.json"], generated_at=GENERATED)
+        self.assertEqual(calls, [("load_run", "run.json"), ("load_evaluation", "v2.json")])
+        self.assertEqual(entry, baseline)
+        self.assertEqual(payload(html)["views"][0]["evaluation"]["contract_version"], "evaluation_report_v2")
 
     def test_json_is_inert_and_template_text_is_not_executed(self):
         text = '{{SCRIPT}}</script><script>alert("owner")</script>&'

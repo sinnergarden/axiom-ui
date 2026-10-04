@@ -4,7 +4,7 @@
   "validation_date": "2026-10-04",
   "unit_tests": {
     "command": "PYTHONPATH=src python3 -m unittest discover -s tests -v",
-    "passed": 24
+    "passed": 27
   },
   "browser": {
     "name": "installed Mac Google Chrome",
@@ -22,7 +22,13 @@
     "month_episode_interval_highlight": true,
     "kline_date_windows": true,
     "open_episode_date_context_consistent": true,
-    "raw_status_and_refs_folded": true
+    "raw_status_and_refs_folded": true,
+    "saved_v2_annualization_window_and_independent_availability": true,
+    "v1_history_has_no_annualization_card": true,
+    "owner_short_span_and_missing_boundary_not_zero": true,
+    "synthetic_available_cagr_with_partial_evaluation": true,
+    "date_and_month_selection_preserve_period_metrics": true,
+    "same_account_one_backtest_four_registrations": true
   },
   "reader_acceptance": {
     "engine_public_run_and_evaluation_loaders": true,
@@ -36,17 +42,23 @@
     "private_evidence_retained_locally": true,
     "owner_saved_run_groups_and_counts": true,
     "owner_registration_history": true,
-    "knowledge_cutoffs_retained_in_comparison": true
+    "knowledge_cutoffs_retained_in_comparison": true,
+    "engine_same_loader_v1_v2": true,
+    "final_v2_identity_content_and_original_run_triple": true,
+    "saved_period_metrics_raw_decimals_and_null_preserved": true,
+    "old_v1_and_owner_sources_hash_mtime_size_unchanged": true,
+    "old_html_screenshots_and_paused_library_batch_unchanged": true
   },
   "independent_review": {
     "static_only": true,
     "remaining_p1": 0,
-    "remaining_p2": 0
+    "remaining_p2": 0,
+    "v2_increment_reviewed": true
   },
   "wheel_assets_included": true,
   "pending": [
-    "Long-history fixed Snapshot and saved run are separate parent-coordinated acceptance",
-    "Optional owner-saved long-period CAGR awaits frozen evaluation v2 contract and artifact; no frontend annualization"
+    "Long-history fixed Snapshot and saved run remain separate parent-coordinated acceptance",
+    "Existing private Library batch remains paused; no new upload attempt"
   ],
   "publication_scope": "Source, tests and handwritten synthetic fixtures only; private HTML, images, data and results excluded",
   "synthetic_scale": {
@@ -58,8 +70,22 @@
     "custom_window_ms": 29.2
   },
   "owner_contracts": {
-    "docs": "81c7f0c7626cb3e81e6b5a0e528b2b2c6550f82d",
+    "docs": "81fdeab265723c54e78218cabff2cf2f5ae02e5b",
     "research": "e612430b53fcb4c0beeaed9a1b5c6fd977a31d63",
-    "engine_p10": "e74cefb65f175b07837cc7f1f8c7217e450a277b"
+    "engine_p10": "e74cefb65f175b07837cc7f1f8c7217e450a277b",
+    "engine_v2_main": "f0fd9776bfaf4fbb2291a44b225fe9a5e4b13079",
+    "ui_consumer_docs_patch_local": "ea95d2c70e2d103a4f2dc60cef59d46218dbd1f2"
+  },
+  "saved_v2_display": {
+    "source_qualification": "Final saved short real account and explicitly labelled synthetic owner golden; no long-history real backtest acceptance",
+    "real_short_span_cagr_unavailable": true,
+    "synthetic_golden_cagr_available": true,
+    "availability_independent_of_top_level_status": true,
+    "benchmark_price_index_excludes_dividends": true,
+    "raw_reasons_and_window_in_provenance": true,
+    "frontend_annualization_computation": false,
+    "frontend_drawdown_annualization": false,
+    "frontend_sharpe": false,
+    "data_queries_or_owner_compute_save_calls": 0
   }
 }

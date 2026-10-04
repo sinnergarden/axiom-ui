@@ -54,6 +54,9 @@
     return (/[1-9]/.test(parts[1].slice(2))?'≈':'')+parts[0]+'.'+parts[1].slice(0,2);
   }
   const percent = v => present(v) ? compact(decimal(v, 2)) + '%' : '未提供';
+  const cagr = leg => !leg ? '未提供' : leg.cagr_status === 'AVAILABLE' ? percent(leg.cagr) : leg.cagr_status === 'INSUFFICIENT_SPAN' ? '样本不足一年' : '起止值缺失';
+  const cagrRaw = leg => leg ? json({cagr:leg.cagr,status:leg.cagr_status,reason:leg.cagr_reason}) : '未提供';
+  const periodRange = period => period ? saved(period.window.anchor_session)+' — '+saved(period.window.end_session) : '年化区间未提供';
   function money(v) {
     if (!present(v)) return '未提供';
     let result = decimal(v, -2), parts = result.split('.');
@@ -138,12 +141,26 @@
     if(research?.outcome)$('notice').textContent+=' 保存说明：'+research.outcome;
     const metrics = r.metrics || {}, cards = clear('metrics');
     const comparison=byId.get(state.compare),old=comparison?.run.metrics || {};
-    const definitions = [['累计收益',metrics.total_return,percent,'整段回测',old.total_return],['最大回撤',metrics.max_drawdown,percent,'整段回测',old.max_drawdown],['总费用',metrics.total_fees_minor,money,'元 · 整段回测',old.total_fees_minor],['期末净资产',nav.at(-1)?.nav_minor,money,'元',comparison?.run.nav?.at(-1)?.nav_minor]];
+    const period=v.evaluation?.period_metrics,oldPeriod=comparison?.evaluation?.period_metrics;
+    const account=period?.account || metrics,oldAccount=oldPeriod?.account || old;
+    cards.classList.toggle('with-cagr',!!(period || oldPeriod));
+    const definitions = [['累计收益',account.total_return,percent,'整段回测',oldAccount.total_return],['最大回撤',account.max_drawdown,percent,'整段回测',oldAccount.max_drawdown],['总费用',metrics.total_fees_minor,money,'元 · 整段回测',old.total_fees_minor],['期末净资产',nav.at(-1)?.nav_minor,money,'元',comparison?.run.nav?.at(-1)?.nav_minor]];
     for (const [label,value,format,help,oldValue] of definitions) {
       const card = node('div', null, 'metric'); card.append(node('span',label));
       const val = node('strong',format(value),positive(value)); val.title = 'Owner 原值：' + saved(value); card.append(val,node('small',help)); cards.append(card);
       if(comparison){const old=node('span','对照 '+format(oldValue),'comparison-value');old.title='对照 Owner 原值：'+saved(oldValue);card.append(old);}
     }
+    if(period || oldPeriod){
+      const card=node('div',null,'metric cagr-metric'),leg=period?.account;
+      card.append(node('span','年化收益（CAGR）'));
+      const val=node('strong',cagr(leg),leg?.cagr_status==='AVAILABLE'?positive(leg.cagr):'unavailable');
+      val.title='Owner 原值：'+cagrRaw(leg);card.append(val,node('small','保存的年化区间'));
+      if(comparison){const old=node('span','对照 '+cagr(oldPeriod?.account),'comparison-value');old.title='对照 Owner 原值：'+cagrRaw(oldPeriod?.account);card.append(old);}
+      cards.append(card);
+    }
+    $('period-note').hidden=!(period || oldPeriod);
+    $('period-note').textContent=period || oldPeriod ? '年化区间：'+periodRange(period)+(comparison?' / 对照：'+periodRange(oldPeriod):'')+'；初始财富归属时钟，非新增 NAV 观测。模拟年化不代表预测收益。' : '';
+    $('period-note').title=json({current:period?.window,comparison:oldPeriod?.window});
     $('selection-context').textContent = state.interval ? '选中期间 ' + state.interval.start + ' — ' + state.interval.end + (state.session ? ' / ' + state.session : '') + '；指标仍为整段回测。' : '指标范围：整段回测' + (state.session ? ' / 选中 ' + state.session : '');
   }
   const NS = 'http://www.w3.org/2000/svg';
@@ -205,7 +222,9 @@
     $('benchmark-toggle').disabled=!benchmark || benchmark.status==='MISSING';
     $('benchmark-toggle').checked=state.benchmark && !$('benchmark-toggle').disabled;
     const missingReasons=[...new Set((benchmark?.series || []).map(p=>p.missing_reason).filter(present))];
-    $('benchmark-note').textContent = benchmark ? '沪深300价格指数（不含分红） · '+statusLabel(benchmark.status)+' · 累计收益 '+percent(benchmark.total_return)+' / 最大回撤 '+percent(benchmark.max_drawdown)+'。'+(missingReasons.length?'存在缺值，详情见数据与运行信息。':'') : '沪深300评价暂未提供。';
+    const period=v.evaluation?.period_metrics,benchMetrics=period?.benchmark || benchmark;
+    $('benchmark-note').textContent = benchmark ? '沪深300价格指数（不含分红） · '+statusLabel(benchmark.status)+' · 累计收益 '+percent(benchMetrics.total_return)+' / 最大回撤 '+percent(benchMetrics.max_drawdown)+(period?' / CAGR '+cagr(period.benchmark)+' · '+periodRange(period):'')+'。'+(missingReasons.length?'存在缺值，详情见数据与运行信息。':'') : '沪深300评价暂未提供。';
+    $('benchmark-note').title=period?cagrRaw(period.benchmark):'';
     if (!nav.length) {missing('performance-chart','净值数据暂未提供。');$('nav-point').textContent='';return;}
     const showBenchmark=state.benchmark && !$('benchmark-toggle').disabled;
     const benchPoints = showBenchmark ? (benchmark?.series || []).map(p=>({session:p.session,value:p.valid === false ? null : p.nav_index})) : [];
@@ -398,7 +417,7 @@
     const panel=clear('source-details');
     for(const text of v.run.limitations || [])panel.append(node('p',String(text)));
     for(const text of v.evaluation?.limitations || [])panel.append(node('p',String(text)));
-    $('source-refs').textContent=json({run_id:v.run.run_id,account_id:v.run.account_id,content_digest:v.run.content_digest,committed_sequence:v.run.committed_sequence,signal_ref:v.run.signal_ref,market_ref:v.run.market_ref,profile_ref:v.run.profile_ref,core_version:v.run.core_version,runtime_version:v.run.runtime_version,implementation_ref:v.run.implementation_ref,evaluation_ref:v.evaluation?.evaluation_ref,evaluation_content_digest:v.evaluation?.content_digest,benchmark_ref:v.evaluation?.benchmark_ref,benchmark:v.evaluation?.benchmark,data_context:v.market.data_batch?.context,research:v.research,registration_history:v.registration_history?.map(h=>h.record)});
+    $('source-refs').textContent=json({run_id:v.run.run_id,account_id:v.run.account_id,content_digest:v.run.content_digest,committed_sequence:v.run.committed_sequence,signal_ref:v.run.signal_ref,market_ref:v.run.market_ref,profile_ref:v.run.profile_ref,core_version:v.run.core_version,runtime_version:v.run.runtime_version,implementation_ref:v.run.implementation_ref,evaluation_ref:v.evaluation?.evaluation_ref,evaluation_content_digest:v.evaluation?.content_digest,evaluation_contract:v.evaluation?.contract_version,evaluation_status:v.evaluation?.status,evaluation_version:v.evaluation?.evaluation_version,evaluation_spec_ref:v.evaluation?.spec_ref,period_metrics:v.evaluation?.period_metrics,benchmark_ref:v.evaluation?.benchmark_ref,benchmark:v.evaluation?.benchmark,data_context:v.market.data_batch?.context,research:v.research,registration_history:v.registration_history?.map(h=>h.record)});
     $('generated-note').textContent='页面生成于 '+data.generated_at+'；不是数据更新时间。所有业务数值来自保存产物；浏览没有采集、训练、回测或交易调用。';
   }
   function render() {

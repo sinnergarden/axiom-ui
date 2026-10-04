@@ -126,7 +126,7 @@ def _run(run: Any, evidence: str) -> dict:
             "contract_version", "run_id", "account_id", "status", "content_digest",
             "committed_sequence", "signal_ref", "market_ref", "profile_ref",
             "core_version", "runtime_version", "implementation_ref", "metrics", "nav",
-            "positions", "decisions", "orders", "fills", "limitations", "final_account")},
+            "positions", "decisions", "orders", "fills", "limitations", "final_account", "initial_nav_minor")},
         "configuration": {"start_session": (wire.get("plan") or {}).get("start_session"),
                           "end_session": (wire.get("plan") or {}).get("end_session"),
                           "initial_account": deepcopy((wire.get("plan") or {}).get("initial_account")),
@@ -139,9 +139,58 @@ def _run(run: Any, evidence: str) -> dict:
     }
 
 
+def _period_metrics(wire: dict, run: Mapping[str, Any]) -> None:
+    """Validate saved v2 display facts and endpoints; never annualize wealth."""
+    period = wire.get("period_metrics")
+    _require(type(period) is dict and all(type(period.get(k)) is dict for k in
+             ("window", "account", "benchmark")), "missing saved period metrics")
+    window = period["window"]
+    _require(all(k in window for k in ("anchor_session", "end_session", "elapsed_calendar_days",
+                 "day_count", "year_segments", "year_fraction")) and
+             window["day_count"] == "actual_actual_calendar_year_split" and
+             type(window["elapsed_calendar_days"]) is int and window["elapsed_calendar_days"] > 0,
+             "malformed saved period window")
+    _decimal(window["year_fraction"], "saved year fraction")
+    _require(all(type(window[k]) is str and window[k] for k in ("anchor_session", "end_session")),
+             "malformed saved period dates")
+    for row in _rows(window["year_segments"], "saved year segments"):
+        _require(all(type(row.get(k)) is int for k in ("year", "days", "year_days")),
+                 "malformed saved year segment")
+    nav = run.get("nav") or []
+    benchmark = wire["benchmark"]
+    _require(nav and window["end_session"] == nav[-1]["session"] and
+             window["anchor_session"] == benchmark.get("anchor_session"),
+             "CONTEXT_MISMATCH: saved period window")
+    for name in ("account", "benchmark"):
+        leg = period[name]
+        _require(all(k in leg for k in ("cagr_status", "cagr", "cagr_reason", "total_return", "max_drawdown")) and
+                 leg["cagr_status"] in {"AVAILABLE", "INSUFFICIENT_SPAN", "MISSING_BOUNDARY"},
+                 "malformed saved CAGR status")
+        if leg["cagr_status"] == "AVAILABLE":
+            _decimal(leg["cagr"], "saved CAGR")
+            _require(leg["cagr_reason"] is None, "available CAGR must not have a missing reason")
+        else:
+            _require(leg["cagr"] is None and type(leg["cagr_reason"]) is str and bool(leg["cagr_reason"]),
+                     "unavailable CAGR must retain null and reason")
+        for key in ("total_return", "max_drawdown"):
+            _decimal(leg[key], "saved period " + key, nullable=True)
+    account = period["account"]
+    _require(type(account.get("initial_nav_minor")) is int and type(account.get("final_nav_minor")) is int and
+             account["final_nav_minor"] == nav[-1]["nav_minor"] and
+             (run.get("initial_nav_minor") is None or account["initial_nav_minor"] == run["initial_nav_minor"]),
+             "CONTEXT_MISMATCH: saved period account endpoints")
+    leg, series = period["benchmark"], benchmark.get("series") or []
+    for key in ("anchor_close", "end_close"):
+        _require(key in leg, "missing saved period benchmark endpoint")
+        _decimal(leg[key], "saved period " + key, nullable=True)
+    _require(leg.get("anchor_close") == benchmark.get("anchor_close") and
+             leg.get("end_close") == (series[-1].get("close") if series else None),
+             "CONTEXT_MISMATCH: saved period benchmark endpoints")
+
+
 def _evaluation(value: Any, run: Mapping[str, Any]) -> dict:
     wire = _wire(value)
-    _require(wire.get("contract_version") == "evaluation_report_v1", "unsupported evaluation contract")
+    _require(wire.get("contract_version") in {"evaluation_report_v1", "evaluation_report_v2"}, "unsupported evaluation contract")
     binding = wire.get("input_run_ref")
     _require(type(binding) is dict and all(binding.get(k) == run.get(k)
              for k in ("run_id", "content_digest", "committed_sequence")),
@@ -200,6 +249,11 @@ def _evaluation(value: Any, run: Mapping[str, Any]) -> dict:
                  "invalid saved distribution bin")
     _require(distribution["status"] != "INSUFFICIENT_SAMPLE" or not distribution["bins"],
              "insufficient sample must not claim owner distribution bins")
+    if wire["contract_version"] == "evaluation_report_v2":
+        _require(wire.get("evaluation_version") == "axiom.evaluation/2", "unsupported saved evaluation version")
+        _period_metrics(wire, run)
+    else:
+        _require("period_metrics" not in wire, "v1 must not acquire period metrics")
     return wire
 
 
