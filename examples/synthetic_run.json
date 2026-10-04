@@ -1,0 +1,48 @@
+{
+  "contract_version": "backtest_run_v1",
+  "run_id": "synthetic-display-run",
+  "account_id": "synthetic-display-account",
+  "status": "COMPLETE",
+  "committed_sequence": 3,
+  "plan": {
+    "example_only": true,
+    "description": "UI 手写合成展示数据，不是 Engine 执行结果或 Research 实验",
+    "start_session": "2025-01-02",
+    "end_session": "2025-01-03",
+    "execution_assumption": "样例 T+1、100 份一手；不是全部 ETF 的统一真实规则"
+  },
+  "signal_ref": "synthetic:signal",
+  "market_ref": "synthetic:market",
+  "profile_ref": "synthetic:profile",
+  "core_version": "synthetic-display-only",
+  "runtime_version": "synthetic-display-only",
+  "limitations": [
+    "合成 UI 展示样例。所有数值手写，仅验证展示；没有运行真实回测。",
+    "T+1 与每手 100 份是样例实验参数，不是 7 只 ETF 的统一真实交易规则。",
+    "样例中的价格、成交和净值无供应商依据，不代表收益、Data 完整性或策略有效性。",
+    "未提供 Research experiment_id；保留 signal_ref，但不推断实验身份。"
+  ],
+  "decisions": [
+    {"decision_id": "sample-d1", "session": "2025-01-02", "security_id": "SAMPLE.ETF", "target_quantity": 100},
+    {"decision_id": "sample-d2", "session": "2025-01-03", "security_id": "SAMPLE.ETF", "target_quantity": 0}
+  ],
+  "orders": [
+    {"order_id": "sample-o1", "session": "2025-01-02", "security_id": "SAMPLE.ETF", "side": "BUY", "quantity": 100, "status": "FILLED"},
+    {"order_id": "sample-o2", "session": "2025-01-03", "security_id": "SAMPLE.ETF", "side": "SELL", "quantity": 100, "status": "UNFILLED", "reason": "synthetic execution constraint"}
+  ],
+  "fills": [
+    {"fill_id": "sample-f1", "order_id": "sample-o1", "session": "2025-01-02", "security_id": "SAMPLE.ETF", "side": "BUY", "quantity": 100, "price": "10.0000", "gross_minor": 100000, "fee_minor": 100, "cash_delta_minor": -100100, "sequence": 1}
+  ],
+  "cash_ledger": null,
+  "position_ledger": null,
+  "nav": [
+    {"session": "2025-01-02", "cash_minor": 899900, "market_value_minor": 100000, "receivable_minor": 0, "nav_minor": 999900, "nav_index": "0.9999", "committed_sequence": 2},
+    {"session": "2025-01-03", "cash_minor": 899900, "market_value_minor": 101000, "receivable_minor": 0, "nav_minor": 1000900, "nav_index": "1.0009", "committed_sequence": 3}
+  ],
+  "positions": [
+    {"session": "2025-01-02", "security_id": "SAMPLE.ETF", "quantity": 100, "sellable_quantity": 0, "mark_price": "10.0000", "mark_session": "2025-01-02", "is_stale": false, "market_value_minor": 100000, "committed_sequence": 2},
+    {"session": "2025-01-03", "security_id": "SAMPLE.ETF", "quantity": 100, "sellable_quantity": 100, "mark_price": "10.1000", "mark_session": "2025-01-03", "is_stale": false, "market_value_minor": 101000, "committed_sequence": 3}
+  ],
+  "metrics": null,
+  "final_account": {"cash_minor": 899900, "committed_sequence": 3, "positions": {"SAMPLE.ETF": 100}}
+}

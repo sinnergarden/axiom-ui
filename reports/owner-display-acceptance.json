@@ -1,0 +1,74 @@
+{
+  "schema_version": "ui_owner_display_acceptance_v1",
+  "generated_at": "2026-10-04T12:43:36.431379+08:00",
+  "owner_files_unchanged": true,
+  "backtest_calls": 0,
+  "owner_save_calls": 0,
+  "reader": "axiom_engine.runtime.load_backtest_run",
+  "reports": [
+    {
+      "origin": "real_fixed_input",
+      "run_id": "sha256:f9a3bc3ce58177d7a19e3c29a508badbb76734b77ae9a9ef7ff99ecc3bbb2b85",
+      "content_digest": "sha256:98522ddce52644f7328969623968e8708feda0aec2a570e75333727ddd1e8778",
+      "implementation_ref": "sha256:36fd490804f4f3030ceeb14b42103acb2868df39d4815eb5323ed4a92ab22308",
+      "source_before": {
+        "sha256": "33183b66fa10a65003d2903c32957c1d20b68fc2bfedbb24427e3073bd8cbe6d",
+        "mtime_ns": 1791088872860527284,
+        "size_bytes": 670109
+      },
+      "sessions": 65,
+      "orders": 14,
+      "fills": 0,
+      "final_nav_minor": 1000000,
+      "committed_sequence": 69,
+      "exact_payload_retained": true,
+      "table_rows_equal": true,
+      "no_active_elements": true,
+      "source_after": {
+        "sha256": "33183b66fa10a65003d2903c32957c1d20b68fc2bfedbb24427e3073bd8cbe6d",
+        "mtime_ns": 1791088872860527284,
+        "size_bytes": 670109
+      },
+      "owner_artifact": "etf_rotation.blocked.backtest.json",
+      "html_artifact": "real-blocked-report.html"
+    },
+    {
+      "origin": "synthetic_known_state",
+      "run_id": "sha256:bf2e77ea2fef57780eb8fb861d0722a60ac3288a9e7145f3fb2b1a18102f9f60",
+      "content_digest": "sha256:01046610b4a950d626028b4a1e794bec6228b7b99412d0fd7e772c70523a75fa",
+      "implementation_ref": "sha256:36fd490804f4f3030ceeb14b42103acb2868df39d4815eb5323ed4a92ab22308",
+      "source_before": {
+        "sha256": "f94aca41b77bd58d2bbf1d6b98eee1d36b32679c0fdbe0c619ab87f71fae8d24",
+        "mtime_ns": 1791088872860712660,
+        "size_bytes": 20330
+      },
+      "sessions": 6,
+      "orders": 3,
+      "fills": 3,
+      "final_nav_minor": 999220,
+      "committed_sequence": 10,
+      "exact_payload_retained": true,
+      "table_rows_equal": true,
+      "no_active_elements": true,
+      "source_after": {
+        "sha256": "f94aca41b77bd58d2bbf1d6b98eee1d36b32679c0fdbe0c619ab87f71fae8d24",
+        "mtime_ns": 1791088872860712660,
+        "size_bytes": 20330
+      },
+      "owner_artifact": "synthetic_golden.backtest.json",
+      "html_artifact": "synthetic-golden-report.html"
+    }
+  ],
+  "limits": [
+    "Real fixed inputs are cash-only: UNKNOWN market status blocks all fills; not strategy-return acceptance.",
+    "Golden prices/states are synthetic.",
+    "Browser file protocol policy prevented screenshot-based visual QA.",
+    "No Data reads, collection, feature builds, simulation or metric recomputation in this UI acceptance."
+  ],
+  "engine_commit": "4a72394f55a54ddbbc609c7870469602c40a22b0",
+  "engine_source_matches_commit": true,
+  "original_ui_source_unchanged": true,
+  "unit_tests_passed": 11,
+  "independent_review": "passed; evidence-label bypass fixed and re-reviewed; execution-block/synthetic extension re-reviewed without repeating tests",
+  "publication_note": "Machine-specific paths removed; owner inputs and local full reports are not included in public source."
+}

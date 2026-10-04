@@ -1,0 +1,27 @@
+{
+  "schema_version": "ui_publication_check_v1",
+  "unit_tests_passed": 12,
+  "raw_owner_inputs_in_public_repo": false,
+  "machine_paths_in_public_tree": false,
+  "reports": [
+    {
+      "owner_artifact": "etf_rotation.blocked.backtest.json",
+      "shareable_html": "Axiom_UI_real_blocked.html",
+      "source_sha256": "33183b66fa10a65003d2903c32957c1d20b68fc2bfedbb24427e3073bd8cbe6d",
+      "shareable_sha256": "c70e20b62075ee3d177f29d4b7f0357366866930c547bcd52188afd26d0b62e1",
+      "shareable_bytes": 58210,
+      "raw_inputs_omitted": true,
+      "original_owner_unchanged": true
+    },
+    {
+      "owner_artifact": "synthetic_golden.backtest.json",
+      "shareable_html": "Axiom_UI_synthetic_golden.html",
+      "source_sha256": "f94aca41b77bd58d2bbf1d6b98eee1d36b32679c0fdbe0c619ab87f71fae8d24",
+      "shareable_sha256": "1fa690d05fb2dfb0e807c3ffde20c3dfdc4d70ee35aaa92a84fbbdd8c2c5afe3",
+      "shareable_bytes": 24085,
+      "raw_inputs_omitted": true,
+      "original_owner_unchanged": true
+    }
+  ],
+  "note": "Shareable exports omit raw market/signal plan and full payload; private local reports retain those inputs."
+}
