@@ -52,6 +52,58 @@ def _source_context(source: dict) -> dict:
     return source.get("context") or (source.get("batch") or {}).get("context") or {}
 
 
+def _display_context(context: dict) -> dict:
+    """Keep saved query identity and clocks without embedding coverage tables."""
+    return {k: deepcopy(v) for k, v in context.items() if k != "coverage"}
+
+
+def _source_summaries(sources: list[dict]) -> list[dict]:
+    return [{"reference": source.get("reference"), "context": _display_context(_source_context(source)),
+             "field_units": {k: {n: meta.get(n) for n in ("unit", "dtype")}
+                             for k, meta in (source.get("batch", {}).get("field_meta") or {}).items()},
+             "display_projection": True,
+             "omitted": ["batch.records", "batch.field_meta.by_key", "context.coverage", "coverage_bundle.payload"]}
+            for source in sources]
+
+
+def _stock_native_chart(market: dict) -> dict | None:
+    sources = [s for s in market.get("source_evidence") or []
+               if _source_context(s).get("domain") == "market_daily"]
+    if not sources:
+        return None
+    _require(len(sources) == 1, "ambiguous saved stock OHLCV source")
+    source = sources[0]
+    _require(source.get("reference") in (market.get("source_refs") or []), "unbound saved stock OHLCV source")
+    batch = source.get("batch") or {}
+    fields = ("open", "high", "low", "close", "volume_shares")
+    meta = batch.get("field_meta") or {}
+    _require(all(meta.get(k, {}).get("unit") == "CNY/share" for k in fields[:4]) and
+             meta.get("volume_shares", {}).get("unit") == "shares", "unexpected stock OHLCV unit")
+    for field in fields:
+        _rows(meta[field].get("by_key"), "saved stock OHLCV provenance")
+    rows = _rows(batch.get("records"), "saved stock OHLCV")
+    return {"source_ref": source["reference"], "display_projection": True,
+            "context": _display_context(batch["context"]), "omitted_context_fields": ["coverage"],
+            "records": [{k: deepcopy(row.get(k)) for k in ("security_id", "session", *fields)} for row in rows],
+            "field_meta": {k: deepcopy(meta[k]) for k in fields}}
+
+
+def _stock_evaluation_display(wire: dict) -> dict:
+    projected = {k: deepcopy(v) for k, v in wire.items() if k not in ("benchmark_input", "dividend_scope")}
+    for name in ("benchmark_input", "dividend_scope"):
+        source = wire.get(name)
+        if source is None:
+            projected[name] = None
+            continue
+        projected[name] = {k: deepcopy(v) for k, v in source.items()
+                           if k not in ("source_evidence", "coverage", "coverage_bundle")}
+        projected[name]["source_evidence"] = _source_summaries(source.get("source_evidence") or [])
+        projected[name]["display_projection"] = True
+        projected[name]["omitted"] = ["coverage", "coverage_bundle.payload", "source_evidence.batch.records",
+                                     "source_evidence.batch.field_meta.by_key"]
+    return projected
+
+
 def _comparison_conditions(plan: dict) -> list[dict]:
     """Project frozen comparison facts; identities/strategy inputs are not policies."""
     profile, replay = plan.get("profile") or {}, plan.get("market_replay") or {}
@@ -80,7 +132,7 @@ def _comparison_conditions(plan: dict) -> list[dict]:
     for key, label in (("snapshot_id", "数据版本"), ("reader_version", "数据读取版本"),
                        ("contract_id", "数据合同"), ("source_profile_id", "数据来源配置"),
                        ("coverage", "数据覆盖说明")):
-        values = [c.get(key) for c in contexts]
+        values = [c.get(key) for c in contexts] if key != "coverage" or plan.get("contract_version") != "backtest_request_v3" else [s.get("reference") for s in evidence]
         fact(key, label, values, bool(values) and all(v is not None for v in values))
     for key, label in (("symbols", "证券覆盖"), ("sessions", "交易日覆盖"),
                        ("pit_policy", "信息时间口径"), ("adjustment_anchor", "复权锚点")):
@@ -92,12 +144,20 @@ def _comparison_conditions(plan: dict) -> list[dict]:
     fact("cash_dividends", "保存分红事实", replay.get("cash_dividends"), "cash_dividends" in replay)
     fact("unit_split_policy", "份额拆分应用政策", plan.get("unit_split_policy"),
          "unit_split_policy" in plan and plan["unit_split_policy"] is not None)
+    if plan.get("contract_version") == "backtest_request_v3":
+        for key, label in (("prediction_universe", "原预测范围"), ("execution_universe", "执行资格子集"),
+                           ("portfolio_policy", "股票组合政策"), ("stock_action_policy", "股票现金行动政策")):
+            fact(key, label, plan.get(key), plan.get(key) is not None)
     return facts
 
 
 def _run(run: Any, evidence: str) -> dict:
     wire = _wire(run)
-    _require(wire.get("contract_version") in {"backtest_run_v1", "backtest_run_v2"}, "unsupported run contract")
+    _require(wire.get("contract_version") in {"backtest_run_v1", "backtest_run_v2", "backtest_run_v3"}, "unsupported run contract")
+    stock = wire["contract_version"] == "backtest_run_v3"
+    if stock:
+        _require((wire.get("runtime_version"), wire.get("core_version"), wire.get("quantity_unit"), wire.get("price_unit")) ==
+                 ("axiom.backtest/3", "axiom.stock_portfolio/1", "shares", "CNY/share"), "unsupported stock version or units")
     _require(all(type(wire.get(k)) is str and wire[k]
                  for k in ("run_id", "account_id", "status")), "missing run identity")
     _watermarks(wire)
@@ -111,6 +171,9 @@ def _run(run: Any, evidence: str) -> dict:
         _require(type(fill.get("quantity")) is int, "fill quantity must be integer units")
         _require(all(type(fill.get(k)) is int for k in ("gross_minor", "fee_minor", "cash_delta_minor")),
                  "fill amounts must be integer CNY cents")
+        if stock:
+            _require(fill.get("quantity_unit") == "shares" and all(type(fill.get(k)) is int for k in
+                     ("commission_minor", "stamp_tax_minor", "transfer_fee_minor")), "missing stock fill units or fee components")
     metrics = wire.get("metrics")
     _require(metrics is None or type(metrics) is dict, "malformed owner metrics")
     for field in ("total_return", "max_drawdown"):
@@ -120,7 +183,7 @@ def _run(run: Any, evidence: str) -> dict:
     _require(type(profile) is dict, "malformed profile")
     market = (wire.get("plan") or {}).get("market_replay") or {}
     _require(type(market) is dict, "malformed frozen market replay")
-    approximate = profile.get("unknown_status_policy") == "etf_daily_observed"
+    approximate = profile.get("unknown_status_policy") in {"etf_daily_observed", "stock_daily_observed"}
     blocked = any(row.get("reason") == "UNKNOWN_MARKET_STATUS" for row in wire.get("orders") or [])
     # Retain saved market values only for an explicitly named close/volume view.
     # Missing high/low is never converted into a synthetic candle.
@@ -171,6 +234,25 @@ def _run(run: Any, evidence: str) -> dict:
             if source.get("reference") in event_refs and
             _source_context(source).get("domain") == "fund_share_conversions"])
         view["configuration"]["unit_split_policy"] = deepcopy((wire.get("plan") or {}).get("unit_split_policy"))
+    if stock:
+        plan = wire.get("plan") or {}
+        _require(plan.get("contract_version") == "backtest_request_v3" and
+                 profile.get("unknown_status_policy") in {"stock_daily_observed", "block"}, "unsupported stock request/profile")
+        view["run"].update({k: deepcopy(wire.get(k)) for k in
+                            ("quantity_unit", "price_unit", "admission_ref", "supported_universe_ref", "stopped")})
+        admission = plan.get("admission_evidence") or {}
+        view["stock_context"] = {k: deepcopy(plan.get(k)) for k in
+                                 ("prediction_universe", "execution_universe", "portfolio_policy", "stock_action_policy")}
+        view["stock_context"].update(signal_inputs={k: deepcopy((plan.get("signal_frame") or {}).get(k)) for k in
+                                                  ("feature_ref", "model_ref", "score_semantics", "score_unit")},
+                                     model_snapshot=(admission.get("model") or {}).get("snapshot"),
+                                     execution_snapshot=(admission.get("execution") or {}).get("snapshot"),
+                                     admission_status=admission.get("status"))
+        view["market"]["source_evidence"] = _source_summaries(market.get("source_evidence") or [])
+        view["market"]["native_chart"] = _stock_native_chart(market)
+        view["market"]["cash_dividends"] = deepcopy(market.get("cash_dividends"))
+        view["market"]["action_diagnostics"] = deepcopy(market.get("action_diagnostics"))
+        view["market"]["action_blocks"] = deepcopy(market.get("action_blocks"))
     return view
 
 
@@ -289,7 +371,7 @@ def _evaluation(value: Any, run: Mapping[str, Any]) -> dict:
         _period_metrics(wire, run)
     else:
         _require("period_metrics" not in wire, "v1 must not acquire period metrics")
-    return wire
+    return _stock_evaluation_display(wire) if run.get("contract_version") == "backtest_run_v3" else wire
 
 
 def _paths(values: Sequence[str | Path], field: str) -> None:
@@ -520,6 +602,12 @@ def _attach_stock_ml(views: list[dict], paths: Sequence[str | Path]) -> None:
                 continue
             _require(all(any(r.get("artifact_type") == kind and r.get("artifact_id") == experiment.get(key)
                              for r in refs) for kind, key in bindings.items()), "CONTEXT_MISMATCH: stock ML registration")
+            if view["run"].get("run_id"):
+                inputs = (view.get("stock_context") or {}).get("signal_inputs") or {}
+                _require(view["run"].get("contract_version") == "backtest_run_v3" and
+                         view["run"].get("signal_ref") == experiment.get("signal_run_ref") and
+                         all(inputs.get(k) == experiment.get(k) for k in ("feature_ref", "model_ref")),
+                         "CONTEXT_MISMATCH: stock account/model inputs")
             _require("stock_ml" not in view, "duplicate stock ML registration attachment")
             view["stock_ml"] = {"experiment": deepcopy(experiment), "model": deepcopy(model),
                                 "signal_evidence": deepcopy(evidence)}
@@ -582,12 +670,17 @@ The workbench does not discover data roots or implicitly issue a Query.
     _require(not stock_ml_paths or experiment_index_path is not None, "stock ML requires explicit Research index")
     _require(not stock_stage_report_paths or stock_ml_paths, "stock stage reports require explicitly loaded stock ML")
     _require(bool(run_paths) or experiment_index_path is not None, "an explicit saved run or Research index is required")
-    originals = []
+    originals, views = [], []
     if run_paths:
         from axiom_engine.runtime import load_backtest_run
-        originals = [_wire(load_backtest_run(path)) for path in run_paths]
-    views = [_run(r, "synthetic_owner_output" if r["run_id"] in synthetic_run_ids else
-                  "saved_backtest_output") for r in originals]
+        for path in run_paths:
+            original = _wire(load_backtest_run(path))
+            views.append(_run(original, "synthetic_owner_output" if original["run_id"] in synthetic_run_ids else "saved_backtest_output"))
+            # Public validation has finished. Retain only the display projection
+            # for stock inputs before loading another large native document.
+            originals.append(original if original["contract_version"] != "backtest_run_v3" else
+                             {"run_id": original["run_id"], "contract_version": original["contract_version"]})
+            del original
     by_id = {v["run"]["run_id"]: v for v in views}
     _require(len(by_id) == len(views), "duplicate run identity")
     _require(set(synthetic_run_ids).issubset(by_id), "unknown synthetic run identity")
@@ -607,6 +700,7 @@ The workbench does not discover data roots or implicitly issue a Query.
                 view["view_id"] = run_id + ":evaluation:" + evaluation["evaluation_ref"]
                 view["evaluation"] = verified
                 views.append(view)
+            del evaluation
     if experiment_paths:
         from axiom_research import load_rotation_experiment
         for path in experiment_paths:
@@ -638,7 +732,13 @@ The workbench does not discover data roots or implicitly issue a Query.
     for run_id, batch in batches.items():
         _require(run_id in by_id, "CONTEXT_MISMATCH: Data without loaded run")
         original = next(r for r in originals if r["run_id"] == run_id)
-        _attach_batch(by_id[run_id], batch, original)
+        if original["contract_version"] == "backtest_run_v3":
+            chart = by_id[run_id]["market"].get("native_chart")
+            _require(chart is not None and _digest(_wire(batch)) == chart["source_ref"],
+                     "CONTEXT_MISMATCH: stock saved DataBatch/native source identity")
+            chart["explicit_saved_batch_matched"] = True
+        else:
+            _attach_batch(by_id[run_id], batch, original)
         by_id[run_id]["market"]["data_batch_file_digest"] = file_digests.get(run_id)
         for view in views:
             if view is not by_id[run_id] and view["run"]["run_id"] == run_id:

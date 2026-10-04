@@ -76,6 +76,42 @@ def saved_unit_run(entry):
     return run
 
 
+def saved_stock_case(sample):
+    """Handwritten stock display fixture, never a strategy or account execution."""
+    entry = deepcopy(sample["runs"][0])
+    run, evaluation, native = entry["run"], entry["evaluation"], entry["data_batch"]
+    run.update(contract_version="backtest_run_v3", runtime_version="axiom.backtest/3",
+               core_version="axiom.stock_portfolio/1", quantity_unit="shares", price_unit="CNY/share",
+               admission_ref="synthetic:admission", supported_universe_ref="synthetic:supported", stopped=None)
+    run["plan"].update(contract_version="backtest_request_v3", prediction_universe=["synthetic:prediction"],
+                       execution_universe=["synthetic:execution"], portfolio_policy={"eligibility_id":"sz_main_a_000_002_003_v1"},
+                       stock_action_policy="observed_implemented_only",
+                       signal_frame={"model_ref":"synthetic:model", "feature_ref":"synthetic:feature", "score_unit":"dimensionless"},
+                       admission_evidence={"model":{"snapshot":"synthetic:model-snapshot"},
+                                           "execution":{"snapshot":"synthetic:execution-snapshot"}, "status":"SYNTHETIC"})
+    run["plan"]["profile"].update(contract_version="stock_daily_open_profile_v1", unknown_status_policy="stock_daily_observed",
+                                lot_size=100, settlement_sessions=1)
+    for fill in run["fills"]:
+        fill.update(quantity_unit="shares", commission_minor=fill["fee_minor"], stamp_tax_minor=0, transfer_fee_minor=0,
+                    execution_admission="STOCK_OBSERVED_DAILY_ASSUMPTION")
+    for row in native["records"]:
+        row["volume_shares"] = row.pop("volume_units")
+    native["field_meta"]["volume_shares"] = native["field_meta"].pop("volume_units")
+    for key in ("open","high","low","close","volume_shares"):
+        native["field_meta"][key]["unit"] = "shares" if key == "volume_shares" else "CNY/share"
+    native["context"]["domain"] = "market_daily"
+    native["context"]["coverage"] = {"large_table":"SYNTHETIC_HEAVY_COVERAGE"}
+    source = {"reference":_digest(native), "batch":native}
+    market = run["plan"]["market_replay"]
+    market.update(source_refs=[source["reference"]], source_evidence=[source],
+                  coverage_bundle=[{"payload":"SYNTHETIC_COMPRESSED_PAYLOAD"}])
+    evaluation["benchmark_input"] = {"source_refs":[source["reference"]],"source_evidence":[source]}
+    evaluation["dividend_scope"] = {"actions":[],"source_refs":[source["reference"]],"source_evidence":[source],
+                                    "coverage":{"table":"SYNTHETIC_HEAVY_COVERAGE"},
+                                    "coverage_bundle":[{"payload":"SYNTHETIC_COMPRESSED_PAYLOAD"}]}
+    return run, evaluation, native
+
+
 class WorkbenchTests(unittest.TestCase):
     def setUp(self):
         self.sample = json.loads(SAMPLE.read_text())
@@ -280,6 +316,45 @@ class WorkbenchTests(unittest.TestCase):
         with self.assertRaisesRegex(ProjectionError, "explicit paths via owner Reader"):
             render_saved_workbench([self.sample["runs"][0]["run"]])
 
+    def test_stock_v3_public_readers_preserve_units_fees_and_project_native_evidence(self):
+        run, evaluation, native = saved_stock_case(self.sample)
+        before = deepcopy((run,evaluation,native));calls=[]
+        runtime=ModuleType("axiom_engine.runtime")
+        runtime.load_backtest_run=lambda path:calls.append(("run",str(path))) or deepcopy(run)
+        runtime.load_backtest_evaluation=lambda path:calls.append(("evaluation",str(path))) or deepcopy(evaluation)
+        with patch.dict(sys.modules,{"axiom_engine.runtime":runtime,"axiom_data":None}):
+            html=render_saved_workbench(["stock.json"],evaluation_paths=["stock-evaluation.json"])
+            view=payload(html)["views"][0]
+            self.assertEqual(calls,[("run","stock.json"),("evaluation","stock-evaluation.json")])
+            self.assertEqual(view["run"]["quantity_unit"],"shares")
+            self.assertEqual(view["run"]["price_unit"],"CNY/share")
+            self.assertEqual(view["run"]["fills"][0]["commission_minor"],str(run["fills"][0]["commission_minor"]))
+            self.assertEqual(view["stock_context"]["model_snapshot"],"synthetic:model-snapshot")
+            self.assertEqual(view["stock_context"]["execution_snapshot"],"synthetic:execution-snapshot")
+            self.assertEqual(view["market"]["native_chart"]["source_ref"],_digest(native))
+            self.assertEqual(view["market"]["native_chart"]["records"][0]["high"],native["records"][0]["high"])
+            self.assertEqual(view["market"]["native_chart"]["field_meta"]["open"],native["field_meta"]["open"])
+            self.assertEqual(view["evaluation"]["content_digest"],evaluation["content_digest"])
+            self.assertEqual(view["evaluation"]["benchmark_input"]["source_evidence"][0]["reference"],_digest(native))
+            self.assertTrue(view["evaluation"]["dividend_scope"]["display_projection"])
+            self.assertNotIn("SYNTHETIC_HEAVY_COVERAGE",html)
+            self.assertNotIn("SYNTHETIC_COMPRESSED_PAYLOAD",html)
+            self.assertEqual((run,evaluation,native),before)
+            matched=payload(render_saved_workbench(["stock.json"],data_batches={run["run_id"]:native}))["views"][0]
+            self.assertTrue(matched["market"]["native_chart"]["explicit_saved_batch_matched"])
+            wrong=deepcopy(native);wrong["records"][0]["high"]="synthetic:wrong-price"
+            with self.assertRaisesRegex(ProjectionError,"stock saved DataBatch/native source"):
+                render_saved_workbench(["stock.json"],data_batches={run["run_id"]:wrong})
+            for key,value in (("quantity_unit","fund units"),("price_unit","CNY/fund unit"),("core_version","axiom.rotation/1")):
+                with self.subTest(stock_tuple=key):
+                    run[key]=value
+                    with self.assertRaisesRegex(ProjectionError,"stock version or units"):
+                        render_saved_workbench(["stock.json"])
+                    run[key]=before[0][key]
+            native["field_meta"]["volume_shares"]["unit"]="fund units"
+            with self.assertRaisesRegex(ProjectionError,"stock OHLCV unit"):
+                render_saved_workbench(["stock.json"])
+
     def test_stock_ml_public_readers_bind_registration_without_account_outputs(self):
         experiment = {"contract_version":"stock_ml_experiment_v1", "account_status":"BLOCKED_PENDING_STOCK_RUNTIME_ADMISSION",
                       "account_reason":"synthetic owner reason", "definition":{"config":{"prediction_sessions":["2026-01-02","2026-01-05"]}}}
@@ -362,6 +437,30 @@ class WorkbenchTests(unittest.TestCase):
                 with patch.object(sys,"argv",args),patch("builtins.print"):
                     main()
                 self.assertEqual(payload(output.read_text())["views"][0]["stock_ml"]["stage_report"]["stage_report_ref"],report["stage_report_ref"])
+            stock_run, _, _ = saved_stock_case(self.sample)
+            stock_run["signal_ref"] = experiment["signal_run_ref"]
+            stock_run["plan"]["signal_frame"].update(
+                feature_ref=experiment["feature_ref"], model_ref=experiment["model_ref"])
+            record["backtest_ref"] = {k:stock_run[k] for k in ("run_id","content_digest","signal_ref","committed_sequence")}
+            record["run_kind"] = "SAVED_BACKTEST"
+            runtime = ModuleType("axiom_engine.runtime")
+            runtime.load_backtest_run = lambda path:deepcopy(stock_run)
+            with patch.dict(sys.modules,{"axiom_engine.runtime":runtime}):
+                actual=payload(render_saved_workbench(["stock-run.json"],**kwargs))["views"][0]
+                self.assertEqual(actual["run"]["status"],stock_run["status"])
+                self.assertEqual(actual["stock_ml"]["experiment"]["account_status"],experiment["account_status"])
+                for key in ("feature_ref","model_ref"):
+                    with self.subTest(account_input=key):
+                        stock_run["plan"]["signal_frame"][key]="synthetic:wrong"
+                        with self.assertRaisesRegex(ProjectionError,"stock account/model inputs"):
+                            render_saved_workbench(["stock-run.json"],**kwargs)
+                        stock_run["plan"]["signal_frame"][key]=experiment[key]
+                stock_run["signal_ref"]="synthetic:wrong-signal"
+                record["backtest_ref"]["signal_ref"]=stock_run["signal_ref"]
+                with self.assertRaisesRegex(ProjectionError,"stock account/model inputs"):
+                    render_saved_workbench(["stock-run.json"],**kwargs)
+            record["backtest_ref"]=None
+            record["run_kind"]="REGISTRATION_ONLY"
             record["output_refs"][3]["artifact_id"]="wrong"
             with self.assertRaisesRegex(ProjectionError,"stock ML registration"):
                 render_saved_workbench([],experiment_index_path="stock-index.json",stock_ml_paths=["stock-dir"])
