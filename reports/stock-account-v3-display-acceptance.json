@@ -1,0 +1,47 @@
+{
+  "contract_version": "ui_stock_v3_display_acceptance_v1",
+  "validation_date": "2026-10-04",
+  "package_version": "0.2.0",
+  "scope": "Read-only display of explicitly supplied owner-saved stock accounts; no strategy acceptance",
+  "ui_unit_tests_passed": 35,
+  "public_readers": {
+    "engine_run_v3_and_evaluation_v2": true,
+    "research_index_model_and_stage_report": true,
+    "exact_run_digest_watermark_and_registration": true,
+    "exact_feature_model_signal_and_stage_report_inputs": true,
+    "mismatched_units_refs_and_explicit_native_batch_rejected": true,
+    "native_evidence_validation_allowed": true
+  },
+  "display": {
+    "stock_shares_cny_per_share_and_native_volume_shares": true,
+    "saved_fill_commission_stamp_tax_and_transfer_fee": true,
+    "prediction_scope_and_execution_subset_separate": true,
+    "model_and_execution_snapshots_and_clocks_preserved": true,
+    "actual_account_status_separate_from_historical_model_manifest": true,
+    "explicit_daily_retrospective_approximation": true,
+    "strict_unknown_cash_only_control_is_not_return_acceptance": true,
+    "saved_nav_metrics_months_episodes_bins_and_null_cagr": true,
+    "thin_display_projection_preserves_original_complete_batch_reference": true,
+    "full_coverage_tables_and_compressed_payload_omitted": true,
+    "selected_ohlcv_per_key_provenance_and_engine_market_evidence_separate": true,
+    "synthetic_notice_preserved": true
+  },
+  "browser": {
+    "installed_mac_chrome_default_security_and_sandbox": true,
+    "desktop": "1440x1100",
+    "mobile": "390x844",
+    "no_document_overflow": true,
+    "run_comparison_and_month_episode_fill_navigation": true,
+    "historical_registration_clears_actual_account_context": true,
+    "existing_etf_three_views_usable_and_original_html_unchanged": true,
+    "local_entry_stock_target_updated_and_etf_section_unchanged": true
+  },
+  "independent_review": {"p1": 0, "p2": 0},
+  "owner_execution_query_save_calls": 0,
+  "protected_owner_legacy_and_paused_library_files_hash_mtime_size_unchanged": true,
+  "wheel_assets_byte_equal": true,
+  "private_results_html_images_and_full_reader_evidence": "Local only; excluded from public source",
+  "uploads": 0,
+  "deployment": false,
+  "visual_product_confirmation": "Pending user review"
+}

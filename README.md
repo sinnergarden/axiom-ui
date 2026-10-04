@@ -123,6 +123,26 @@ owner status and reason. With no BacktestRun, account metrics, charts and
 comparison are hidden. Research COMPLETE is a saved research registration;
 it does not establish an account backtest or strategy performance.
 
+The workbench also reads stock `backtest_run_v3` through the same public Engine
+loader, together with its saved evaluation and exact Research registration.
+Stock quantities and native daily volume are shares; prices are CNY per share.
+Per-fill commission, seller stamp tax and transfer fees remain owner values.
+The saved prediction universe, Shenzhen execution subset, model/execution
+Snapshots, admission, profile and evidence clocks remain visible. An explicit
+`stock_daily_observed` profile is labelled a retrospective daily approximation;
+UNKNOWN status stays unknown. Strict blocking and zero-fill cash-only results
+are a separate control, not strategy return acceptance. Actual run status and
+its registration describe the current account; the old model manifest's account
+status remains historical research provenance.
+
+For v3, the validated native `market_daily` source supplies OHLCV and per-key
+provenance. An optional explicit saved DataBatch must match that complete source
+identity exactly. The display retains its original reference and query clocks,
+while omitting full coverage tables and compressed payloads. It is clearly a
+display projection, not a new complete DataBatch. Saved evaluation metrics,
+monthly returns, episodes, bins and null CAGR are preserved without computation.
+The stock contract is [Trade §6.1](https://github.com/sinnergarden/axiom-docs/blob/e65dff8a3c39fa750efa5162058ce2348f2ab6fa/docs/design/04_axiom_trade.md#stock-daily-observed-minimal).
+
 ```sh
 PYTHONPATH=src:/path/to/axiom-research/src python3 -m axiom_ui --workbench --experiment-index /path/to/index.json --stock-ml /path/to/stock-experiment --stock-stage-report /path/to/stage-report.json --output /tmp/axiom-stock-stage.html
 ```
