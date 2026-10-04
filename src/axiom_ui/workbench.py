@@ -77,11 +77,14 @@ def _stock_native_chart(market: dict) -> dict | None:
     batch = source.get("batch") or {}
     fields = ("open", "high", "low", "close", "volume_shares")
     meta = batch.get("field_meta") or {}
-    _require(all(meta.get(k, {}).get("unit") == "CNY/share" for k in fields[:4]) and
+    _require(all(meta.get(k, {}).get("unit") == "CNY/share" for k in ("open", "close")) and
+             all(k not in meta or meta[k].get("unit") == "CNY/share" for k in ("high", "low")) and
              meta.get("volume_shares", {}).get("unit") == "shares", "unexpected stock OHLCV unit")
-    for field in fields:
+    for field in (k for k in fields if k in meta):
         _rows(meta[field].get("by_key"), "saved stock OHLCV provenance")
     rows = _rows(batch.get("records"), "saved stock OHLCV")
+    if any(k not in meta for k in ("high", "low")):
+        return None
     return {"source_ref": source["reference"], "display_projection": True,
             "context": _display_context(batch["context"]), "omitted_context_fields": ["coverage"],
             "records": [{k: deepcopy(row.get(k)) for k in ("security_id", "session", *fields)} for row in rows],

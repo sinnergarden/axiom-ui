@@ -3,7 +3,7 @@
   "validation_date": "2026-10-04",
   "package_version": "0.2.0",
   "scope": "Read-only display of explicitly supplied owner-saved stock accounts; no strategy acceptance",
-  "ui_unit_tests_passed": 34,
+  "ui_unit_tests_passed": 35,
   "public_readers": {
     "engine_run_v3_and_evaluation_v2": true,
     "research_index_model_and_stage_report": true,

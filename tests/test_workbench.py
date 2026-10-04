@@ -355,6 +355,45 @@ class WorkbenchTests(unittest.TestCase):
             with self.assertRaisesRegex(ProjectionError,"stock OHLCV unit"):
                 render_saved_workbench(["stock.json"])
 
+    def test_stock_v3_without_high_low_keeps_saved_close_volume_fallback(self):
+        run, _, native = saved_stock_case(self.sample)
+        for field in ("high", "low"):
+            del native["field_meta"][field]
+            for row in native["records"]:
+                del row[field]
+        native["context"]["query"]["fields"]=["open","close","volume_shares"]
+        market=run["plan"]["market_replay"]
+        market["source_evidence"][0]["reference"]=_digest(native)
+        market["source_refs"]=[_digest(native)]
+        market["rows"]=[{k:row[k] for k in ("security_id","session","open","close","volume_shares")}
+                        for row in native["records"]]
+        before=deepcopy(run)
+        runtime=ModuleType("axiom_engine.runtime")
+        runtime.load_backtest_run=lambda path:deepcopy(run)
+        with patch.dict(sys.modules,{"axiom_engine.runtime":runtime,"axiom_data":None}):
+            html=render_saved_workbench(["stock-close-volume.json"])
+            view=payload(html)["views"][0]
+            self.assertIsNone(view["market"]["native_chart"])
+            self.assertIsNone(view["market"]["data_batch"])
+            self.assertEqual(view["market"]["rows"][0]["close"],native["records"][0]["close"])
+            self.assertEqual(view["market"]["rows"][0]["volume_shares"],str(native["records"][0]["volume_shares"]))
+            self.assertEqual(view["run"]["nav"][-1]["nav_minor"],str(run["nav"][-1]["nav_minor"]))
+            self.assertIn("K线暂未提供，当前仅显示保存的收盘价与全天量。",html)
+            self.assertNotIn("high",view["market"]["rows"][0])
+            self.assertNotIn("low",view["market"]["rows"][0])
+            self.assertEqual(run,before)
+            # A missing optional field must not excuse wrong units on provided fields.
+            for field in ("open","close","volume_shares","high"):
+                with self.subTest(provided_field=field):
+                    original=deepcopy(native["field_meta"].get(field))
+                    native["field_meta"][field]={"unit":"fund units"}
+                    with self.assertRaisesRegex(ProjectionError,"stock OHLCV unit"):
+                        render_saved_workbench(["stock-close-volume.json"])
+                    if original is None:
+                        del native["field_meta"][field]
+                    else:
+                        native["field_meta"][field]=original
+
     def test_stock_ml_public_readers_bind_registration_without_account_outputs(self):
         experiment = {"contract_version":"stock_ml_experiment_v1", "account_status":"BLOCKED_PENDING_STOCK_RUNTIME_ADMISSION",
                       "account_reason":"synthetic owner reason", "definition":{"config":{"prediction_sessions":["2026-01-02","2026-01-05"]}}}
