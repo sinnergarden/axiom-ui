@@ -382,6 +382,12 @@ class WorkbenchTests(unittest.TestCase):
             self.assertNotIn("high",view["market"]["rows"][0])
             self.assertNotIn("low",view["market"]["rows"][0])
             self.assertEqual(run,before)
+            matched=payload(render_saved_workbench(["stock-close-volume.json"],data_batches={run["run_id"]:native}))["views"][0]
+            self.assertTrue(matched["market"]["explicit_saved_batch_matched"])
+            self.assertIsNone(matched["market"]["native_chart"])
+            wrong=deepcopy(native);wrong["records"][0]["close"]="synthetic:changed"
+            with self.assertRaisesRegex(ProjectionError,"stock saved DataBatch/native source identity"):
+                render_saved_workbench(["stock-close-volume.json"],data_batches={run["run_id"]:wrong})
             # A missing optional field must not excuse wrong units on provided fields.
             for field in ("open","close","volume_shares","high"):
                 with self.subTest(provided_field=field):

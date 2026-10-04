@@ -736,10 +736,15 @@ The workbench does not discover data roots or implicitly issue a Query.
         _require(run_id in by_id, "CONTEXT_MISMATCH: Data without loaded run")
         original = next(r for r in originals if r["run_id"] == run_id)
         if original["contract_version"] == "backtest_run_v3":
-            chart = by_id[run_id]["market"].get("native_chart")
-            _require(chart is not None and _digest(_wire(batch)) == chart["source_ref"],
+            market = by_id[run_id]["market"]
+            source_refs = [s["reference"] for s in market.get("source_evidence") or []
+                           if s["context"].get("domain") == "market_daily"]
+            _require(len(source_refs) == 1 and _digest(_wire(batch)) == source_refs[0],
                      "CONTEXT_MISMATCH: stock saved DataBatch/native source identity")
-            chart["explicit_saved_batch_matched"] = True
+            if market.get("native_chart") is not None:
+                market["native_chart"]["explicit_saved_batch_matched"] = True
+            else:
+                market["explicit_saved_batch_matched"] = True
         else:
             _attach_batch(by_id[run_id], batch, original)
         by_id[run_id]["market"]["data_batch_file_digest"] = file_digests.get(run_id)
