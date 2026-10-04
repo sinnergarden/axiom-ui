@@ -1,0 +1,452 @@
+"""Read-only workbench composition over explicit, validated owner results.
+
+This module formats and binds saved facts. It never executes Research/Core,
+calculates account statistics, resolves current, or writes an owner artifact.
+"""
+from __future__ import annotations
+
+import base64
+from copy import deepcopy
+from decimal import Decimal, InvalidOperation
+from hashlib import sha256
+import json
+import re
+from pathlib import Path
+from typing import Any, Mapping, Sequence
+
+from .projection import ProjectionError, _digest, _generated, _require
+from .report import _watermarks
+
+ASSETS = Path(__file__).with_name("assets")
+
+
+def _wire(value: Any) -> dict:
+    wire = value.to_dict() if hasattr(value, "to_dict") else value
+    _require(type(wire) is dict, "owner response must be a JSON object")
+    try:
+        return json.loads(json.dumps(wire, ensure_ascii=False, allow_nan=False))
+    except (TypeError, ValueError) as exc:
+        raise ProjectionError("owner response must be finite JSON") from exc
+
+
+def _decimal(value: Any, field: str, *, nullable: bool = False) -> None:
+    if nullable and value is None:
+        return
+    _require(type(value) is str, f"{field} must retain an owner decimal string")
+    try:
+        valid = Decimal(value).is_finite()
+    except InvalidOperation:
+        valid = False
+    _require(valid, f"nonfinite {field}")
+
+
+def _rows(value: Any, field: str, *, nullable: bool = False) -> list | None:
+    if nullable and value is None:
+        return None
+    _require(type(value) is list and all(type(row) is dict for row in value),
+             f"malformed {field}")
+    return value
+
+
+def _run(run: Any, evidence: str) -> dict:
+    wire = _wire(run)
+    _require(wire.get("contract_version") == "backtest_run_v1", "unsupported run contract")
+    _require(all(type(wire.get(k)) is str and wire[k]
+                 for k in ("run_id", "account_id", "status")), "missing run identity")
+    _watermarks(wire)
+    for point in wire.get("nav") or []:
+        _decimal(point.get("nav_index"), "nav_index")
+        _require(type(point.get("nav_minor")) is int, "NAV must be integer CNY cents")
+    for field in ("positions", "decisions", "orders", "fills"):
+        _rows(wire.get(field), field, nullable=True)
+    for fill in wire.get("fills") or []:
+        _decimal(fill.get("price"), "fill price")
+        _require(type(fill.get("quantity")) is int, "fill quantity must be integer units")
+        _require(all(type(fill.get(k)) is int for k in ("gross_minor", "fee_minor", "cash_delta_minor")),
+                 "fill amounts must be integer CNY cents")
+    metrics = wire.get("metrics")
+    _require(metrics is None or type(metrics) is dict, "malformed owner metrics")
+    for field in ("total_return", "max_drawdown"):
+        if metrics is not None and field in metrics:
+            _decimal(metrics[field], field, nullable=True)
+    profile = (wire.get("plan") or {}).get("profile") or {}
+    _require(type(profile) is dict, "malformed profile")
+    market = (wire.get("plan") or {}).get("market_replay") or {}
+    _require(type(market) is dict, "malformed frozen market replay")
+    approximate = profile.get("unknown_status_policy") == "etf_daily_observed"
+    blocked = any(row.get("reason") == "UNKNOWN_MARKET_STATUS" for row in wire.get("orders") or [])
+    # Retain saved market values only for an explicitly named close/volume view.
+    # Missing high/low is never converted into a synthetic candle.
+    market_rows = deepcopy(market.get("rows") or [])
+    _rows(market_rows, "saved market rows")
+    return {
+        "view_id": wire["run_id"],
+        "run": {k: deepcopy(wire.get(k)) for k in (
+            "contract_version", "run_id", "account_id", "status", "content_digest",
+            "committed_sequence", "signal_ref", "market_ref", "profile_ref",
+            "core_version", "runtime_version", "implementation_ref", "metrics", "nav",
+            "positions", "decisions", "orders", "fills", "limitations", "final_account")},
+        "configuration": {"start_session": (wire.get("plan") or {}).get("start_session"),
+                          "end_session": (wire.get("plan") or {}).get("end_session"),
+                          "initial_account": deepcopy((wire.get("plan") or {}).get("initial_account")),
+                          "profile": deepcopy(profile), "price_basis": market.get("price_basis")},
+        "market": {"rows": market_rows, "price_basis": market.get("price_basis"),
+                   "source_refs": deepcopy(market.get("source_refs")), "data_batch": None},
+        "evidence_kind": evidence, "approximate": approximate, "blocked": blocked,
+        "research": None, "evaluation": None,
+    }
+
+
+def _evaluation(value: Any, run: Mapping[str, Any]) -> dict:
+    wire = _wire(value)
+    _require(wire.get("contract_version") == "evaluation_report_v1", "unsupported evaluation contract")
+    binding = wire.get("input_run_ref")
+    _require(type(binding) is dict and all(binding.get(k) == run.get(k)
+             for k in ("run_id", "content_digest", "committed_sequence")),
+             "CONTEXT_MISMATCH: evaluation/run identity or watermark")
+    _require(all(wire.get(k) == run.get(k) for k in ("signal_ref", "market_ref", "profile_ref")),
+             "CONTEXT_MISMATCH: evaluation input refs")
+    _require(wire.get("status") in {"COMPLETE", "PARTIAL"}, "unsupported evaluation status")
+    nav = {row["session"]: row for row in run.get("nav") or []}
+    series = _rows(wire.get("series"), "evaluation series")
+    seen = set()
+    for point in series:
+        day = point.get("session")
+        _require(day not in seen and day in nav and all(point.get(k) == nav[day].get(k)
+                 for k in ("nav_minor", "nav_index", "committed_sequence")),
+                 "CONTEXT_MISMATCH: evaluation series/NAV")
+        seen.add(day)
+        _decimal(point.get("drawdown"), "drawdown", nullable=True)
+    _require(seen == set(nav), "CONTEXT_MISMATCH: evaluation session coverage")
+    months = set()
+    for month in _rows(wire.get("monthly_returns"), "monthly_returns"):
+        _require(month.get("month") not in months, "duplicate monthly evaluation")
+        months.add(month.get("month"))
+        _require(month.get("status") in {"COMPLETE", "PARTIAL", "MISSING"}, "unknown month status")
+        _decimal(month.get("return"), "month return", nullable=True)
+        _decimal(month.get("observed_return"), "observed month return", nullable=True)
+    fills = {f["fill_id"]: f for f in run.get("fills") or []}
+    episodes = set()
+    for episode in _rows(wire.get("episodes"), "episodes"):
+        _require(episode.get("episode_id") not in episodes, "duplicate episode")
+        episodes.add(episode.get("episode_id"))
+        _require(episode.get("status") in {"CLOSED", "OPEN"}, "unknown episode status")
+        _require(all(type(episode.get(k)) is bool for k in ("statistics_eligible", "left_censored")),
+                 "episode qualification must retain owner booleans")
+        for ref in _rows(episode.get("fill_refs"), "episode fill_refs"):
+            fill = fills.get(ref.get("fill_id"))
+            _require(fill is not None and fill.get("sequence") == ref.get("sequence") and
+                     fill.get("security_id") == episode.get("security_id"),
+                     "CONTEXT_MISMATCH: episode/fill")
+        for field in ("net_pnl_minor", "marked_pnl_minor"):
+            _require(episode.get(field) is None or type(episode.get(field)) is int,
+                     "episode P&L must retain integer cents")
+        _decimal(episode.get("net_return"), "episode return", nullable=True)
+    metrics = wire.get("episode_metrics")
+    _require(type(metrics) is dict, "missing episode metrics")
+    for field in ("win_rate", "mean_net_pnl_minor", "mean_episode_return"):
+        _decimal(metrics.get(field), field, nullable=True)
+    _require(type(wire.get("benchmark")) is dict, "missing benchmark availability report")
+    distribution = wire.get("pnl_distribution")
+    _require(type(distribution) is dict and distribution.get("status") in
+             {"AVAILABLE", "INSUFFICIENT_SAMPLE"}, "missing owner P&L distribution status")
+    _require(distribution.get("metric") == "net_pnl_minor" and distribution.get("unit") == "CNY fen",
+             "unexpected distribution metric/unit")
+    for bucket in _rows(distribution.get("bins"), "distribution bins"):
+        _require(type(bucket.get("count")) is int and bucket["count"] >= 0 and
+                 all(bucket.get(k) is None or type(bucket[k]) is int for k in ("lower_minor", "upper_minor")),
+                 "invalid saved distribution bin")
+    _require(distribution["status"] != "INSUFFICIENT_SAMPLE" or not distribution["bins"],
+             "insufficient sample must not claim owner distribution bins")
+    return wire
+
+
+def _paths(values: Sequence[str | Path], field: str) -> None:
+    _require(isinstance(values, Sequence) and not isinstance(values, (str, bytes)) and
+             all(isinstance(p, (str, Path)) for p in values),
+             f"{field} requires explicit paths via owner Reader")
+
+
+def _catalog(reader: Any, views: list[dict]) -> list[dict]:
+    """Bind a Research-owned index to explicit loaded results; never discover files."""
+    projection = _wire(reader.index())
+    _require(projection.get("contract_version") == "experiment_projection_v1", "unsupported Research projection")
+    loaded, evaluations = {}, {}
+    for view in views:
+        loaded.setdefault(view["run"]["run_id"], view)
+        if view["evaluation"] is not None:
+            evaluations[view["evaluation"]["evaluation_ref"]] = view
+    used, selected = set(), []
+    for item in _rows(projection.get("questions"), "Research questions"):
+        question, organization = item.get("question"), item.get("organization")
+        _require(type(question) is dict and type(organization) is dict, "malformed Research question")
+        runs = _rows(item.get("runs"), "Research runs")
+        versions = _rows(item.get("versions"), "Research versions")
+        for version in versions or [{"question_id": question.get("question_id"), "version_ref": None,
+                                     "created_at": question.get("created_at")}]:
+            _require(version.get("question_id") == question.get("question_id"), "CONTEXT_MISMATCH: Research version/question")
+            records = [r for r in runs if r.get("version_ref") == version.get("version_ref")]
+            parent = version.get("parent_version_ref")
+            difference = _wire(reader.compare_versions(parent, version["version_ref"])) if parent else None
+            for record in records or [None]:
+                if record:
+                    _require(record.get("question_id") == question.get("question_id") and
+                             record.get("status") in {"COMPLETE", "FAILED", "BLOCKED"}, "malformed Research run")
+                backtest = record.get("backtest_ref") if record else None
+                engine = loaded.get(backtest.get("run_id")) if type(backtest) is dict else None
+                if engine:
+                    _require(all(backtest.get(k) == engine["run"].get(k) for k in
+                             ("run_id", "content_digest", "signal_ref", "committed_sequence")),
+                             "CONTEXT_MISMATCH: Research/Engine run reference")
+                    evaluation = record.get("evaluation_ref")
+                    chosen = evaluations.get(evaluation.get("evaluation_ref")) if type(evaluation) is dict else None
+                    if chosen:
+                        saved = chosen["evaluation"]
+                        _require(all(chosen["run"].get(k) == engine["run"].get(k) for k in
+                                     ("run_id", "content_digest", "committed_sequence")) and
+                                 evaluation.get("evaluation_ref") == saved.get("evaluation_ref") and
+                                 evaluation.get("evaluation_content_digest") == saved.get("content_digest") and
+                                 evaluation.get("input_run_ref") == saved.get("input_run_ref"),
+                                 "CONTEXT_MISMATCH: Research/Engine evaluation reference")
+                    view = deepcopy(chosen or engine)
+                    if chosen or engine["evaluation"] is None:
+                        used.add((chosen or engine)["view_id"])
+                    if chosen is None:
+                        # A separately loaded newer evaluation must not appear
+                        # under an immutable record that references an older one.
+                        view["evaluation"] = None
+                else:
+                    view = {"run": {"run_id": None, "status": None, "nav": None, "positions": None,
+                                     "fills": None, "orders": None, "decisions": None, "metrics": None},
+                            "configuration": {}, "market": {"rows": [], "data_batch": None},
+                            "evaluation": None, "approximate": False, "blocked": False,
+                            "evidence_kind": "research_record_only"}
+                view["view_id"] = record["run_record_ref"] if record else (version["version_ref"] or question["question_id"]) + ":unrun"
+                batch_refs = [r for r in (record.get("output_refs") or []) if r.get("artifact_type") == "DataBatch"] if record else []
+                batch = view["market"]["data_batch"]
+                if batch_refs and batch is not None:
+                    matching = [r for r in batch_refs if r.get("artifact_id") == _digest(batch)]
+                    _require(bool(matching), "CONTEXT_MISMATCH: Research/DataBatch identity")
+                    file_digest = view["market"].get("data_batch_file_digest")
+                    if file_digest is not None:
+                        _require(any(r.get("content_digest") == file_digest for r in matching),
+                                 "CONTEXT_MISMATCH: Research/DataBatch file digest")
+                run_organization = record.get("organization") or {} if record else {}
+                _require(type(run_organization) is dict, "malformed Research run organization")
+                view["research"] = {"question_id": question.get("question_id"), "question_ref": question.get("question_ref"),
+                    "title": question.get("title"), "hypothesis": question.get("hypothesis"), "description": question.get("description"),
+                    "version_id": version.get("version_ref"), "version_label": version.get("label"),
+                    "version_explanation": version.get("explanation"), "parameters": version.get("parameters"),
+                    "input_refs": version.get("input_refs"), "changes": version.get("explicit_changes"),
+                    "version_comparison": difference, "comparison_left_ref": parent,
+                    "created_at": record.get("created_at") if record else version.get("created_at"),
+                    "status": record.get("status") if record else None, "not_run": record is None,
+                    "no_version": version.get("version_ref") is None, "last_activity_at": item.get("last_activity_at"),
+                    "reason": record.get("reason") if record else None, "outcome": record.get("outcome") if record else None,
+                    "run_record_ref": record.get("run_record_ref") if record else None,
+                    "output_refs": record.get("output_refs") if record else None,
+                    "backtest_ref": backtest, "evaluation_ref": record.get("evaluation_ref") if record else None,
+                    "tags": organization.get("tags"), "groups": organization.get("groups"),
+                    "favorite": run_organization.get("favorite"), "shelved": run_organization.get("shelved"),
+                    "run_organization_revision": run_organization.get("revision"),
+                    "question_favorite": organization.get("favorite"), "question_shelved": organization.get("shelved"),
+                    "organization_revision": organization.get("revision"),
+                    "store_revision": projection.get("store_revision"), "index_content_digest": projection.get("content_digest")}
+                selected.append(view)
+    selected.extend(v for v in views if v["view_id"] not in used)
+    _require(len({v["view_id"] for v in selected}) == len(selected), "duplicate Research selection identity")
+    return selected
+
+
+def _attach_batch(view: dict, batch: Any, source_run: dict) -> None:
+    wire = batch.to_json() if hasattr(batch, "to_json") else batch
+    _require(type(wire) is dict and set(wire) == {"records", "field_meta", "context"},
+             "unsupported DataBatch")
+    wire = _wire(wire)
+    context = wire["context"]
+    _require(type(context) is dict and context.get("contract_version") == "data_batch_v1" and
+             context.get("snapshot_id") not in {None, "", "current", "latest"}, "unpinned DataBatch")
+    market = (source_run.get("plan") or {}).get("market_replay") or {}
+    query = context.get("query")
+    _require(type(query) is dict and query.get("price_basis") == market.get("price_basis") == "unadjusted",
+             "CONTEXT_MISMATCH: price basis; adjusted fills require owner display mapping")
+    fields = query.get("fields") or []
+    _require(all(k in fields for k in ("open", "high", "low", "close", "volume_units")),
+             "OHLCV Data Query fields required")
+    rows = _rows(wire.get("records"), "Data records")
+    matches = []
+    for source in market.get("source_evidence") or []:
+        frozen = source.get("context") if type(source) is dict else None
+        if type(frozen) is not dict or frozen.get("domain") != "market_daily":
+            continue
+        frozen_query = frozen.get("query") or {}
+        if {k: v for k, v in query.items() if k != "fields"} != {
+                k: v for k, v in frozen_query.items() if k != "fields"}:
+            continue
+        if not all(context.get(k) == frozen.get(k) for k in
+                   ("snapshot_id", "domain", "reader_version", "derivation", "contract_id", "source_profile_id", "coverage")):
+            continue
+        if not set(frozen_query.get("fields") or []).issubset(fields):
+            continue
+        base_fields = frozen_query["fields"]
+        # Prove the original run's common facts AND per-key provenance exactly.
+        # Only the requested high/low extension differs; no latest resolution.
+        base = {"context": frozen,
+                "records": [{k: r[k] for k in ("security_id", "session", *base_fields)} for r in rows],
+                "field_meta": {k: wire["field_meta"].get(k) for k in base_fields}}
+        if _digest(base) == source.get("reference"):
+            matches.append(source)
+    _require(len(matches) == 1, "CONTEXT_MISMATCH: frozen Data Query/reader/provenance")
+    _require(all(wire["field_meta"].get(k, {}).get("unit") == "CNY/fund unit"
+                 for k in ("open", "high", "low", "close")) and
+             wire["field_meta"].get("volume_units", {}).get("unit") == "fund units",
+             "unexpected OHLCV unit")
+    original = {(r["security_id"], r["session"]): r for r in market.get("rows") or []}
+    seen = set()
+    for row in rows:
+        key = row.get("security_id"), row.get("session")
+        _require(key not in seen, "duplicate Data key")
+        seen.add(key)
+        _require(key in original, "CONTEXT_MISMATCH: Data key outside saved run market")
+        for field in ("open", "close"):
+            if row.get(field) is not None and original[key].get(field) is not None:
+                _require(Decimal(str(row[field])) == Decimal(str(original[key][field])),
+                         "CONTEXT_MISMATCH: Data price/saved market")
+    # Existing P12 validates per-key metadata and keeps query/source refs intact.
+    from .projection import project_data_layer
+    securities = {r["security_id"] for r in rows}
+    for security in securities:
+        for field in ("open", "high", "low", "close", "volume_units"):
+            project_data_layer(wire, field=field, security_id=security,
+                               role="volume" if field == "volume_units" else "candles",
+                               generated_at="2026-10-04T00:00:00Z")
+    view["market"]["data_batch"] = wire
+
+
+def render_saved_workbench(run_paths: Sequence[str | Path], *,
+                           evaluation_paths: Sequence[str | Path] = (),
+                           experiment_paths: Sequence[str | Path] = (),
+                           experiment_index_path: str | Path | None = None,
+                           data_batches: Mapping[str, Any] | None = None,
+                           data_batch_paths: Mapping[str, str | Path] | None = None,
+                           synthetic_run_ids: Sequence[str] = (),
+                           generated_at: str | None = None) -> str:
+    """Read explicit saved owner paths, validate refs, and render a private offline UI.
+
+Data batches must be responses already obtained from Data's public Reader.
+The workbench does not discover data roots or implicitly issue a Query.
+"""
+    for paths, field in ((run_paths, "runs"), (evaluation_paths, "evaluations"), (experiment_paths, "experiments")):
+        _paths(paths, field)
+    _require(experiment_index_path is None or isinstance(experiment_index_path, (str, Path)), "Research index requires explicit path")
+    _require(bool(run_paths) or experiment_index_path is not None, "an explicit saved run or Research index is required")
+    originals = []
+    if run_paths:
+        from axiom_engine.runtime import load_backtest_run
+        originals = [_wire(load_backtest_run(path)) for path in run_paths]
+    views = [_run(r, "synthetic_owner_output" if r["run_id"] in synthetic_run_ids else
+                  "saved_backtest_output") for r in originals]
+    by_id = {v["run"]["run_id"]: v for v in views}
+    _require(len(by_id) == len(views), "duplicate run identity")
+    _require(set(synthetic_run_ids).issubset(by_id), "unknown synthetic run identity")
+    if evaluation_paths:
+        from axiom_engine.runtime import load_backtest_evaluation
+        for path in evaluation_paths:
+            evaluation = _wire(load_backtest_evaluation(path))
+            run_id = (evaluation.get("input_run_ref") or {}).get("run_id")
+            _require(run_id in by_id, "CONTEXT_MISMATCH: evaluation without loaded run")
+            _require(not any(v["evaluation"] is not None and v["evaluation"].get("evaluation_ref") ==
+                             evaluation.get("evaluation_ref") for v in views), "duplicate evaluation identity")
+            verified = _evaluation(evaluation, by_id[run_id]["run"])
+            if by_id[run_id]["evaluation"] is None:
+                by_id[run_id]["evaluation"] = verified
+            else:
+                view = deepcopy(by_id[run_id])
+                view["view_id"] = run_id + ":evaluation:" + evaluation["evaluation_ref"]
+                view["evaluation"] = verified
+                views.append(view)
+    if experiment_paths:
+        from axiom_research import load_rotation_experiment
+        for path in experiment_paths:
+            experiment = load_rotation_experiment(path)
+            manifest = experiment.manifest()
+            for view in views:
+                if view["run"]["signal_ref"] == manifest.get("signal_run_ref"):
+                    view["research"] = {"experiment_ref": "sha256:" + experiment.path.name,
+                        "question_id": None, "title": None, "hypothesis": None,
+                        "version_id": None, "version_label": None, "created_at": None,
+                        "tags": None, "favorite": None, "shelved": None,
+                        "parameters": manifest.get("policy"), "changes": None,
+                        "signal_ref": manifest.get("signal_run_ref"),
+                        "feature_ref": manifest.get("feature_build"), "limitations": manifest.get("scope")}
+    batches = dict(data_batches or {})
+    file_digests = {}
+    for run_id, path in (data_batch_paths or {}).items():
+        _require(isinstance(path, (str, Path)), "DataBatch requires explicit response file path")
+        _require(run_id not in batches, "duplicate DataBatch input for run")
+        raw = Path(path).read_bytes()
+        def unique(pairs):
+            result = {}
+            for key, value in pairs:
+                _require(key not in result, "duplicate DataBatch JSON key")
+                result[key] = value
+            return result
+        batches[run_id] = json.loads(raw, object_pairs_hook=unique)
+        file_digests[run_id] = "sha256:" + sha256(raw).hexdigest()
+    for run_id, batch in batches.items():
+        _require(run_id in by_id, "CONTEXT_MISMATCH: Data without loaded run")
+        original = next(r for r in originals if r["run_id"] == run_id)
+        _attach_batch(by_id[run_id], batch, original)
+        by_id[run_id]["market"]["data_batch_file_digest"] = file_digests.get(run_id)
+        for view in views:
+            if view is not by_id[run_id] and view["run"]["run_id"] == run_id:
+                view["market"] = deepcopy(by_id[run_id]["market"])
+    if experiment_index_path is not None:
+        from axiom_research import ExperimentReader
+        views = _catalog(ExperimentReader(experiment_index_path), views)
+    return _render(views, generated_at)
+
+
+def render_sample_workbench(sample: Mapping[str, Any], *, generated_at: str | None = None) -> str:
+    """Explicit synthetic UI fixture; never represents an owner result or real run."""
+    data = _wire(sample)
+    _require(data.get("fixture_kind") == "synthetic_ui_workbench", "explicit synthetic fixture required")
+    views = []
+    for entry in _rows(data.get("runs"), "sample runs"):
+        view = _run(entry.get("run"), "synthetic_ui_fixture")
+        view["research"] = deepcopy(entry.get("research"))
+        if entry.get("evaluation") is not None:
+            view["evaluation"] = _evaluation(entry["evaluation"], view["run"])
+        if entry.get("data_batch") is not None:
+            _attach_batch(view, entry["data_batch"], entry["run"])
+        views.append(view)
+    _require(bool(views) and len({v["run"]["run_id"] for v in views}) == len(views),
+             "empty/duplicate sample runs")
+    return _render(views, generated_at)
+
+
+def _render(views: list[dict], generated_at: str | None) -> str:
+    _require(bool(views), "no saved records to display")
+    payload = {"contract_version": "ui_workbench_projection_v1", "views": views,
+               "generated_at": _generated(generated_at)}
+    # Escaping '<' prevents owner strings from closing the inert JSON script.
+    def browser_values(value):
+        # Browser coordinates may use Number; saved integers must not silently
+        # lose precision at JSON.parse. Display integers as exact decimal text.
+        if type(value) is int:
+            return str(value)
+        if type(value) is list:
+            return [browser_values(v) for v in value]
+        if type(value) is dict:
+            return {k: browser_values(v) for k, v in value.items()}
+        return value
+    data = json.dumps(browser_values(payload), ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+    data = data.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    css = (ASSETS / "workbench.css").read_text()
+    script = (ASSETS / "workbench.js").read_text()
+    script_hash = base64.b64encode(sha256(script.encode()).digest()).decode()
+    template = (ASSETS / "workbench.html").read_text()
+    replacements = {"SCRIPT_HASH": script_hash, "CSS": css, "DATA": data, "SCRIPT": script}
+    # Substitute only original template slots; owner text is never reparsed.
+    return re.sub(r"\{\{(SCRIPT_HASH|CSS|DATA|SCRIPT)\}\}",
+                  lambda match: replacements[match.group(1)], template)

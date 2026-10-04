@@ -1,0 +1,43 @@
+{
+  "contract_version": "ui_workbench_acceptance_v1",
+  "package_version": "0.2.0",
+  "validation_date": "2026-10-04",
+  "unit_tests": {
+    "command": "PYTHONPATH=src python3 -m unittest discover -s tests -v",
+    "passed": 22
+  },
+  "browser": {
+    "name": "installed Mac Google Chrome",
+    "default_security_and_sandbox": true,
+    "desktop": "1440x1100",
+    "mobile": "390x844",
+    "no_document_overflow": true,
+    "tabs_preserve_run_context": true,
+    "comparison_shared_chart_and_saved_metrics": true,
+    "saved_fill_order_month_episode_drilldown": true,
+    "partial_missing_and_blocked_labels": true,
+    "mobile_navigation_folds": true
+  },
+  "reader_acceptance": {
+    "engine_public_run_and_evaluation_loaders": true,
+    "research_public_index_and_parent_version_diff": true,
+    "saved_data_batch_response_only": true,
+    "exact_run_digest_watermark_and_input_refs": true,
+    "frozen_common_data_batch_digest": true,
+    "registered_full_data_wire_and_file_digest": true,
+    "owner_source_hash_mtime_size_unchanged": true,
+    "no_business_computation_or_current_resolution": true,
+    "private_evidence_retained_locally": true
+  },
+  "independent_review": {
+    "static_only": true,
+    "remaining_p1": 0,
+    "remaining_p2": 0
+  },
+  "wheel_assets_included": true,
+  "pending": [
+    "Research grouped saved_run_ref/history projection is under owner review; UI will consume final owner fields",
+    "Long-history fixed Snapshot and saved run are separate parent-coordinated acceptance"
+  ],
+  "publication_scope": "Source, tests and handwritten synthetic fixtures only; private HTML, images, data and results excluded"
+}
