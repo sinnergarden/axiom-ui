@@ -1,0 +1,3086 @@
+{
+  "fixture_kind": "synthetic_ui_workbench",
+  "description": "All handwritten synthetic contract values; not a real or accepted account run",
+  "runs": [
+    {
+      "run": {
+        "contract_version": "backtest_run_v1",
+        "run_id": "synthetic:run-v2",
+        "account_id": "synthetic-account",
+        "content_digest": "synthetic:digest:synthetic:run-v2",
+        "committed_sequence": 9,
+        "status": "COMPLETE",
+        "signal_ref": "synthetic:signal-v2",
+        "market_ref": "synthetic:market-current",
+        "profile_ref": "synthetic:profile",
+        "core_version": "synthetic_core_v1",
+        "runtime_version": "synthetic_runtime_v1",
+        "implementation_ref": "synthetic:implementation",
+        "plan": {
+          "start_session": "2026-03-30",
+          "end_session": "2026-04-30",
+          "initial_account": {
+            "cash_minor": 1000000
+          },
+          "profile": {
+            "unknown_status_policy": "block",
+            "lot_size": 100
+          },
+          "market_replay": {
+            "contract_version": "market_replay_v1",
+            "price_basis": "unadjusted",
+            "rows": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "open": "10.00",
+                "close": "10.00",
+                "volume_units": 10000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "open": "10.10",
+                "close": "10.50",
+                "volume_units": 13000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "open": "10.50",
+                "close": "10.10",
+                "volume_units": 14000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "open": "10.00",
+                "close": "10.00",
+                "volume_units": 14000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "open": "9.00",
+                "close": "9.50",
+                "volume_units": 15000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "open": "9.50",
+                "close": "9.80",
+                "volume_units": 16000
+              }
+            ],
+            "source_refs": [
+              "sha256:c17821ff15cb948dac100c291eca6901fed6711e139c27b39bc0a71d03b42cc7"
+            ],
+            "source_evidence": [
+              {
+                "reference": "sha256:c17821ff15cb948dac100c291eca6901fed6711e139c27b39bc0a71d03b42cc7",
+                "context": {
+                  "contract_version": "data_batch_v1",
+                  "snapshot_id": "synthetic:current-snapshot",
+                  "domain": "market_daily",
+                  "reader_version": "synthetic_reader_v1",
+                  "contract_id": "synthetic_daily_v1",
+                  "source_profile_id": "synthetic",
+                  "query": {
+                    "fields": [
+                      "open",
+                      "close",
+                      "volume_units"
+                    ],
+                    "symbols": [
+                      "cn.etf.SSE.510300.20120528"
+                    ],
+                    "sessions": [
+                      "2026-03-30",
+                      "2026-03-31",
+                      "2026-04-01",
+                      "2026-04-02",
+                      "2026-04-29",
+                      "2026-04-30"
+                    ],
+                    "price_basis": "unadjusted",
+                    "adjustment_anchor": null,
+                    "pit_policy": "synthetic_observed",
+                    "purpose": "market_replay",
+                    "cutoff_by_session": {
+                      "2026-03-30": "2026-03-30T20:00:00+08:00",
+                      "2026-03-31": "2026-03-31T20:00:00+08:00",
+                      "2026-04-01": "2026-04-01T20:00:00+08:00",
+                      "2026-04-02": "2026-04-02T20:00:00+08:00",
+                      "2026-04-29": "2026-04-29T20:00:00+08:00",
+                      "2026-04-30": "2026-04-30T20:00:00+08:00"
+                    },
+                    "policy_by_session": null,
+                    "universe_id": null
+                  },
+                  "limitations": [
+                    "Synthetic UI fixture only"
+                  ],
+                  "coverage": null
+                }
+              }
+            ]
+          }
+        },
+        "nav": [
+          {
+            "session": "2026-03-30",
+            "cash_minor": 899900,
+            "market_value_minor": 100000,
+            "receivable_minor": 0,
+            "nav_minor": 999900,
+            "nav_index": "0.9999",
+            "committed_sequence": 2
+          },
+          {
+            "session": "2026-03-31",
+            "cash_minor": 899900,
+            "market_value_minor": 105000,
+            "receivable_minor": 0,
+            "nav_minor": 1004900,
+            "nav_index": "1.0049",
+            "committed_sequence": 3
+          },
+          {
+            "session": "2026-04-01",
+            "cash_minor": 899900,
+            "market_value_minor": 101000,
+            "receivable_minor": 0,
+            "nav_minor": 1000900,
+            "nav_index": "1.0009",
+            "committed_sequence": 4
+          },
+          {
+            "session": "2026-04-02",
+            "cash_minor": 999800,
+            "market_value_minor": 0,
+            "receivable_minor": 0,
+            "nav_minor": 999800,
+            "nav_index": "0.9998",
+            "committed_sequence": 6
+          },
+          {
+            "session": "2026-04-29",
+            "cash_minor": 909700,
+            "market_value_minor": 95000,
+            "receivable_minor": 0,
+            "nav_minor": 1004700,
+            "nav_index": "1.0047",
+            "committed_sequence": 8
+          },
+          {
+            "session": "2026-04-30",
+            "cash_minor": 909700,
+            "market_value_minor": 98000,
+            "receivable_minor": 0,
+            "nav_minor": 1007700,
+            "nav_index": "1.0077",
+            "committed_sequence": 9
+          }
+        ],
+        "positions": [
+          {
+            "session": "2026-03-30",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "quantity": 100,
+            "sellable_quantity": 0,
+            "mark_price": "10.00",
+            "mark_session": "2026-03-30",
+            "is_stale": false,
+            "market_value_minor": 100000,
+            "committed_sequence": 2
+          },
+          {
+            "session": "2026-03-31",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "quantity": 100,
+            "sellable_quantity": 100,
+            "mark_price": "10.50",
+            "mark_session": "2026-03-31",
+            "is_stale": false,
+            "market_value_minor": 105000,
+            "committed_sequence": 3
+          },
+          {
+            "session": "2026-04-01",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "quantity": 100,
+            "sellable_quantity": 100,
+            "mark_price": "10.10",
+            "mark_session": "2026-04-01",
+            "is_stale": false,
+            "market_value_minor": 101000,
+            "committed_sequence": 4
+          },
+          {
+            "session": "2026-04-29",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "quantity": 100,
+            "sellable_quantity": 0,
+            "mark_price": "9.50",
+            "mark_session": "2026-04-29",
+            "is_stale": false,
+            "market_value_minor": 95000,
+            "committed_sequence": 8
+          },
+          {
+            "session": "2026-04-30",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "quantity": 100,
+            "sellable_quantity": 100,
+            "mark_price": "9.80",
+            "mark_session": "2026-04-30",
+            "is_stale": false,
+            "market_value_minor": 98000,
+            "committed_sequence": 9
+          }
+        ],
+        "orders": [
+          {
+            "order_id": "synthetic:run-v2:order:0",
+            "session": "2026-03-30",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "side": "BUY",
+            "quantity": 100,
+            "filled_quantity": 100,
+            "status": "FILLED",
+            "reason": null,
+            "market_state": "synthetic_known",
+            "state_reason": "synthetic_fixture",
+            "execution_admission": "SYNTHETIC_FIXTURE"
+          },
+          {
+            "order_id": "synthetic:run-v2:order:1",
+            "session": "2026-04-02",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "side": "SELL",
+            "quantity": 100,
+            "filled_quantity": 100,
+            "status": "FILLED",
+            "reason": null,
+            "market_state": "synthetic_known",
+            "state_reason": "synthetic_fixture",
+            "execution_admission": "SYNTHETIC_FIXTURE"
+          },
+          {
+            "order_id": "synthetic:run-v2:order:2",
+            "session": "2026-04-29",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "side": "BUY",
+            "quantity": 100,
+            "filled_quantity": 100,
+            "status": "FILLED",
+            "reason": null,
+            "market_state": "synthetic_known",
+            "state_reason": "synthetic_fixture",
+            "execution_admission": "SYNTHETIC_FIXTURE"
+          }
+        ],
+        "fills": [
+          {
+            "fill_id": "synthetic:run-v2:fill:0",
+            "order_id": "synthetic:run-v2:order:0",
+            "session": "2026-03-30",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "side": "BUY",
+            "quantity": 100,
+            "price": "10.00",
+            "gross_minor": 100000,
+            "fee_minor": 100,
+            "cash_delta_minor": -100100,
+            "sequence": 1,
+            "execution_admission": "SYNTHETIC_FIXTURE"
+          },
+          {
+            "fill_id": "synthetic:run-v2:fill:1",
+            "order_id": "synthetic:run-v2:order:1",
+            "session": "2026-04-02",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "side": "SELL",
+            "quantity": 100,
+            "price": "10.00",
+            "gross_minor": 100000,
+            "fee_minor": 100,
+            "cash_delta_minor": 99900,
+            "sequence": 5,
+            "execution_admission": "SYNTHETIC_FIXTURE"
+          },
+          {
+            "fill_id": "synthetic:run-v2:fill:2",
+            "order_id": "synthetic:run-v2:order:2",
+            "session": "2026-04-29",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "side": "BUY",
+            "quantity": 100,
+            "price": "9.00",
+            "gross_minor": 90000,
+            "fee_minor": 100,
+            "cash_delta_minor": -90100,
+            "sequence": 7,
+            "execution_admission": "SYNTHETIC_FIXTURE"
+          }
+        ],
+        "decisions": [
+          {
+            "feature_session": "2026-03-27",
+            "trade_session": "2026-03-30",
+            "status": "DECISION_COMPLETE",
+            "selected_security_id": "cn.etf.SSE.510300.20120528",
+            "intents": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "side": "BUY",
+                "quantity": 100
+              }
+            ],
+            "trace": [
+              {
+                "reason": "SYNTHETIC_SAVED_RULE"
+              }
+            ]
+          }
+        ],
+        "metrics": {
+          "total_return": "0.0077",
+          "max_drawdown": "-0.005075131853",
+          "total_fees_minor": 300,
+          "turnover_minor": 290000,
+          "fill_count": 3,
+          "unfilled_order_count": 0
+        },
+        "limitations": [
+          "Handwritten synthetic UI contract fixture; not Engine acceptance or real profitability evidence"
+        ],
+        "final_account": null
+      },
+      "research": {
+        "question_id": "synthetic:question",
+        "title": "动量规则的退场如何影响结果？",
+        "hypothesis": "合成说明：只演示问题、版本与运行导航。",
+        "version_id": "synthetic:version-v2",
+        "version_label": "v2 · 固定输入",
+        "created_at": "2026-10-04T12:04:00Z",
+        "tags": [
+          "ETF",
+          "合成"
+        ],
+        "favorite": true,
+        "shelved": false,
+        "status": "COMPLETE",
+        "parameters": {
+          "top_k": 1
+        },
+        "changes": [
+          {
+            "field": "market_ref",
+            "before": "synthetic:market-old",
+            "after": "synthetic:market-current"
+          }
+        ],
+        "signal_evaluation": null
+      },
+      "evaluation": {
+        "contract_version": "evaluation_report_v1",
+        "evaluation_ref": "synthetic:evaluation:synthetic:run-v2",
+        "content_digest": "synthetic:evaluation-digest:synthetic:run-v2",
+        "input_run_ref": {
+          "run_id": "synthetic:run-v2",
+          "content_digest": "synthetic:digest:synthetic:run-v2",
+          "committed_sequence": 9
+        },
+        "signal_ref": "synthetic:signal-v2",
+        "market_ref": "synthetic:market-current",
+        "profile_ref": "synthetic:profile",
+        "spec_ref": "synthetic:spec",
+        "spec": {
+          "description": "synthetic saved P10 display values"
+        },
+        "status": "PARTIAL",
+        "evaluation_version": "synthetic_p10",
+        "implementation_ref": "synthetic:implementation",
+        "benchmark_ref": "synthetic:index",
+        "benchmark_input": null,
+        "dividend_scope_ref": null,
+        "dividend_scope": null,
+        "series": [
+          {
+            "session": "2026-03-30",
+            "nav_minor": 999900,
+            "nav_index": "0.9999",
+            "committed_sequence": 2,
+            "peak_nav_minor": null,
+            "drawdown": "-0.0001"
+          },
+          {
+            "session": "2026-03-31",
+            "nav_minor": 1004900,
+            "nav_index": "1.0049",
+            "committed_sequence": 3,
+            "peak_nav_minor": null,
+            "drawdown": "0"
+          },
+          {
+            "session": "2026-04-01",
+            "nav_minor": 1000900,
+            "nav_index": "1.0009",
+            "committed_sequence": 4,
+            "peak_nav_minor": null,
+            "drawdown": "-0.00398049557"
+          },
+          {
+            "session": "2026-04-02",
+            "nav_minor": 999800,
+            "nav_index": "0.9998",
+            "committed_sequence": 6,
+            "peak_nav_minor": null,
+            "drawdown": "-0.005075131853"
+          },
+          {
+            "session": "2026-04-29",
+            "nav_minor": 1004700,
+            "nav_index": "1.0047",
+            "committed_sequence": 8,
+            "peak_nav_minor": null,
+            "drawdown": "-0.000199024779"
+          },
+          {
+            "session": "2026-04-30",
+            "nav_minor": 1007700,
+            "nav_index": "1.0077",
+            "committed_sequence": 9,
+            "peak_nav_minor": null,
+            "drawdown": "0"
+          }
+        ],
+        "monthly_returns": [
+          {
+            "month": "2026-03",
+            "status": "PARTIAL",
+            "first_session": "2026-03-30",
+            "last_session": "2026-03-31",
+            "boundary_session": null,
+            "return": null,
+            "observed_return": "0.0049",
+            "reason": "SHORT_FIRST_MONTH",
+            "committed_sequence": 9
+          },
+          {
+            "month": "2026-04",
+            "status": "COMPLETE",
+            "first_session": "2026-04-01",
+            "last_session": "2026-04-30",
+            "boundary_session": "2026-03-31",
+            "return": "0.002786",
+            "observed_return": null,
+            "reason": null,
+            "committed_sequence": 9
+          }
+        ],
+        "pnl_distribution": {
+          "status": "INSUFFICIENT_SAMPLE",
+          "metric": "net_pnl_minor",
+          "unit": "CNY fen",
+          "included_episode_count": 1,
+          "minimum_episodes": 10,
+          "bins": []
+        },
+        "episodes": [
+          {
+            "episode_id": "synthetic:run-v2:episode:closed",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "status": "CLOSED",
+            "entry_session": "2026-03-30",
+            "exit_session": "2026-04-02",
+            "entry_sequence": 1,
+            "exit_sequence": 5,
+            "left_censored": false,
+            "income_status": "OBSERVED_ONLY",
+            "statistics_eligible": true,
+            "exclusion_reasons": [],
+            "buy_cost_minor": 100100,
+            "sell_proceeds_minor": 99900,
+            "fees_minor": 200,
+            "dividend_income_minor": 0,
+            "pending_dividend_minor": null,
+            "receivable_minor": 0,
+            "net_pnl_minor": -200,
+            "marked_pnl_minor": null,
+            "return_denominator_minor": 100100,
+            "net_return": "-0.001998001998001998",
+            "fill_refs": [
+              {
+                "fill_id": "synthetic:run-v2:fill:0",
+                "sequence": 1
+              },
+              {
+                "fill_id": "synthetic:run-v2:fill:1",
+                "sequence": 5
+              }
+            ],
+            "dividends": []
+          },
+          {
+            "episode_id": "synthetic:run-v2:episode:open",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "status": "OPEN",
+            "entry_session": "2026-04-29",
+            "exit_session": null,
+            "entry_sequence": 7,
+            "exit_sequence": null,
+            "left_censored": false,
+            "income_status": "COVERAGE_UNKNOWN",
+            "statistics_eligible": false,
+            "exclusion_reasons": [
+              "OPEN"
+            ],
+            "buy_cost_minor": 90100,
+            "sell_proceeds_minor": 0,
+            "fees_minor": 100,
+            "dividend_income_minor": 0,
+            "pending_dividend_minor": null,
+            "receivable_minor": null,
+            "net_pnl_minor": null,
+            "marked_pnl_minor": 7900,
+            "return_denominator_minor": 90100,
+            "net_return": null,
+            "fill_refs": [
+              {
+                "fill_id": "synthetic:run-v2:fill:2",
+                "sequence": 7
+              }
+            ],
+            "dividends": []
+          }
+        ],
+        "episode_metrics": {
+          "closed_count": 1,
+          "eligible_closed_count": 1,
+          "open_count": 1,
+          "left_censored_count": 0,
+          "income_pending_count": 0,
+          "win_count": 0,
+          "loss_count": 1,
+          "tie_count": 0,
+          "win_rate": "0",
+          "mean_net_pnl_minor": "-200",
+          "mean_episode_return": "-0.001998001998001998",
+          "return_denominator": "cumulative_buy_cost_including_fees",
+          "weighting": "equal_closed_episode",
+          "dividend_scope_status": "COVERAGE_UNKNOWN"
+        },
+        "benchmark": {
+          "security_id": "000300.SH",
+          "series_kind": "price_index_excluding_dividends",
+          "unit": "index points",
+          "anchor_session": "2026-03-27",
+          "anchor_close": "4000",
+          "status": "COMPLETE",
+          "total_return": "0.01",
+          "max_drawdown": "-0.00744",
+          "series": [
+            {
+              "session": "2026-03-30",
+              "close": "4000",
+              "nav_index": "1",
+              "daily_return": null,
+              "drawdown": "0",
+              "valid": true,
+              "missing_reason": null,
+              "source_refs": [
+                "synthetic:index"
+              ]
+            },
+            {
+              "session": "2026-03-31",
+              "close": "4030",
+              "nav_index": "1.0075",
+              "daily_return": null,
+              "drawdown": "0",
+              "valid": true,
+              "missing_reason": null,
+              "source_refs": [
+                "synthetic:index"
+              ]
+            },
+            {
+              "session": "2026-04-01",
+              "close": "4000",
+              "nav_index": "1",
+              "daily_return": null,
+              "drawdown": "-0.00744",
+              "valid": true,
+              "missing_reason": null,
+              "source_refs": [
+                "synthetic:index"
+              ]
+            },
+            {
+              "session": "2026-04-02",
+              "close": "4005",
+              "nav_index": "1.00125",
+              "daily_return": null,
+              "drawdown": "-0.0062",
+              "valid": true,
+              "missing_reason": null,
+              "source_refs": [
+                "synthetic:index"
+              ]
+            },
+            {
+              "session": "2026-04-29",
+              "close": "4050",
+              "nav_index": "1.0125",
+              "daily_return": null,
+              "drawdown": "0",
+              "valid": true,
+              "missing_reason": null,
+              "source_refs": [
+                "synthetic:index"
+              ]
+            },
+            {
+              "session": "2026-04-30",
+              "close": "4040",
+              "nav_index": "1.01",
+              "daily_return": null,
+              "drawdown": "-0.00246",
+              "valid": true,
+              "missing_reason": null,
+              "source_refs": [
+                "synthetic:index"
+              ]
+            }
+          ]
+        },
+        "limitations": [
+          "Synthetic UI values only; dividend scope unknown; benchmark price index excludes dividends"
+        ]
+      },
+      "data_batch": {
+        "records": [
+          {
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "session": "2026-03-30",
+            "open": "10.00",
+            "high": "10.10",
+            "low": "9.90",
+            "close": "10.00",
+            "volume_units": 10000
+          },
+          {
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "session": "2026-03-31",
+            "open": "10.10",
+            "high": "10.60",
+            "low": "10.00",
+            "close": "10.50",
+            "volume_units": 13000
+          },
+          {
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "session": "2026-04-01",
+            "open": "10.50",
+            "high": "10.60",
+            "low": "10.00",
+            "close": "10.10",
+            "volume_units": 14000
+          },
+          {
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "session": "2026-04-02",
+            "open": "10.00",
+            "high": "10.20",
+            "low": "9.90",
+            "close": "10.00",
+            "volume_units": 14000
+          },
+          {
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "session": "2026-04-29",
+            "open": "9.00",
+            "high": "9.70",
+            "low": "8.90",
+            "close": "9.50",
+            "volume_units": 15000
+          },
+          {
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "session": "2026-04-30",
+            "open": "9.50",
+            "high": "9.90",
+            "low": "9.40",
+            "close": "9.80",
+            "volume_units": 16000
+          }
+        ],
+        "field_meta": {
+          "open": {
+            "unit": "CNY/fund unit",
+            "dtype": "decimal",
+            "by_key": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "missing_reason": null,
+                "usable_from": "2026-03-30T12:00:00Z",
+                "first_observed_at": "2026-03-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-30"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "missing_reason": null,
+                "usable_from": "2026-03-31T12:00:00Z",
+                "first_observed_at": "2026-03-31T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-31"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "missing_reason": null,
+                "usable_from": "2026-04-01T12:00:00Z",
+                "first_observed_at": "2026-04-01T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-01"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "missing_reason": null,
+                "usable_from": "2026-04-02T12:00:00Z",
+                "first_observed_at": "2026-04-02T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-02"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "missing_reason": null,
+                "usable_from": "2026-04-29T12:00:00Z",
+                "first_observed_at": "2026-04-29T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-29"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "missing_reason": null,
+                "usable_from": "2026-04-30T12:00:00Z",
+                "first_observed_at": "2026-04-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-30"
+              }
+            ]
+          },
+          "high": {
+            "unit": "CNY/fund unit",
+            "dtype": "decimal",
+            "by_key": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "missing_reason": null,
+                "usable_from": "2026-03-30T12:00:00Z",
+                "first_observed_at": "2026-03-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-30"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "missing_reason": null,
+                "usable_from": "2026-03-31T12:00:00Z",
+                "first_observed_at": "2026-03-31T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-31"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "missing_reason": null,
+                "usable_from": "2026-04-01T12:00:00Z",
+                "first_observed_at": "2026-04-01T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-01"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "missing_reason": null,
+                "usable_from": "2026-04-02T12:00:00Z",
+                "first_observed_at": "2026-04-02T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-02"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "missing_reason": null,
+                "usable_from": "2026-04-29T12:00:00Z",
+                "first_observed_at": "2026-04-29T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-29"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "missing_reason": null,
+                "usable_from": "2026-04-30T12:00:00Z",
+                "first_observed_at": "2026-04-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-30"
+              }
+            ]
+          },
+          "low": {
+            "unit": "CNY/fund unit",
+            "dtype": "decimal",
+            "by_key": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "missing_reason": null,
+                "usable_from": "2026-03-30T12:00:00Z",
+                "first_observed_at": "2026-03-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-30"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "missing_reason": null,
+                "usable_from": "2026-03-31T12:00:00Z",
+                "first_observed_at": "2026-03-31T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-31"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "missing_reason": null,
+                "usable_from": "2026-04-01T12:00:00Z",
+                "first_observed_at": "2026-04-01T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-01"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "missing_reason": null,
+                "usable_from": "2026-04-02T12:00:00Z",
+                "first_observed_at": "2026-04-02T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-02"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "missing_reason": null,
+                "usable_from": "2026-04-29T12:00:00Z",
+                "first_observed_at": "2026-04-29T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-29"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "missing_reason": null,
+                "usable_from": "2026-04-30T12:00:00Z",
+                "first_observed_at": "2026-04-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-30"
+              }
+            ]
+          },
+          "close": {
+            "unit": "CNY/fund unit",
+            "dtype": "decimal",
+            "by_key": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "missing_reason": null,
+                "usable_from": "2026-03-30T12:00:00Z",
+                "first_observed_at": "2026-03-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-30"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "missing_reason": null,
+                "usable_from": "2026-03-31T12:00:00Z",
+                "first_observed_at": "2026-03-31T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-31"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "missing_reason": null,
+                "usable_from": "2026-04-01T12:00:00Z",
+                "first_observed_at": "2026-04-01T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-01"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "missing_reason": null,
+                "usable_from": "2026-04-02T12:00:00Z",
+                "first_observed_at": "2026-04-02T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-02"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "missing_reason": null,
+                "usable_from": "2026-04-29T12:00:00Z",
+                "first_observed_at": "2026-04-29T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-29"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "missing_reason": null,
+                "usable_from": "2026-04-30T12:00:00Z",
+                "first_observed_at": "2026-04-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-30"
+              }
+            ]
+          },
+          "volume_units": {
+            "unit": "fund units",
+            "dtype": "int64",
+            "by_key": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "missing_reason": null,
+                "usable_from": "2026-03-30T12:00:00Z",
+                "first_observed_at": "2026-03-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-30"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "missing_reason": null,
+                "usable_from": "2026-03-31T12:00:00Z",
+                "first_observed_at": "2026-03-31T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-31"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "missing_reason": null,
+                "usable_from": "2026-04-01T12:00:00Z",
+                "first_observed_at": "2026-04-01T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-01"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "missing_reason": null,
+                "usable_from": "2026-04-02T12:00:00Z",
+                "first_observed_at": "2026-04-02T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-02"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "missing_reason": null,
+                "usable_from": "2026-04-29T12:00:00Z",
+                "first_observed_at": "2026-04-29T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-29"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "missing_reason": null,
+                "usable_from": "2026-04-30T12:00:00Z",
+                "first_observed_at": "2026-04-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-30"
+              }
+            ]
+          }
+        },
+        "context": {
+          "contract_version": "data_batch_v1",
+          "snapshot_id": "synthetic:current-snapshot",
+          "domain": "market_daily",
+          "reader_version": "synthetic_reader_v1",
+          "contract_id": "synthetic_daily_v1",
+          "source_profile_id": "synthetic",
+          "query": {
+            "fields": [
+              "open",
+              "high",
+              "low",
+              "close",
+              "volume_units"
+            ],
+            "symbols": [
+              "cn.etf.SSE.510300.20120528"
+            ],
+            "sessions": [
+              "2026-03-30",
+              "2026-03-31",
+              "2026-04-01",
+              "2026-04-02",
+              "2026-04-29",
+              "2026-04-30"
+            ],
+            "price_basis": "unadjusted",
+            "adjustment_anchor": null,
+            "pit_policy": "synthetic_observed",
+            "purpose": "market_replay",
+            "cutoff_by_session": {
+              "2026-03-30": "2026-03-30T20:00:00+08:00",
+              "2026-03-31": "2026-03-31T20:00:00+08:00",
+              "2026-04-01": "2026-04-01T20:00:00+08:00",
+              "2026-04-02": "2026-04-02T20:00:00+08:00",
+              "2026-04-29": "2026-04-29T20:00:00+08:00",
+              "2026-04-30": "2026-04-30T20:00:00+08:00"
+            },
+            "policy_by_session": null,
+            "universe_id": null
+          },
+          "limitations": [
+            "Synthetic UI fixture only"
+          ],
+          "coverage": null
+        }
+      }
+    },
+    {
+      "run": {
+        "contract_version": "backtest_run_v1",
+        "run_id": "synthetic:run-v1",
+        "account_id": "synthetic-account",
+        "content_digest": "synthetic:digest:synthetic:run-v1",
+        "committed_sequence": 9,
+        "status": "COMPLETE",
+        "signal_ref": "synthetic:signal-v1",
+        "market_ref": "synthetic:market-old",
+        "profile_ref": "synthetic:profile",
+        "core_version": "synthetic_core_v1",
+        "runtime_version": "synthetic_runtime_v1",
+        "implementation_ref": "synthetic:implementation",
+        "plan": {
+          "start_session": "2026-03-30",
+          "end_session": "2026-04-30",
+          "initial_account": {
+            "cash_minor": 1000000
+          },
+          "profile": {
+            "unknown_status_policy": "block",
+            "lot_size": 100
+          },
+          "market_replay": {
+            "contract_version": "market_replay_v1",
+            "price_basis": "unadjusted",
+            "rows": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "open": "10.00",
+                "close": "10.00",
+                "volume_units": 10000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "open": "10.10",
+                "close": "10.50",
+                "volume_units": 13000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "open": "10.50",
+                "close": "10.10",
+                "volume_units": 14000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "open": "10.00",
+                "close": "10.00",
+                "volume_units": 14000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "open": "9.00",
+                "close": "9.50",
+                "volume_units": 15000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "open": "9.50",
+                "close": "8.33",
+                "volume_units": 16000
+              }
+            ],
+            "source_refs": [
+              "sha256:cb9b5ed6ebdeaa4d673739f1c11646d03e2b1857fbd8eb23684582e2c883f920"
+            ],
+            "source_evidence": [
+              {
+                "reference": "sha256:cb9b5ed6ebdeaa4d673739f1c11646d03e2b1857fbd8eb23684582e2c883f920",
+                "context": {
+                  "contract_version": "data_batch_v1",
+                  "snapshot_id": "synthetic:old-snapshot",
+                  "domain": "market_daily",
+                  "reader_version": "synthetic_reader_v1",
+                  "contract_id": "synthetic_daily_v1",
+                  "source_profile_id": "synthetic",
+                  "query": {
+                    "fields": [
+                      "open",
+                      "close",
+                      "volume_units"
+                    ],
+                    "symbols": [
+                      "cn.etf.SSE.510300.20120528"
+                    ],
+                    "sessions": [
+                      "2026-03-30",
+                      "2026-03-31",
+                      "2026-04-01",
+                      "2026-04-02",
+                      "2026-04-29",
+                      "2026-04-30"
+                    ],
+                    "price_basis": "unadjusted",
+                    "adjustment_anchor": null,
+                    "pit_policy": "synthetic_observed",
+                    "purpose": "market_replay",
+                    "cutoff_by_session": {
+                      "2026-03-30": "2026-03-30T20:00:00+08:00",
+                      "2026-03-31": "2026-03-31T20:00:00+08:00",
+                      "2026-04-01": "2026-04-01T20:00:00+08:00",
+                      "2026-04-02": "2026-04-02T20:00:00+08:00",
+                      "2026-04-29": "2026-04-29T20:00:00+08:00",
+                      "2026-04-30": "2026-04-30T20:00:00+08:00"
+                    },
+                    "policy_by_session": null,
+                    "universe_id": null
+                  },
+                  "limitations": [
+                    "Synthetic UI fixture only"
+                  ],
+                  "coverage": null
+                }
+              }
+            ]
+          }
+        },
+        "nav": [
+          {
+            "session": "2026-03-30",
+            "cash_minor": 899900,
+            "market_value_minor": 100000,
+            "receivable_minor": 0,
+            "nav_minor": 999900,
+            "nav_index": "0.9999",
+            "committed_sequence": 2
+          },
+          {
+            "session": "2026-03-31",
+            "cash_minor": 899900,
+            "market_value_minor": 105000,
+            "receivable_minor": 0,
+            "nav_minor": 1004900,
+            "nav_index": "1.0049",
+            "committed_sequence": 3
+          },
+          {
+            "session": "2026-04-01",
+            "cash_minor": 899900,
+            "market_value_minor": 101000,
+            "receivable_minor": 0,
+            "nav_minor": 1000900,
+            "nav_index": "1.0009",
+            "committed_sequence": 4
+          },
+          {
+            "session": "2026-04-02",
+            "cash_minor": 999800,
+            "market_value_minor": 0,
+            "receivable_minor": 0,
+            "nav_minor": 999800,
+            "nav_index": "0.9998",
+            "committed_sequence": 6
+          },
+          {
+            "session": "2026-04-29",
+            "cash_minor": 909700,
+            "market_value_minor": 95000,
+            "receivable_minor": 0,
+            "nav_minor": 1004700,
+            "nav_index": "1.0047",
+            "committed_sequence": 8
+          },
+          {
+            "session": "2026-04-30",
+            "cash_minor": 909700,
+            "market_value_minor": 83300,
+            "receivable_minor": 0,
+            "nav_minor": 993000,
+            "nav_index": "0.993",
+            "committed_sequence": 9
+          }
+        ],
+        "positions": [
+          {
+            "session": "2026-03-30",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "quantity": 100,
+            "sellable_quantity": 0,
+            "mark_price": "10.00",
+            "mark_session": "2026-03-30",
+            "is_stale": false,
+            "market_value_minor": 100000,
+            "committed_sequence": 2
+          },
+          {
+            "session": "2026-03-31",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "quantity": 100,
+            "sellable_quantity": 100,
+            "mark_price": "10.50",
+            "mark_session": "2026-03-31",
+            "is_stale": false,
+            "market_value_minor": 105000,
+            "committed_sequence": 3
+          },
+          {
+            "session": "2026-04-01",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "quantity": 100,
+            "sellable_quantity": 100,
+            "mark_price": "10.10",
+            "mark_session": "2026-04-01",
+            "is_stale": false,
+            "market_value_minor": 101000,
+            "committed_sequence": 4
+          },
+          {
+            "session": "2026-04-29",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "quantity": 100,
+            "sellable_quantity": 0,
+            "mark_price": "9.50",
+            "mark_session": "2026-04-29",
+            "is_stale": false,
+            "market_value_minor": 95000,
+            "committed_sequence": 8
+          },
+          {
+            "session": "2026-04-30",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "quantity": 100,
+            "sellable_quantity": 100,
+            "mark_price": "8.33",
+            "mark_session": "2026-04-30",
+            "is_stale": false,
+            "market_value_minor": 83300,
+            "committed_sequence": 9
+          }
+        ],
+        "orders": [
+          {
+            "order_id": "synthetic:run-v1:order:0",
+            "session": "2026-03-30",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "side": "BUY",
+            "quantity": 100,
+            "filled_quantity": 100,
+            "status": "FILLED",
+            "reason": null,
+            "market_state": "synthetic_known",
+            "state_reason": "synthetic_fixture",
+            "execution_admission": "SYNTHETIC_FIXTURE"
+          },
+          {
+            "order_id": "synthetic:run-v1:order:1",
+            "session": "2026-04-02",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "side": "SELL",
+            "quantity": 100,
+            "filled_quantity": 100,
+            "status": "FILLED",
+            "reason": null,
+            "market_state": "synthetic_known",
+            "state_reason": "synthetic_fixture",
+            "execution_admission": "SYNTHETIC_FIXTURE"
+          },
+          {
+            "order_id": "synthetic:run-v1:order:2",
+            "session": "2026-04-29",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "side": "BUY",
+            "quantity": 100,
+            "filled_quantity": 100,
+            "status": "FILLED",
+            "reason": null,
+            "market_state": "synthetic_known",
+            "state_reason": "synthetic_fixture",
+            "execution_admission": "SYNTHETIC_FIXTURE"
+          }
+        ],
+        "fills": [
+          {
+            "fill_id": "synthetic:run-v1:fill:0",
+            "order_id": "synthetic:run-v1:order:0",
+            "session": "2026-03-30",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "side": "BUY",
+            "quantity": 100,
+            "price": "10.00",
+            "gross_minor": 100000,
+            "fee_minor": 100,
+            "cash_delta_minor": -100100,
+            "sequence": 1,
+            "execution_admission": "SYNTHETIC_FIXTURE"
+          },
+          {
+            "fill_id": "synthetic:run-v1:fill:1",
+            "order_id": "synthetic:run-v1:order:1",
+            "session": "2026-04-02",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "side": "SELL",
+            "quantity": 100,
+            "price": "10.00",
+            "gross_minor": 100000,
+            "fee_minor": 100,
+            "cash_delta_minor": 99900,
+            "sequence": 5,
+            "execution_admission": "SYNTHETIC_FIXTURE"
+          },
+          {
+            "fill_id": "synthetic:run-v1:fill:2",
+            "order_id": "synthetic:run-v1:order:2",
+            "session": "2026-04-29",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "side": "BUY",
+            "quantity": 100,
+            "price": "9.00",
+            "gross_minor": 90000,
+            "fee_minor": 100,
+            "cash_delta_minor": -90100,
+            "sequence": 7,
+            "execution_admission": "SYNTHETIC_FIXTURE"
+          }
+        ],
+        "decisions": [
+          {
+            "feature_session": "2026-03-27",
+            "trade_session": "2026-03-30",
+            "status": "DECISION_COMPLETE",
+            "selected_security_id": "cn.etf.SSE.510300.20120528",
+            "intents": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "side": "BUY",
+                "quantity": 100
+              }
+            ],
+            "trace": [
+              {
+                "reason": "SYNTHETIC_SAVED_RULE"
+              }
+            ]
+          }
+        ],
+        "metrics": {
+          "total_return": "-0.007",
+          "max_drawdown": "-0.01184",
+          "total_fees_minor": 300,
+          "turnover_minor": 290000,
+          "fill_count": 3,
+          "unfilled_order_count": 0
+        },
+        "limitations": [
+          "Handwritten synthetic UI contract fixture; not Engine acceptance or real profitability evidence"
+        ],
+        "final_account": null
+      },
+      "research": {
+        "question_id": "synthetic:question",
+        "title": "动量规则的退场如何影响结果？",
+        "hypothesis": "合成说明：只演示问题、版本与运行导航。",
+        "version_id": "synthetic:version-v1",
+        "version_label": "v1 · 旧输入",
+        "created_at": "2026-10-04T12:00:00Z",
+        "tags": [
+          "ETF",
+          "合成"
+        ],
+        "favorite": false,
+        "shelved": true,
+        "status": "NEGATIVE",
+        "parameters": {
+          "top_k": 1
+        },
+        "changes": [
+          {
+            "field": "market_ref",
+            "before": "synthetic:market-old",
+            "after": "synthetic:market-current"
+          }
+        ],
+        "signal_evaluation": null
+      },
+      "evaluation": {
+        "contract_version": "evaluation_report_v1",
+        "evaluation_ref": "synthetic:evaluation:synthetic:run-v1",
+        "content_digest": "synthetic:evaluation-digest:synthetic:run-v1",
+        "input_run_ref": {
+          "run_id": "synthetic:run-v1",
+          "content_digest": "synthetic:digest:synthetic:run-v1",
+          "committed_sequence": 9
+        },
+        "signal_ref": "synthetic:signal-v1",
+        "market_ref": "synthetic:market-old",
+        "profile_ref": "synthetic:profile",
+        "spec_ref": "synthetic:spec",
+        "spec": {
+          "description": "synthetic saved P10 display values"
+        },
+        "status": "PARTIAL",
+        "evaluation_version": "synthetic_p10",
+        "implementation_ref": "synthetic:implementation",
+        "benchmark_ref": "synthetic:index",
+        "benchmark_input": null,
+        "dividend_scope_ref": null,
+        "dividend_scope": null,
+        "series": [
+          {
+            "session": "2026-03-30",
+            "nav_minor": 999900,
+            "nav_index": "0.9999",
+            "committed_sequence": 2,
+            "peak_nav_minor": null,
+            "drawdown": "-0.0001"
+          },
+          {
+            "session": "2026-03-31",
+            "nav_minor": 1004900,
+            "nav_index": "1.0049",
+            "committed_sequence": 3,
+            "peak_nav_minor": null,
+            "drawdown": "0"
+          },
+          {
+            "session": "2026-04-01",
+            "nav_minor": 1000900,
+            "nav_index": "1.0009",
+            "committed_sequence": 4,
+            "peak_nav_minor": null,
+            "drawdown": "-0.00398049557"
+          },
+          {
+            "session": "2026-04-02",
+            "nav_minor": 999800,
+            "nav_index": "0.9998",
+            "committed_sequence": 6,
+            "peak_nav_minor": null,
+            "drawdown": "-0.005075131853"
+          },
+          {
+            "session": "2026-04-29",
+            "nav_minor": 1004700,
+            "nav_index": "1.0047",
+            "committed_sequence": 8,
+            "peak_nav_minor": null,
+            "drawdown": "-0.000199024779"
+          },
+          {
+            "session": "2026-04-30",
+            "nav_minor": 993000,
+            "nav_index": "0.993",
+            "committed_sequence": 9,
+            "peak_nav_minor": null,
+            "drawdown": "-0.01184"
+          }
+        ],
+        "monthly_returns": [
+          {
+            "month": "2026-03",
+            "status": "PARTIAL",
+            "first_session": "2026-03-30",
+            "last_session": "2026-03-31",
+            "boundary_session": null,
+            "return": null,
+            "observed_return": "0.0049",
+            "reason": "SHORT_FIRST_MONTH",
+            "committed_sequence": 9
+          },
+          {
+            "month": "2026-04",
+            "status": "COMPLETE",
+            "first_session": "2026-04-01",
+            "last_session": "2026-04-30",
+            "boundary_session": "2026-03-31",
+            "return": "-0.01184",
+            "observed_return": null,
+            "reason": null,
+            "committed_sequence": 9
+          }
+        ],
+        "pnl_distribution": {
+          "status": "INSUFFICIENT_SAMPLE",
+          "metric": "net_pnl_minor",
+          "unit": "CNY fen",
+          "included_episode_count": 1,
+          "minimum_episodes": 10,
+          "bins": []
+        },
+        "episodes": [
+          {
+            "episode_id": "synthetic:run-v1:episode:closed",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "status": "CLOSED",
+            "entry_session": "2026-03-30",
+            "exit_session": "2026-04-02",
+            "entry_sequence": 1,
+            "exit_sequence": 5,
+            "left_censored": false,
+            "income_status": "OBSERVED_ONLY",
+            "statistics_eligible": true,
+            "exclusion_reasons": [],
+            "buy_cost_minor": 100100,
+            "sell_proceeds_minor": 99900,
+            "fees_minor": 200,
+            "dividend_income_minor": 0,
+            "pending_dividend_minor": null,
+            "receivable_minor": 0,
+            "net_pnl_minor": -200,
+            "marked_pnl_minor": null,
+            "return_denominator_minor": 100100,
+            "net_return": "-0.001998001998001998",
+            "fill_refs": [
+              {
+                "fill_id": "synthetic:run-v1:fill:0",
+                "sequence": 1
+              },
+              {
+                "fill_id": "synthetic:run-v1:fill:1",
+                "sequence": 5
+              }
+            ],
+            "dividends": []
+          },
+          {
+            "episode_id": "synthetic:run-v1:episode:open",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "status": "OPEN",
+            "entry_session": "2026-04-29",
+            "exit_session": null,
+            "entry_sequence": 7,
+            "exit_sequence": null,
+            "left_censored": false,
+            "income_status": "COVERAGE_UNKNOWN",
+            "statistics_eligible": false,
+            "exclusion_reasons": [
+              "OPEN"
+            ],
+            "buy_cost_minor": 90100,
+            "sell_proceeds_minor": 0,
+            "fees_minor": 100,
+            "dividend_income_minor": 0,
+            "pending_dividend_minor": null,
+            "receivable_minor": null,
+            "net_pnl_minor": null,
+            "marked_pnl_minor": -6800,
+            "return_denominator_minor": 90100,
+            "net_return": null,
+            "fill_refs": [
+              {
+                "fill_id": "synthetic:run-v1:fill:2",
+                "sequence": 7
+              }
+            ],
+            "dividends": []
+          }
+        ],
+        "episode_metrics": {
+          "closed_count": 1,
+          "eligible_closed_count": 1,
+          "open_count": 1,
+          "left_censored_count": 0,
+          "income_pending_count": 0,
+          "win_count": 0,
+          "loss_count": 1,
+          "tie_count": 0,
+          "win_rate": "0",
+          "mean_net_pnl_minor": "-200",
+          "mean_episode_return": "-0.001998001998001998",
+          "return_denominator": "cumulative_buy_cost_including_fees",
+          "weighting": "equal_closed_episode",
+          "dividend_scope_status": "COVERAGE_UNKNOWN"
+        },
+        "benchmark": {
+          "security_id": "000300.SH",
+          "series_kind": "price_index_excluding_dividends",
+          "unit": "index points",
+          "anchor_session": "2026-03-27",
+          "anchor_close": "4000",
+          "status": "COMPLETE",
+          "total_return": "0.01",
+          "max_drawdown": "-0.00744",
+          "series": [
+            {
+              "session": "2026-03-30",
+              "close": "4000",
+              "nav_index": "1",
+              "daily_return": null,
+              "drawdown": "0",
+              "valid": true,
+              "missing_reason": null,
+              "source_refs": [
+                "synthetic:index"
+              ]
+            },
+            {
+              "session": "2026-03-31",
+              "close": "4030",
+              "nav_index": "1.0075",
+              "daily_return": null,
+              "drawdown": "0",
+              "valid": true,
+              "missing_reason": null,
+              "source_refs": [
+                "synthetic:index"
+              ]
+            },
+            {
+              "session": "2026-04-01",
+              "close": "4000",
+              "nav_index": "1",
+              "daily_return": null,
+              "drawdown": "-0.00744",
+              "valid": true,
+              "missing_reason": null,
+              "source_refs": [
+                "synthetic:index"
+              ]
+            },
+            {
+              "session": "2026-04-02",
+              "close": "4005",
+              "nav_index": "1.00125",
+              "daily_return": null,
+              "drawdown": "-0.0062",
+              "valid": true,
+              "missing_reason": null,
+              "source_refs": [
+                "synthetic:index"
+              ]
+            },
+            {
+              "session": "2026-04-29",
+              "close": "4050",
+              "nav_index": "1.0125",
+              "daily_return": null,
+              "drawdown": "0",
+              "valid": true,
+              "missing_reason": null,
+              "source_refs": [
+                "synthetic:index"
+              ]
+            },
+            {
+              "session": "2026-04-30",
+              "close": "4040",
+              "nav_index": "1.01",
+              "daily_return": null,
+              "drawdown": "-0.00246",
+              "valid": true,
+              "missing_reason": null,
+              "source_refs": [
+                "synthetic:index"
+              ]
+            }
+          ]
+        },
+        "limitations": [
+          "Synthetic UI values only; dividend scope unknown; benchmark price index excludes dividends"
+        ]
+      },
+      "data_batch": {
+        "records": [
+          {
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "session": "2026-03-30",
+            "open": "10.00",
+            "high": "10.10",
+            "low": "9.90",
+            "close": "10.00",
+            "volume_units": 10000
+          },
+          {
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "session": "2026-03-31",
+            "open": "10.10",
+            "high": "10.60",
+            "low": "10.00",
+            "close": "10.50",
+            "volume_units": 13000
+          },
+          {
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "session": "2026-04-01",
+            "open": "10.50",
+            "high": "10.60",
+            "low": "10.00",
+            "close": "10.10",
+            "volume_units": 14000
+          },
+          {
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "session": "2026-04-02",
+            "open": "10.00",
+            "high": "10.20",
+            "low": "9.90",
+            "close": "10.00",
+            "volume_units": 14000
+          },
+          {
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "session": "2026-04-29",
+            "open": "9.00",
+            "high": "9.70",
+            "low": "8.90",
+            "close": "9.50",
+            "volume_units": 15000
+          },
+          {
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "session": "2026-04-30",
+            "open": "9.50",
+            "high": "9.70",
+            "low": "8.10",
+            "close": "8.33",
+            "volume_units": 16000
+          }
+        ],
+        "field_meta": {
+          "open": {
+            "unit": "CNY/fund unit",
+            "dtype": "decimal",
+            "by_key": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "missing_reason": null,
+                "usable_from": "2026-03-30T12:00:00Z",
+                "first_observed_at": "2026-03-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-30"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "missing_reason": null,
+                "usable_from": "2026-03-31T12:00:00Z",
+                "first_observed_at": "2026-03-31T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-31"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "missing_reason": null,
+                "usable_from": "2026-04-01T12:00:00Z",
+                "first_observed_at": "2026-04-01T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-01"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "missing_reason": null,
+                "usable_from": "2026-04-02T12:00:00Z",
+                "first_observed_at": "2026-04-02T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-02"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "missing_reason": null,
+                "usable_from": "2026-04-29T12:00:00Z",
+                "first_observed_at": "2026-04-29T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-29"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "missing_reason": null,
+                "usable_from": "2026-04-30T12:00:00Z",
+                "first_observed_at": "2026-04-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-30"
+              }
+            ]
+          },
+          "high": {
+            "unit": "CNY/fund unit",
+            "dtype": "decimal",
+            "by_key": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "missing_reason": null,
+                "usable_from": "2026-03-30T12:00:00Z",
+                "first_observed_at": "2026-03-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-30"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "missing_reason": null,
+                "usable_from": "2026-03-31T12:00:00Z",
+                "first_observed_at": "2026-03-31T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-31"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "missing_reason": null,
+                "usable_from": "2026-04-01T12:00:00Z",
+                "first_observed_at": "2026-04-01T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-01"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "missing_reason": null,
+                "usable_from": "2026-04-02T12:00:00Z",
+                "first_observed_at": "2026-04-02T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-02"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "missing_reason": null,
+                "usable_from": "2026-04-29T12:00:00Z",
+                "first_observed_at": "2026-04-29T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-29"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "missing_reason": null,
+                "usable_from": "2026-04-30T12:00:00Z",
+                "first_observed_at": "2026-04-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-30"
+              }
+            ]
+          },
+          "low": {
+            "unit": "CNY/fund unit",
+            "dtype": "decimal",
+            "by_key": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "missing_reason": null,
+                "usable_from": "2026-03-30T12:00:00Z",
+                "first_observed_at": "2026-03-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-30"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "missing_reason": null,
+                "usable_from": "2026-03-31T12:00:00Z",
+                "first_observed_at": "2026-03-31T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-31"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "missing_reason": null,
+                "usable_from": "2026-04-01T12:00:00Z",
+                "first_observed_at": "2026-04-01T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-01"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "missing_reason": null,
+                "usable_from": "2026-04-02T12:00:00Z",
+                "first_observed_at": "2026-04-02T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-02"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "missing_reason": null,
+                "usable_from": "2026-04-29T12:00:00Z",
+                "first_observed_at": "2026-04-29T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-29"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "missing_reason": null,
+                "usable_from": "2026-04-30T12:00:00Z",
+                "first_observed_at": "2026-04-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-30"
+              }
+            ]
+          },
+          "close": {
+            "unit": "CNY/fund unit",
+            "dtype": "decimal",
+            "by_key": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "missing_reason": null,
+                "usable_from": "2026-03-30T12:00:00Z",
+                "first_observed_at": "2026-03-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-30"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "missing_reason": null,
+                "usable_from": "2026-03-31T12:00:00Z",
+                "first_observed_at": "2026-03-31T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-31"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "missing_reason": null,
+                "usable_from": "2026-04-01T12:00:00Z",
+                "first_observed_at": "2026-04-01T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-01"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "missing_reason": null,
+                "usable_from": "2026-04-02T12:00:00Z",
+                "first_observed_at": "2026-04-02T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-02"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "missing_reason": null,
+                "usable_from": "2026-04-29T12:00:00Z",
+                "first_observed_at": "2026-04-29T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-29"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "missing_reason": null,
+                "usable_from": "2026-04-30T12:00:00Z",
+                "first_observed_at": "2026-04-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-30"
+              }
+            ]
+          },
+          "volume_units": {
+            "unit": "fund units",
+            "dtype": "int64",
+            "by_key": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "missing_reason": null,
+                "usable_from": "2026-03-30T12:00:00Z",
+                "first_observed_at": "2026-03-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-30"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "missing_reason": null,
+                "usable_from": "2026-03-31T12:00:00Z",
+                "first_observed_at": "2026-03-31T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-31"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "missing_reason": null,
+                "usable_from": "2026-04-01T12:00:00Z",
+                "first_observed_at": "2026-04-01T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-01"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "missing_reason": null,
+                "usable_from": "2026-04-02T12:00:00Z",
+                "first_observed_at": "2026-04-02T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-02"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "missing_reason": null,
+                "usable_from": "2026-04-29T12:00:00Z",
+                "first_observed_at": "2026-04-29T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-29"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "missing_reason": null,
+                "usable_from": "2026-04-30T12:00:00Z",
+                "first_observed_at": "2026-04-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-30"
+              }
+            ]
+          }
+        },
+        "context": {
+          "contract_version": "data_batch_v1",
+          "snapshot_id": "synthetic:old-snapshot",
+          "domain": "market_daily",
+          "reader_version": "synthetic_reader_v1",
+          "contract_id": "synthetic_daily_v1",
+          "source_profile_id": "synthetic",
+          "query": {
+            "fields": [
+              "open",
+              "high",
+              "low",
+              "close",
+              "volume_units"
+            ],
+            "symbols": [
+              "cn.etf.SSE.510300.20120528"
+            ],
+            "sessions": [
+              "2026-03-30",
+              "2026-03-31",
+              "2026-04-01",
+              "2026-04-02",
+              "2026-04-29",
+              "2026-04-30"
+            ],
+            "price_basis": "unadjusted",
+            "adjustment_anchor": null,
+            "pit_policy": "synthetic_observed",
+            "purpose": "market_replay",
+            "cutoff_by_session": {
+              "2026-03-30": "2026-03-30T20:00:00+08:00",
+              "2026-03-31": "2026-03-31T20:00:00+08:00",
+              "2026-04-01": "2026-04-01T20:00:00+08:00",
+              "2026-04-02": "2026-04-02T20:00:00+08:00",
+              "2026-04-29": "2026-04-29T20:00:00+08:00",
+              "2026-04-30": "2026-04-30T20:00:00+08:00"
+            },
+            "policy_by_session": null,
+            "universe_id": null
+          },
+          "limitations": [
+            "Synthetic UI fixture only"
+          ],
+          "coverage": null
+        }
+      }
+    },
+    {
+      "run": {
+        "contract_version": "backtest_run_v1",
+        "run_id": "synthetic:blocked",
+        "account_id": "synthetic-account",
+        "content_digest": "synthetic:digest:synthetic:blocked",
+        "committed_sequence": 1,
+        "status": "COMPLETE",
+        "signal_ref": "synthetic:signal-v2",
+        "market_ref": "synthetic:market-current",
+        "profile_ref": "synthetic:strict",
+        "core_version": "synthetic_core_v1",
+        "runtime_version": "synthetic_runtime_v1",
+        "implementation_ref": "synthetic:implementation",
+        "plan": {
+          "start_session": "2026-03-30",
+          "end_session": "2026-04-30",
+          "initial_account": {
+            "cash_minor": 1000000
+          },
+          "profile": {
+            "unknown_status_policy": "block",
+            "lot_size": 100
+          },
+          "market_replay": {
+            "contract_version": "market_replay_v1",
+            "price_basis": "unadjusted",
+            "rows": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "open": "10.00",
+                "close": "10.00",
+                "volume_units": 10000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "open": "10.10",
+                "close": "10.50",
+                "volume_units": 13000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "open": "10.50",
+                "close": "10.10",
+                "volume_units": 14000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "open": "10.00",
+                "close": "10.00",
+                "volume_units": 14000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "open": "9.00",
+                "close": "9.50",
+                "volume_units": 15000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "open": "9.50",
+                "close": "9.80",
+                "volume_units": 16000
+              }
+            ],
+            "source_refs": [
+              "sha256:c17821ff15cb948dac100c291eca6901fed6711e139c27b39bc0a71d03b42cc7"
+            ],
+            "source_evidence": [
+              {
+                "reference": "sha256:c17821ff15cb948dac100c291eca6901fed6711e139c27b39bc0a71d03b42cc7",
+                "context": {
+                  "contract_version": "data_batch_v1",
+                  "snapshot_id": "synthetic:current-snapshot",
+                  "domain": "market_daily",
+                  "reader_version": "synthetic_reader_v1",
+                  "contract_id": "synthetic_daily_v1",
+                  "source_profile_id": "synthetic",
+                  "query": {
+                    "fields": [
+                      "open",
+                      "close",
+                      "volume_units"
+                    ],
+                    "symbols": [
+                      "cn.etf.SSE.510300.20120528"
+                    ],
+                    "sessions": [
+                      "2026-03-30",
+                      "2026-03-31",
+                      "2026-04-01",
+                      "2026-04-02",
+                      "2026-04-29",
+                      "2026-04-30"
+                    ],
+                    "price_basis": "unadjusted",
+                    "adjustment_anchor": null,
+                    "pit_policy": "synthetic_observed",
+                    "purpose": "market_replay",
+                    "cutoff_by_session": {
+                      "2026-03-30": "2026-03-30T20:00:00+08:00",
+                      "2026-03-31": "2026-03-31T20:00:00+08:00",
+                      "2026-04-01": "2026-04-01T20:00:00+08:00",
+                      "2026-04-02": "2026-04-02T20:00:00+08:00",
+                      "2026-04-29": "2026-04-29T20:00:00+08:00",
+                      "2026-04-30": "2026-04-30T20:00:00+08:00"
+                    },
+                    "policy_by_session": null,
+                    "universe_id": null
+                  },
+                  "limitations": [
+                    "Synthetic UI fixture only"
+                  ],
+                  "coverage": null
+                }
+              }
+            ]
+          }
+        },
+        "nav": [
+          {
+            "session": "2026-03-30",
+            "cash_minor": 1000000,
+            "market_value_minor": 0,
+            "receivable_minor": 0,
+            "nav_minor": 1000000,
+            "nav_index": "1",
+            "committed_sequence": 1
+          },
+          {
+            "session": "2026-03-31",
+            "cash_minor": 1000000,
+            "market_value_minor": 0,
+            "receivable_minor": 0,
+            "nav_minor": 1000000,
+            "nav_index": "1",
+            "committed_sequence": 1
+          },
+          {
+            "session": "2026-04-01",
+            "cash_minor": 1000000,
+            "market_value_minor": 0,
+            "receivable_minor": 0,
+            "nav_minor": 1000000,
+            "nav_index": "1",
+            "committed_sequence": 1
+          },
+          {
+            "session": "2026-04-02",
+            "cash_minor": 1000000,
+            "market_value_minor": 0,
+            "receivable_minor": 0,
+            "nav_minor": 1000000,
+            "nav_index": "1",
+            "committed_sequence": 1
+          },
+          {
+            "session": "2026-04-29",
+            "cash_minor": 1000000,
+            "market_value_minor": 0,
+            "receivable_minor": 0,
+            "nav_minor": 1000000,
+            "nav_index": "1",
+            "committed_sequence": 1
+          },
+          {
+            "session": "2026-04-30",
+            "cash_minor": 1000000,
+            "market_value_minor": 0,
+            "receivable_minor": 0,
+            "nav_minor": 1000000,
+            "nav_index": "1",
+            "committed_sequence": 1
+          }
+        ],
+        "positions": [],
+        "orders": [
+          {
+            "order_id": "synthetic:blocked:order:0",
+            "session": "2026-03-30",
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "side": "BUY",
+            "quantity": 100,
+            "filled_quantity": 0,
+            "status": "EXPIRED",
+            "reason": "UNKNOWN_MARKET_STATUS",
+            "market_state": "unknown_status",
+            "state_reason": "status_source_missing"
+          }
+        ],
+        "fills": [],
+        "decisions": [
+          {
+            "feature_session": "2026-03-27",
+            "trade_session": "2026-03-30",
+            "status": "DECISION_COMPLETE",
+            "selected_security_id": "cn.etf.SSE.510300.20120528",
+            "intents": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "side": "BUY",
+                "quantity": 100
+              }
+            ],
+            "trace": [
+              {
+                "reason": "SYNTHETIC_SAVED_RULE"
+              }
+            ]
+          }
+        ],
+        "metrics": {
+          "total_return": "0",
+          "max_drawdown": "0",
+          "total_fees_minor": 0,
+          "turnover_minor": 0,
+          "fill_count": 0,
+          "unfilled_order_count": 1
+        },
+        "limitations": [
+          "Handwritten synthetic UI contract fixture; not Engine acceptance or real profitability evidence"
+        ],
+        "final_account": null
+      },
+      "research": {
+        "question_id": "synthetic:question",
+        "title": "动量规则的退场如何影响结果？",
+        "hypothesis": "合成说明：只演示问题、版本与运行导航。",
+        "version_id": "synthetic:version-v2",
+        "version_label": "v2 · 固定输入",
+        "created_at": "2026-10-04T12:02:00Z",
+        "tags": [
+          "ETF",
+          "合成"
+        ],
+        "favorite": false,
+        "shelved": false,
+        "status": "BLOCKED",
+        "parameters": {
+          "top_k": 1
+        },
+        "changes": [
+          {
+            "field": "market_ref",
+            "before": "synthetic:market-old",
+            "after": "synthetic:market-current"
+          }
+        ],
+        "signal_evaluation": null
+      },
+      "evaluation": {
+        "contract_version": "evaluation_report_v1",
+        "evaluation_ref": "synthetic:evaluation:synthetic:blocked",
+        "content_digest": "synthetic:evaluation-digest:synthetic:blocked",
+        "input_run_ref": {
+          "run_id": "synthetic:blocked",
+          "content_digest": "synthetic:digest:synthetic:blocked",
+          "committed_sequence": 1
+        },
+        "signal_ref": "synthetic:signal-v2",
+        "market_ref": "synthetic:market-current",
+        "profile_ref": "synthetic:strict",
+        "spec_ref": "synthetic:spec",
+        "spec": {
+          "description": "synthetic saved P10 display values"
+        },
+        "status": "PARTIAL",
+        "evaluation_version": "synthetic_p10",
+        "implementation_ref": "synthetic:implementation",
+        "benchmark_ref": "synthetic:index",
+        "benchmark_input": null,
+        "dividend_scope_ref": null,
+        "dividend_scope": null,
+        "series": [
+          {
+            "session": "2026-03-30",
+            "nav_minor": 1000000,
+            "nav_index": "1",
+            "committed_sequence": 1,
+            "peak_nav_minor": null,
+            "drawdown": "0"
+          },
+          {
+            "session": "2026-03-31",
+            "nav_minor": 1000000,
+            "nav_index": "1",
+            "committed_sequence": 1,
+            "peak_nav_minor": null,
+            "drawdown": "0"
+          },
+          {
+            "session": "2026-04-01",
+            "nav_minor": 1000000,
+            "nav_index": "1",
+            "committed_sequence": 1,
+            "peak_nav_minor": null,
+            "drawdown": "0"
+          },
+          {
+            "session": "2026-04-02",
+            "nav_minor": 1000000,
+            "nav_index": "1",
+            "committed_sequence": 1,
+            "peak_nav_minor": null,
+            "drawdown": "0"
+          },
+          {
+            "session": "2026-04-29",
+            "nav_minor": 1000000,
+            "nav_index": "1",
+            "committed_sequence": 1,
+            "peak_nav_minor": null,
+            "drawdown": "0"
+          },
+          {
+            "session": "2026-04-30",
+            "nav_minor": 1000000,
+            "nav_index": "1",
+            "committed_sequence": 1,
+            "peak_nav_minor": null,
+            "drawdown": "0"
+          }
+        ],
+        "monthly_returns": [
+          {
+            "month": "2026-03",
+            "status": "PARTIAL",
+            "first_session": "2026-03-30",
+            "last_session": "2026-03-31",
+            "boundary_session": null,
+            "return": null,
+            "observed_return": "0",
+            "reason": "SHORT_FIRST_MONTH",
+            "committed_sequence": 1
+          },
+          {
+            "month": "2026-04",
+            "status": "COMPLETE",
+            "first_session": "2026-04-01",
+            "last_session": "2026-04-30",
+            "boundary_session": "2026-03-31",
+            "return": "0",
+            "observed_return": null,
+            "reason": null,
+            "committed_sequence": 1
+          }
+        ],
+        "pnl_distribution": {
+          "status": "INSUFFICIENT_SAMPLE",
+          "metric": "net_pnl_minor",
+          "unit": "CNY fen",
+          "included_episode_count": 0,
+          "minimum_episodes": 10,
+          "bins": []
+        },
+        "episodes": [],
+        "episode_metrics": {
+          "closed_count": 0,
+          "eligible_closed_count": 0,
+          "open_count": 0,
+          "left_censored_count": 0,
+          "income_pending_count": 0,
+          "win_count": 0,
+          "loss_count": 0,
+          "tie_count": 0,
+          "win_rate": null,
+          "mean_net_pnl_minor": null,
+          "mean_episode_return": null,
+          "return_denominator": "cumulative_buy_cost_including_fees",
+          "weighting": "equal_closed_episode",
+          "dividend_scope_status": "COVERAGE_UNKNOWN"
+        },
+        "benchmark": {
+          "security_id": "000300.SH",
+          "series_kind": "price_index_excluding_dividends",
+          "unit": "index points",
+          "anchor_session": "2026-03-27",
+          "anchor_close": "4000",
+          "status": "COMPLETE",
+          "total_return": "0.01",
+          "max_drawdown": "-0.00744",
+          "series": [
+            {
+              "session": "2026-03-30",
+              "close": "4000",
+              "nav_index": "1",
+              "daily_return": null,
+              "drawdown": "0",
+              "valid": true,
+              "missing_reason": null,
+              "source_refs": [
+                "synthetic:index"
+              ]
+            },
+            {
+              "session": "2026-03-31",
+              "close": "4030",
+              "nav_index": "1.0075",
+              "daily_return": null,
+              "drawdown": "0",
+              "valid": true,
+              "missing_reason": null,
+              "source_refs": [
+                "synthetic:index"
+              ]
+            },
+            {
+              "session": "2026-04-01",
+              "close": "4000",
+              "nav_index": "1",
+              "daily_return": null,
+              "drawdown": "-0.00744",
+              "valid": true,
+              "missing_reason": null,
+              "source_refs": [
+                "synthetic:index"
+              ]
+            },
+            {
+              "session": "2026-04-02",
+              "close": "4005",
+              "nav_index": "1.00125",
+              "daily_return": null,
+              "drawdown": "-0.0062",
+              "valid": true,
+              "missing_reason": null,
+              "source_refs": [
+                "synthetic:index"
+              ]
+            },
+            {
+              "session": "2026-04-29",
+              "close": "4050",
+              "nav_index": "1.0125",
+              "daily_return": null,
+              "drawdown": "0",
+              "valid": true,
+              "missing_reason": null,
+              "source_refs": [
+                "synthetic:index"
+              ]
+            },
+            {
+              "session": "2026-04-30",
+              "close": "4040",
+              "nav_index": "1.01",
+              "daily_return": null,
+              "drawdown": "-0.00246",
+              "valid": true,
+              "missing_reason": null,
+              "source_refs": [
+                "synthetic:index"
+              ]
+            }
+          ]
+        },
+        "limitations": [
+          "Synthetic UI values only; dividend scope unknown; benchmark price index excludes dividends"
+        ]
+      },
+      "data_batch": {
+        "records": [
+          {
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "session": "2026-03-30",
+            "open": "10.00",
+            "high": "10.10",
+            "low": "9.90",
+            "close": "10.00",
+            "volume_units": 10000
+          },
+          {
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "session": "2026-03-31",
+            "open": "10.10",
+            "high": "10.60",
+            "low": "10.00",
+            "close": "10.50",
+            "volume_units": 13000
+          },
+          {
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "session": "2026-04-01",
+            "open": "10.50",
+            "high": "10.60",
+            "low": "10.00",
+            "close": "10.10",
+            "volume_units": 14000
+          },
+          {
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "session": "2026-04-02",
+            "open": "10.00",
+            "high": "10.20",
+            "low": "9.90",
+            "close": "10.00",
+            "volume_units": 14000
+          },
+          {
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "session": "2026-04-29",
+            "open": "9.00",
+            "high": "9.70",
+            "low": "8.90",
+            "close": "9.50",
+            "volume_units": 15000
+          },
+          {
+            "security_id": "cn.etf.SSE.510300.20120528",
+            "session": "2026-04-30",
+            "open": "9.50",
+            "high": "9.90",
+            "low": "9.40",
+            "close": "9.80",
+            "volume_units": 16000
+          }
+        ],
+        "field_meta": {
+          "open": {
+            "unit": "CNY/fund unit",
+            "dtype": "decimal",
+            "by_key": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "missing_reason": null,
+                "usable_from": "2026-03-30T12:00:00Z",
+                "first_observed_at": "2026-03-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-30"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "missing_reason": null,
+                "usable_from": "2026-03-31T12:00:00Z",
+                "first_observed_at": "2026-03-31T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-31"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "missing_reason": null,
+                "usable_from": "2026-04-01T12:00:00Z",
+                "first_observed_at": "2026-04-01T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-01"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "missing_reason": null,
+                "usable_from": "2026-04-02T12:00:00Z",
+                "first_observed_at": "2026-04-02T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-02"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "missing_reason": null,
+                "usable_from": "2026-04-29T12:00:00Z",
+                "first_observed_at": "2026-04-29T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-29"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "missing_reason": null,
+                "usable_from": "2026-04-30T12:00:00Z",
+                "first_observed_at": "2026-04-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-30"
+              }
+            ]
+          },
+          "high": {
+            "unit": "CNY/fund unit",
+            "dtype": "decimal",
+            "by_key": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "missing_reason": null,
+                "usable_from": "2026-03-30T12:00:00Z",
+                "first_observed_at": "2026-03-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-30"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "missing_reason": null,
+                "usable_from": "2026-03-31T12:00:00Z",
+                "first_observed_at": "2026-03-31T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-31"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "missing_reason": null,
+                "usable_from": "2026-04-01T12:00:00Z",
+                "first_observed_at": "2026-04-01T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-01"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "missing_reason": null,
+                "usable_from": "2026-04-02T12:00:00Z",
+                "first_observed_at": "2026-04-02T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-02"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "missing_reason": null,
+                "usable_from": "2026-04-29T12:00:00Z",
+                "first_observed_at": "2026-04-29T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-29"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "missing_reason": null,
+                "usable_from": "2026-04-30T12:00:00Z",
+                "first_observed_at": "2026-04-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-30"
+              }
+            ]
+          },
+          "low": {
+            "unit": "CNY/fund unit",
+            "dtype": "decimal",
+            "by_key": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "missing_reason": null,
+                "usable_from": "2026-03-30T12:00:00Z",
+                "first_observed_at": "2026-03-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-30"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "missing_reason": null,
+                "usable_from": "2026-03-31T12:00:00Z",
+                "first_observed_at": "2026-03-31T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-31"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "missing_reason": null,
+                "usable_from": "2026-04-01T12:00:00Z",
+                "first_observed_at": "2026-04-01T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-01"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "missing_reason": null,
+                "usable_from": "2026-04-02T12:00:00Z",
+                "first_observed_at": "2026-04-02T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-02"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "missing_reason": null,
+                "usable_from": "2026-04-29T12:00:00Z",
+                "first_observed_at": "2026-04-29T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-29"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "missing_reason": null,
+                "usable_from": "2026-04-30T12:00:00Z",
+                "first_observed_at": "2026-04-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-30"
+              }
+            ]
+          },
+          "close": {
+            "unit": "CNY/fund unit",
+            "dtype": "decimal",
+            "by_key": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "missing_reason": null,
+                "usable_from": "2026-03-30T12:00:00Z",
+                "first_observed_at": "2026-03-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-30"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "missing_reason": null,
+                "usable_from": "2026-03-31T12:00:00Z",
+                "first_observed_at": "2026-03-31T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-31"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "missing_reason": null,
+                "usable_from": "2026-04-01T12:00:00Z",
+                "first_observed_at": "2026-04-01T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-01"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "missing_reason": null,
+                "usable_from": "2026-04-02T12:00:00Z",
+                "first_observed_at": "2026-04-02T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-02"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "missing_reason": null,
+                "usable_from": "2026-04-29T12:00:00Z",
+                "first_observed_at": "2026-04-29T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-29"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "missing_reason": null,
+                "usable_from": "2026-04-30T12:00:00Z",
+                "first_observed_at": "2026-04-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-30"
+              }
+            ]
+          },
+          "volume_units": {
+            "unit": "fund units",
+            "dtype": "int64",
+            "by_key": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "missing_reason": null,
+                "usable_from": "2026-03-30T12:00:00Z",
+                "first_observed_at": "2026-03-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-30"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "missing_reason": null,
+                "usable_from": "2026-03-31T12:00:00Z",
+                "first_observed_at": "2026-03-31T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-03-31"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "missing_reason": null,
+                "usable_from": "2026-04-01T12:00:00Z",
+                "first_observed_at": "2026-04-01T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-01"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "missing_reason": null,
+                "usable_from": "2026-04-02T12:00:00Z",
+                "first_observed_at": "2026-04-02T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-02"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "missing_reason": null,
+                "usable_from": "2026-04-29T12:00:00Z",
+                "first_observed_at": "2026-04-29T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-29"
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "missing_reason": null,
+                "usable_from": "2026-04-30T12:00:00Z",
+                "first_observed_at": "2026-04-30T12:00:00Z",
+                "evidence_ref": "synthetic:evidence:2026-04-30"
+              }
+            ]
+          }
+        },
+        "context": {
+          "contract_version": "data_batch_v1",
+          "snapshot_id": "synthetic:current-snapshot",
+          "domain": "market_daily",
+          "reader_version": "synthetic_reader_v1",
+          "contract_id": "synthetic_daily_v1",
+          "source_profile_id": "synthetic",
+          "query": {
+            "fields": [
+              "open",
+              "high",
+              "low",
+              "close",
+              "volume_units"
+            ],
+            "symbols": [
+              "cn.etf.SSE.510300.20120528"
+            ],
+            "sessions": [
+              "2026-03-30",
+              "2026-03-31",
+              "2026-04-01",
+              "2026-04-02",
+              "2026-04-29",
+              "2026-04-30"
+            ],
+            "price_basis": "unadjusted",
+            "adjustment_anchor": null,
+            "pit_policy": "synthetic_observed",
+            "purpose": "market_replay",
+            "cutoff_by_session": {
+              "2026-03-30": "2026-03-30T20:00:00+08:00",
+              "2026-03-31": "2026-03-31T20:00:00+08:00",
+              "2026-04-01": "2026-04-01T20:00:00+08:00",
+              "2026-04-02": "2026-04-02T20:00:00+08:00",
+              "2026-04-29": "2026-04-29T20:00:00+08:00",
+              "2026-04-30": "2026-04-30T20:00:00+08:00"
+            },
+            "policy_by_session": null,
+            "universe_id": null
+          },
+          "limitations": [
+            "Synthetic UI fixture only"
+          ],
+          "coverage": null
+        }
+      }
+    },
+    {
+      "run": {
+        "contract_version": "backtest_run_v1",
+        "run_id": "synthetic:failed",
+        "account_id": "synthetic-account",
+        "content_digest": "synthetic:digest:synthetic:failed",
+        "committed_sequence": 9,
+        "status": "FAILED",
+        "signal_ref": "synthetic:signal-v2",
+        "market_ref": "synthetic:market-current",
+        "profile_ref": "synthetic:profile",
+        "core_version": "synthetic_core_v1",
+        "runtime_version": "synthetic_runtime_v1",
+        "implementation_ref": "synthetic:implementation",
+        "plan": {
+          "start_session": "2026-03-30",
+          "end_session": "2026-04-30",
+          "initial_account": {
+            "cash_minor": 1000000
+          },
+          "profile": {
+            "unknown_status_policy": "block",
+            "lot_size": 100
+          },
+          "market_replay": {
+            "contract_version": "market_replay_v1",
+            "price_basis": "unadjusted",
+            "rows": [
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-30",
+                "open": "10.00",
+                "close": "10.00",
+                "volume_units": 10000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-03-31",
+                "open": "10.10",
+                "close": "10.50",
+                "volume_units": 13000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-01",
+                "open": "10.50",
+                "close": "10.10",
+                "volume_units": 14000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-02",
+                "open": "10.00",
+                "close": "10.00",
+                "volume_units": 14000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-29",
+                "open": "9.00",
+                "close": "9.50",
+                "volume_units": 15000
+              },
+              {
+                "security_id": "cn.etf.SSE.510300.20120528",
+                "session": "2026-04-30",
+                "open": "9.50",
+                "close": "9.80",
+                "volume_units": 16000
+              }
+            ],
+            "source_refs": [
+              "sha256:c17821ff15cb948dac100c291eca6901fed6711e139c27b39bc0a71d03b42cc7"
+            ],
+            "source_evidence": [
+              {
+                "reference": "sha256:c17821ff15cb948dac100c291eca6901fed6711e139c27b39bc0a71d03b42cc7",
+                "context": {
+                  "contract_version": "data_batch_v1",
+                  "snapshot_id": "synthetic:current-snapshot",
+                  "domain": "market_daily",
+                  "reader_version": "synthetic_reader_v1",
+                  "contract_id": "synthetic_daily_v1",
+                  "source_profile_id": "synthetic",
+                  "query": {
+                    "fields": [
+                      "open",
+                      "close",
+                      "volume_units"
+                    ],
+                    "symbols": [
+                      "cn.etf.SSE.510300.20120528"
+                    ],
+                    "sessions": [
+                      "2026-03-30",
+                      "2026-03-31",
+                      "2026-04-01",
+                      "2026-04-02",
+                      "2026-04-29",
+                      "2026-04-30"
+                    ],
+                    "price_basis": "unadjusted",
+                    "adjustment_anchor": null,
+                    "pit_policy": "synthetic_observed",
+                    "purpose": "market_replay",
+                    "cutoff_by_session": {
+                      "2026-03-30": "2026-03-30T20:00:00+08:00",
+                      "2026-03-31": "2026-03-31T20:00:00+08:00",
+                      "2026-04-01": "2026-04-01T20:00:00+08:00",
+                      "2026-04-02": "2026-04-02T20:00:00+08:00",
+                      "2026-04-29": "2026-04-29T20:00:00+08:00",
+                      "2026-04-30": "2026-04-30T20:00:00+08:00"
+                    },
+                    "policy_by_session": null,
+                    "universe_id": null
+                  },
+                  "limitations": [
+                    "Synthetic UI fixture only"
+                  ],
+                  "coverage": null
+                }
+              }
+            ]
+          }
+        },
+        "nav": null,
+        "positions": null,
+        "orders": null,
+        "fills": null,
+        "decisions": null,
+        "metrics": null,
+        "limitations": [
+          "Handwritten synthetic UI contract fixture; not Engine acceptance or real profitability evidence"
+        ],
+        "final_account": null
+      },
+      "research": {
+        "question_id": "synthetic:question",
+        "title": "动量规则的退场如何影响结果？",
+        "hypothesis": "合成说明：只演示问题、版本与运行导航。",
+        "version_id": "synthetic:version-v2",
+        "version_label": "v2 · 固定输入",
+        "created_at": "2026-10-04T12:03:00Z",
+        "tags": [
+          "ETF",
+          "合成"
+        ],
+        "favorite": false,
+        "shelved": false,
+        "status": "FAILED",
+        "parameters": {
+          "top_k": 1
+        },
+        "changes": [
+          {
+            "field": "market_ref",
+            "before": "synthetic:market-old",
+            "after": "synthetic:market-current"
+          }
+        ],
+        "signal_evaluation": null
+      },
+      "evaluation": null,
+      "data_batch": null
+    }
+  ]
+}

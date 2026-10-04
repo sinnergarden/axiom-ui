@@ -77,6 +77,26 @@ class ReportTests(unittest.TestCase):
         with self.assertRaisesRegex(ProjectionError, "malformed metrics"):
             self.render()
 
+    def test_unit_run_v2_static_report_separates_application_from_fills(self):
+        self.assertNotIn('id="unit_split_applications"', self.render())
+        self.run["contract_version"] = "backtest_run_v2"
+        self.run["unit_split_applications"] = [{"event_id":"synthetic:unit-event",
+            "before_quantity":100, "after_quantity":115, "rounding_value_minor":4610,
+            "normalized_quote":{"price":"100.000"}}]
+        self.run["positions"][0]["mark_basis_event_id"] = "synthetic:unit-event"
+        self.run["orders"][0]["announced_suspension_event_ids"] = ["synthetic:unit-event"]
+        original = deepcopy(self.run)
+        html = self.render()
+        self.assertIn('id="unit_split_applications"', html)
+        self.assertIn("账户变化（非成交）", html)
+        self.assertIn("估值单位事件依据", html)
+        self.assertIn("公告停牌事件来源", html)
+        self.assertIn('title="原始整数分：4610">46.10', html)
+        self.assertEqual(self.run, original)
+        self.run["unit_split_applications"] = None
+        with self.assertRaisesRegex(ProjectionError, "malformed saved unit split"):
+            self.render()
+
     def test_raw_mapping_cannot_claim_saved_run_evidence(self):
         with self.assertRaisesRegex(ProjectionError, "Engine Reader"):
             render_backtest_report(self.run)
