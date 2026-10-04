@@ -527,11 +527,45 @@ def _attach_stock_ml(views: list[dict], paths: Sequence[str | Path]) -> None:
         _require(matched, "CONTEXT_MISMATCH: stock ML without registered experiment")
 
 
+def _attach_stock_stage_reports(views: list[dict], paths: Sequence[str | Path]) -> None:
+    """Attach optional saved reports only to their six exact registered inputs."""
+    if not paths:
+        return
+    from axiom_research import load_stock_stage_report
+    bindings = {"StockMLExperiment":"experiment_ref", "FeatureBuild":"feature_ref",
+                "TrainingDataset":"dataset_ref", "ModelRelease":"model_ref",
+                "SignalRun":"signal_run_ref", "SignalEvidence":"evidence_ref"}
+    for path in paths:
+        report = _wire(load_stock_stage_report(path))
+        _require((report.get("contract_version"), report.get("report_version")) ==
+                 ("stock_stage_report_v1", "axiom.stock_stage_report/1"), "unsupported stock stage report contract")
+        refs = report.get("input_refs")
+        _require(type(refs) is dict and set(refs) == set(bindings.values()) and
+                 all(type(ref) is str and ref for ref in refs.values()), "malformed stock stage report input refs")
+        _require(type(report.get("training")) is dict and type(report.get("signal_summary")) is dict,
+                 "malformed stock stage report projection")
+        _rows(report.get("measurements"), "saved stock stage measurements")
+        matched = False
+        for view in views:
+            stock = view.get("stock_ml")
+            if not stock or stock["experiment"]["experiment_ref"] != refs["experiment_ref"]:
+                continue
+            registered = (view.get("research") or {}).get("output_refs") or []
+            _require(all(stock["experiment"].get(key) == refs[key] and
+                         any(r.get("artifact_type") == kind and r.get("artifact_id") == refs[key] for r in registered)
+                         for kind, key in bindings.items()), "CONTEXT_MISMATCH: stock stage report inputs")
+            _require("stage_report" not in stock, "duplicate stock stage report attachment")
+            stock["stage_report"] = deepcopy(report)
+            matched = True
+        _require(matched, "CONTEXT_MISMATCH: stock stage report without loaded registered experiment")
+
+
 def render_saved_workbench(run_paths: Sequence[str | Path], *,
                            evaluation_paths: Sequence[str | Path] = (),
                            experiment_paths: Sequence[str | Path] = (),
                            experiment_index_path: str | Path | None = None,
                            stock_ml_paths: Sequence[str | Path] = (),
+                           stock_stage_report_paths: Sequence[str | Path] = (),
                            data_batches: Mapping[str, Any] | None = None,
                            data_batch_paths: Mapping[str, str | Path] | None = None,
                            synthetic_run_ids: Sequence[str] = (),
@@ -542,10 +576,11 @@ Data batches must be responses already obtained from Data's public Reader.
 The workbench does not discover data roots or implicitly issue a Query.
 """
     for paths, field in ((run_paths, "runs"), (evaluation_paths, "evaluations"), (experiment_paths, "experiments"),
-                         (stock_ml_paths, "stock ML experiments")):
+                         (stock_ml_paths, "stock ML experiments"), (stock_stage_report_paths, "stock stage reports")):
         _paths(paths, field)
     _require(experiment_index_path is None or isinstance(experiment_index_path, (str, Path)), "Research index requires explicit path")
     _require(not stock_ml_paths or experiment_index_path is not None, "stock ML requires explicit Research index")
+    _require(not stock_stage_report_paths or stock_ml_paths, "stock stage reports require explicitly loaded stock ML")
     _require(bool(run_paths) or experiment_index_path is not None, "an explicit saved run or Research index is required")
     originals = []
     if run_paths:
@@ -612,6 +647,7 @@ The workbench does not discover data roots or implicitly issue a Query.
         from axiom_research import ExperimentReader
         views = _catalog(ExperimentReader(experiment_index_path), views)
     _attach_stock_ml(views, stock_ml_paths)
+    _attach_stock_stage_reports(views, stock_stage_report_paths)
     return _render(views, generated_at)
 
 

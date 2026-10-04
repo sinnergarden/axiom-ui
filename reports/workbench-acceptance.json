@@ -49,7 +49,12 @@
     "mac_local_entry_and_screenshot_links": true,
     "final_long_registered_ohlcv_and_experiment_navigation": true,
     "long_saved_run_registration_history_is_not_backtest_count": true,
-    "long_short_comparison_retains_independent_cagr_availability": true
+    "long_short_comparison_retains_independent_cagr_availability": true,
+    "stock_stage_report_declared_actual_windows_and_summary_means": true,
+    "stock_stage_report_measurement_mode_status_seconds_and_receipts": true,
+    "stock_report_missing_receipt_does_not_claim_saved_source": true,
+    "stock_stage_report_optional_context_cleared_on_switch": true,
+    "stage_report_increment_existing_real_etf_usable_and_unchanged": true
   },
   "reader_acceptance": {
     "engine_public_run_and_evaluation_loaders": true,
@@ -83,7 +88,12 @@
     "stock_missing_public_fields_not_inferred": true,
     "final_long_data_batch_wire_file_and_common_field_identity": true,
     "final_long_registration_exact_run_evaluation_signal_refs": true,
-    "historical_short_run_explicitly_loaded_without_uri_following": true
+    "historical_short_run_explicitly_loaded_without_uri_following": true,
+    "stock_stage_report_public_loader_only": true,
+    "stock_stage_report_six_input_refs_match_loaded_experiment_and_registration": true,
+    "stock_stage_report_owner_values_preserved_with_integer_text": true,
+    "stock_stage_report_export_compute_helpers_forbidden": true,
+    "stage_report_increment_owner_and_historical_preview_hash_mtime_size_unchanged": true
   },
   "independent_review": {
     "static_only": true,
@@ -93,13 +103,16 @@
     "account_v2_increment_reviewed": true,
     "native_event_source_p2_closed": true,
     "stock_stage_increment_reviewed": true,
-    "ohlcv_market_state_source_p2_closed": true
+    "ohlcv_market_state_source_p2_closed": true,
+    "stock_stage_report_increment_reviewed": true,
+    "missing_receipt_source_p2_closed": true
   },
   "wheel_assets_included": true,
   "pending": [
-    "Stock public Readers do not expose mature training window, training/prediction elapsed time or aggregate IC/ICIR",
+    "Stock BacktestRun v3 waits for actual Engine contract and owner artifacts; no units or trading semantics inferred",
+    "ICIR is not provided by the saved stage report",
     "Existing private Library batch remains paused; no new upload attempt",
-    "Local consumer/source commits await parent publication coordination"
+    "Stage-report software increment awaits parent review of its exact draft PR head; consumer Docs patch is local for coordination"
   ],
   "publication_scope": "Source, tests and handwritten synthetic fixtures only; private HTML, images, data and results excluded",
   "synthetic_scale": {
@@ -118,7 +131,10 @@
     "ui_consumer_docs_patch_local": "f8494fc2b708f9a507889f9aa087a2282c9bf41e",
     "engine_account_v2_local_reader": "59a4e1c7827f241c407e4dce7cd490806560c4ce",
     "engine_account_v2_publication": "Local source only for this consumer acceptance; Engine publication handled by its owner",
-    "ui_stock_consumer_docs_patch_local": "0782be99fe1a9e252ffa3526fdff5aed2ac10f5e"
+    "ui_stock_consumer_docs_patch_local": "0782be99fe1a9e252ffa3526fdff5aed2ac10f5e",
+    "stock_stage_report_research_source": "a8f30d421c7fca3ca32ac22c0efe3d4d72935343",
+    "stock_stage_report_docs_main": "7a139c2792d9c512ebb039ef194ca5d09f390e5f",
+    "ui_stage_report_consumer_docs_patch_local": "143f5ff982b57e151cf60d4b87685f5462c6b75d"
   },
   "saved_v2_display": {
     "source_qualification": "Owner-saved final long real account under explicit ETF daily approximation, historical short output and labelled synthetic golden; saved metrics only",
@@ -153,10 +169,10 @@
     "qualification": "Real saved Research model/signal/evidence only; stock account blocked and not executed",
     "research_complete_not_account_backtest_complete": true,
     "saved_daily_ic_rank_ic_and_pair_counts": true,
-    "actual_mature_training_window_timings_and_aggregate_marked_unprovided": true,
     "no_account_metrics_charts_positions_orders_or_fills": true,
     "no_feature_training_prediction_core_account_or_data_execution": true,
-    "library_writes": 0
+    "library_writes": 0,
+    "without_optional_report_actual_training_timings_and_aggregate_marked_unprovided": true
   },
   "final_long_saved_display": {
     "qualification": "Fixed real inputs with explicit ETF daily execution approximation; not strict PIT/live/strategy validation",
@@ -172,5 +188,21 @@
     "registered_ohlcv_and_research_navigation_loaded": true,
     "same_run_registration_history_distinct_from_saved_backtest_count": true,
     "historical_short_comparison_labels_saved_condition_differences": true
+  },
+  "saved_stock_stage_report_display": {
+    "qualification": "Owner-saved Research stage report only; does not establish a stock account backtest",
+    "optional_explicit_path_six_input_refs_bound": true,
+    "declared_and_actual_training_windows_rows_sessions_saved_only": true,
+    "ic_rank_ic_means_and_valid_sessions_saved_only": true,
+    "icir_not_computed": true,
+    "receipt_modes_status_null_and_provenance_preserved": true,
+    "reused_not_executed_null_not_zero_seconds": true,
+    "inherited_feature_qlib_cold_measurements_not_current_model_cold_run": true,
+    "missing_receipt_source_marked_unprovided": true,
+    "build_total_not_summed_or_memory_allocated_to_stage": true,
+    "old_report_missing_behavior_preserved": true,
+    "existing_etf_page_usable_and_unchanged": true,
+    "data_queries_or_owner_compute_save_calls": 0,
+    "library_writes": 0
   }
 }
