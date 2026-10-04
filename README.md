@@ -109,15 +109,22 @@ A Research index can be opened before any account output exists. Explicit
 `load_stock_ml_experiment` and `load_stock_model` Readers, then bind all stage
 identities to the existing registration. The panel displays saved feature IDs
 and versions, fit cutoff, declared feature/prediction windows, label maturity
-and normalization, daily IC/RankIC and valid/excluded pairs. The current Readers
-do not expose the actual mature training window, aggregate IC/ICIR or timings;
-these are unavailable, without estimates. A blocked stock account retains its
+and normalization, daily IC/RankIC and valid/excluded pairs. An optional `stock_stage_report_paths` / `--stock-stage-report` input uses
+`load_stock_stage_report` and binds all six input refs to the loaded experiment
+and its Research registration. It displays the saved declared/actual training
+windows, rows/sessions, IC/RankIC means and valid sessions, and native measurement
+modes/status/seconds. Reused stages retain null seconds, and inherited Feature/Qlib
+cold measurements remain separate from current-model timings. Build/total are
+never summed and whole-receipt memory is not allocated to stages. Without a report,
+the actual mature training window, aggregate means and timings stay unavailable.
+ICIR is not calculated. The public contract is
+[Research §4.6](https://github.com/sinnergarden/axiom-docs/blob/7a139c2792d9c512ebb039ef194ca5d09f390e5f/docs/design/05_axiom_research.md#stock-saved-stage-report-proposal). A blocked stock account retains its
 owner status and reason. With no BacktestRun, account metrics, charts and
 comparison are hidden. Research COMPLETE is a saved research registration;
 it does not establish an account backtest or strategy performance.
 
 ```sh
-PYTHONPATH=src:/path/to/axiom-research/src python3 -m axiom_ui --workbench --experiment-index /path/to/index.json --stock-ml /path/to/stock-experiment --output /tmp/axiom-stock-stage.html
+PYTHONPATH=src:/path/to/axiom-research/src python3 -m axiom_ui --workbench --experiment-index /path/to/index.json --stock-ml /path/to/stock-experiment --stock-stage-report /path/to/stage-report.json --output /tmp/axiom-stock-stage.html
 ```
 
 Research's `ExperimentReader` supplies question descriptions, version parameters,

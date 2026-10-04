@@ -322,13 +322,46 @@ class WorkbenchTests(unittest.TestCase):
             self.assertEqual(view["research"]["saved_backtest_count"],"0")
             self.assertEqual((experiment,model,evidence,projection),before)
             self.assertEqual(calls,[("index","stock-index.json"),("stock","stock-dir"),("model","stock-dir"),("evidence",)])
+            report = {"contract_version":"stock_stage_report_v1", "report_version":"axiom.stock_stage_report/1",
+                      "stage_report_ref":"synthetic:report", "content_digest":"synthetic:report-content",
+                      "input_refs":{key:experiment[key] for key in keys.values() if key != "label_ref"},
+                      "training":{"declared":{"session_count":2},"actual":{"first_feature_session":"2025-12-29",
+                                  "last_feature_session":"2025-12-29","session_count":1,"training_row_count":20}},
+                      "signal_summary":{"ic":{"session_count":0,"mean":None},"rank_ic":{"session_count":1,"mean":-0.2}},
+                      "measurements":[{"stage":"feature","mode":"saved_input_build","status":"REUSED_NOT_EXECUTED",
+                                       "seconds":None,"reported_seconds":0,"inherited_feature_only":False},
+                                      {"stage":"total","mode":"saved_input_build","status":"NOT_PROVIDED",
+                                       "seconds":None,"reported_seconds":None,"receipt_file_digest":None,
+                                       "observation":None,"inherited_feature_only":False}]}
+            report_before=deepcopy(report)
+            research.load_stock_stage_report=lambda path:calls.append(("stage-report",str(path))) or deepcopy(report)
+            kwargs={"experiment_index_path":"stock-index.json","stock_ml_paths":["stock-dir"],"stock_stage_report_paths":["report.json"],"generated_at":GENERATED}
+            attached=payload(render_saved_workbench([],**kwargs))["views"][0]["stock_ml"]["stage_report"]
+            self.assertIsNone(attached["signal_summary"]["ic"]["mean"])
+            self.assertEqual(attached["signal_summary"]["rank_ic"]["mean"],-0.2)
+            self.assertEqual(attached["training"]["actual"]["training_row_count"],"20")
+            self.assertIsNone(attached["measurements"][0]["seconds"])
+            self.assertEqual(attached["measurements"][0]["reported_seconds"],"0")
+            self.assertIsNone(attached["measurements"][1]["receipt_file_digest"])
+            self.assertIsNone(attached["measurements"][1]["observation"])
+            self.assertEqual(report,report_before)
+            for key in report["input_refs"]:
+                with self.subTest(stage_input=key):
+                    report["input_refs"][key]="synthetic:wrong"
+                    with self.assertRaisesRegex(ProjectionError,"CONTEXT_MISMATCH"):
+                        render_saved_workbench([],**kwargs)
+                    report["input_refs"][key]=report_before["input_refs"][key]
+            with self.assertRaisesRegex(ProjectionError,"duplicate stock stage report"):
+                render_saved_workbench([],**{**kwargs,"stock_stage_report_paths":["report.json","report.json"]})
+            with self.assertRaisesRegex(ProjectionError,"explicitly loaded stock ML"):
+                render_saved_workbench([],experiment_index_path="stock-index.json",stock_stage_report_paths=["report.json"])
             from axiom_ui.__main__ import main
             with tempfile.TemporaryDirectory() as directory:
                 output=Path(directory)/"stock.html"
-                args=["axiom-ui","--workbench","--experiment-index","stock-index.json","--stock-ml","stock-dir","--output",str(output)]
+                args=["axiom-ui","--workbench","--experiment-index","stock-index.json","--stock-ml","stock-dir","--stock-stage-report","report.json","--output",str(output)]
                 with patch.object(sys,"argv",args),patch("builtins.print"):
                     main()
-                self.assertEqual(payload(output.read_text())["views"][0]["stock_ml"]["experiment"]["experiment_ref"],experiment["experiment_ref"])
+                self.assertEqual(payload(output.read_text())["views"][0]["stock_ml"]["stage_report"]["stage_report_ref"],report["stage_report_ref"])
             record["output_refs"][3]["artifact_id"]="wrong"
             with self.assertRaisesRegex(ProjectionError,"stock ML registration"):
                 render_saved_workbench([],experiment_index_path="stock-index.json",stock_ml_paths=["stock-dir"])

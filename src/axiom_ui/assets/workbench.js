@@ -175,7 +175,9 @@
     $('selection-context').textContent = state.interval ? '选中期间 ' + state.interval.start + ' — ' + state.interval.end + (state.session ? ' / ' + state.session : '') + '；指标仍为整段回测。' : '指标范围：整段回测' + (state.session ? ' / 选中 ' + state.session : '');
   }
   function renderStockML(v){
-    const stock=v.stock_ml,panel=$('stock-ml-context'),registered=(v.research?.output_refs || []).some(ref=>ref.artifact_type==='StockMLExperiment');panel.hidden=!stock&&!registered;
+    const stock=v.stock_ml,report=stock?.stage_report,panel=$('stock-ml-context'),registered=(v.research?.output_refs || []).some(ref=>ref.artifact_type==='StockMLExperiment');panel.hidden=!stock&&!registered;
+    $('stock-saved-report').hidden=!report;
+    if(!report){clear('stock-report-summary');clear('stock-measurements');$('stock-report-raw').textContent='';$('stock-measurement-note').textContent='';}
     if(!stock){
       if(registered){
         $('stock-account-status').textContent='该登记的阶段产物未载入；账户结果不可用。保留原研究记录，不使用其他版本的模型或信号替代。';
@@ -190,16 +192,37 @@
     $('stock-account-status').textContent=(blocked?'股票账户未执行 · ':'账户状态：')+saved(experiment.account_status)+'；'+saved(experiment.account_reason)+'。研究登记完成只表示已保存的研究阶段，不代表账户回测完成。';
     const range=sessions=>sessions?.length?sessions[0]+' — '+sessions.at(-1):'未提供';
     const values=clear('stock-stage-values');
-    for(const [label,value] of [['训练 fit cutoff',model.fit_cutoff],['声明 Feature session 窗口',range(config.feature_sessions)],['实际成熟训练样本窗口','当前读取输出未提供'],['预测窗口',range(config.prediction_sessions)],['标签评价 cutoff',evidence.evaluation_cutoff],['Feature ID / 语义版本',(model.feature_selection || config.feature_selection || []).map(f=>f.id+' / '+f.semantic_version).join('、') || '未提供'],['特征标准化',model.feature_normalization],['预测目标语义',model.target_semantics || evidence.score_semantics],['标签成熟规则',model.label_normalization?.maturity],['训练 / 预测耗时','当前读取输出未提供']]){
+    for(const [label,value] of [['训练 fit cutoff',model.fit_cutoff],['声明 Feature session 窗口',range(config.feature_sessions)],['实际成熟训练样本窗口',report?reportWindow(report.training?.actual):'当前读取输出未提供'],['预测窗口',range(config.prediction_sessions)],['标签评价 cutoff',evidence.evaluation_cutoff],['Feature ID / 语义版本',(model.feature_selection || config.feature_selection || []).map(f=>f.id+' / '+f.semantic_version).join('、') || '未提供'],['特征标准化',model.feature_normalization],['预测目标语义',model.target_semantics || evidence.score_semantics],['标签成熟规则',model.label_normalization?.maturity],['训练 / 预测耗时',report?'见保存阶段测量（按模式和来源区分）':'当前读取输出未提供']]){
       const row=node('div',null,'point-row');row.append(node('span',label),node('strong',saved(value)));values.append(row);
     }
     $('stock-stage-config').textContent=json({fit_cutoff:model.fit_cutoff,feature_normalization:model.feature_normalization,label_normalization:model.label_normalization,score_semantics:evidence.score_semantics,label_semantics:evidence.label_semantics,minimum_pairs:evidence.minimum_pairs,rank_ties:evidence.rank_ties,parameters:model.parameters,num_boost_round:model.num_boost_round,environment:model.environment});
-    $('stock-ic-note').textContent='IC、RankIC 和有效/排除配对均为 owner 保存值，不表示账户收益。均值与 ICIR 未提供，不从逐日值计算。';
+    $('stock-ic-note').textContent='IC、RankIC 和有效/排除配对均为 owner 保存值，不表示账户收益。'+(report?'汇总均值见保存阶段报告；ICIR 未提供，不自行计算。':'均值与 ICIR 未提供，不从逐日值计算。');
+    if(report)renderStockReport(report);
     const table=node('table'),head=node('tr'),thead=node('thead'),body=node('tbody');
     for(const label of ['Session','IC','RankIC','有效预测','有效配对','排除配对','原因'])head.append(node('th',label));thead.append(head);table.append(thead,body);
     for(const row of evidence.series || []){const tr=node('tr');tr.dataset.icSession=row.session;tr.title=json(row);for(const key of ['session','ic','rank_ic','prediction_valid_count','valid_pair_count','excluded_pair_count','reason'])tr.append(node('td',saved(row[key])));body.append(tr);}
     clear('stock-ic-table').append(table);
     $('stock-stage-refs').textContent=json({experiment_ref:experiment.experiment_ref,feature_ref:experiment.feature_ref,label_ref:experiment.label_ref,dataset_ref:experiment.dataset_ref,model_ref:experiment.model_ref,signal_run_ref:experiment.signal_run_ref,evidence_ref:experiment.evidence_ref,definition:experiment.definition,signal_evidence:evidence});
+  }
+  const reportWindow = window => !window ? '未提供' : saved(window.first_feature_session)+' — '+saved(window.last_feature_session)+' · '+saved(window.session_count)+' session'+(Object.hasOwn(window,'training_row_count')?' · '+saved(window.training_row_count)+' 行':'');
+  function renderStockReport(report){
+    const training=report.training,summary=report.signal_summary,values=clear('stock-report-summary');
+    for(const [label,value] of [['训练声明窗口（fit cutoff 内）',reportWindow(training.declared)],['实际成熟训练窗口',reportWindow(training.actual)],['IC 均值 / 有效 session',saved(summary.ic?.mean)+' / '+saved(summary.ic?.session_count)],['RankIC 均值 / 有效 session',saved(summary.rank_ic?.mean)+' / '+saved(summary.rank_ic?.session_count)],['汇总权重 / 缺值规则',saved(summary.weighting)+' / '+saved(summary.missing_policy)],['预测总行 / 有效 / 无效',saved(summary.prediction_row_count)+' / '+saved(summary.prediction_valid_row_count)+' / '+saved(summary.prediction_invalid_row_count)],['有效 / 排除配对',saved(summary.valid_pair_count)+' / '+saved(summary.excluded_pair_count)]]){
+      const row=node('div',null,'point-row');row.append(node('span',label),node('strong',value));values.append(row);
+    }
+    $('stock-measurement-note').textContent='以下 seconds、模式和状态均为 owner 保存值。复用未执行不是零秒冷跑；继承的冷构建只说明早期 Feature/Qlib 来源，不代表当前模型冷训练。build/total 不相加，receipt 整体内存与规模不摊到阶段，不推算吞吐。';
+    const table=node('table'),thead=node('thead'),head=node('tr'),body=node('tbody');
+    for(const label of ['阶段','模式','状态','Owner 秒数','来源范围'])head.append(node('th',label));thead.append(head);table.append(thead,body);
+    for(const measurement of report.measurements){
+      const tr=node('tr');tr.title=json(measurement);tr.dataset.measurementStage=measurement.stage;tr.dataset.measurementMode=measurement.mode || '';
+      const stage=({feature:'特征',qlib:'Qlib 导出',label_dataset:'标签 / 训练集',train:'训练',predict:'预测',build:'保存构建',total:'总计',cache_load:'缓存读取'})[measurement.stage] || measurement.stage;
+      const mode=({saved_input_build:'本次保存构建',cache_reuse:'缓存复用',cold_build:'冷构建'})[measurement.mode] || measurement.mode;
+      const status=({MEASURED:'已测量',REUSED_NOT_EXECUTED:'复用，未执行',NOT_PROVIDED:'未提供'})[measurement.status] || measurement.status;
+      const scope=!measurement.receipt_file_digest?'测量 receipt 未提供':measurement.inherited_feature_only?'继承早期 Feature/Qlib（非当前模型冷跑）':'当前实验保存 receipt';
+      for(const value of [stage,mode,status,measurement.seconds,scope])tr.append(node('td',saved(value)));
+      body.append(tr);
+    }
+    clear('stock-measurements').append(table);$('stock-report-raw').textContent=json(report);
   }
   const NS = 'http://www.w3.org/2000/svg';
   function svgEl(tag, attrs = {}, text) {
@@ -481,6 +504,7 @@
     for(const text of v.run.limitations || [])panel.append(node('p',String(text)));
     for(const text of v.evaluation?.limitations || [])panel.append(node('p',String(text)));
     for(const text of v.stock_ml?.signal_evidence?.limitations || [])panel.append(node('p',String(text)));
+    for(const text of v.stock_ml?.stage_report?.limitations || [])panel.append(node('p',String(text)));
     $('source-refs').textContent=json({run_id:v.run.run_id,run_contract:v.run.contract_version,account_id:v.run.account_id,content_digest:v.run.content_digest,committed_sequence:v.run.committed_sequence,signal_ref:v.run.signal_ref,market_ref:v.run.market_ref,profile_ref:v.run.profile_ref,core_version:v.run.core_version,runtime_version:v.run.runtime_version,implementation_ref:v.run.implementation_ref,unit_split_applications:v.run.unit_split_applications,unit_split_events:v.market.unit_splits,unit_split_source_evidence:v.market.unit_split_source_evidence,evaluation_ref:v.evaluation?.evaluation_ref,evaluation_content_digest:v.evaluation?.content_digest,evaluation_contract:v.evaluation?.contract_version,evaluation_status:v.evaluation?.status,evaluation_version:v.evaluation?.evaluation_version,evaluation_spec_ref:v.evaluation?.spec_ref,period_metrics:v.evaluation?.period_metrics,benchmark_ref:v.evaluation?.benchmark_ref,benchmark:v.evaluation?.benchmark,data_context:v.market.data_batch?.context,research:v.research,stock_ml:v.stock_ml,registration_history:v.registration_history?.map(h=>h.record)});
     $('generated-note').textContent='页面生成于 '+data.generated_at+'；不是数据更新时间。所有业务数值来自保存产物；浏览没有采集、训练、回测或交易调用。';
   }
@@ -499,7 +523,7 @@
   for(const id of ['window-start','window-end'])$(id).addEventListener('change',()=>{state.tradeWindow={mode:'custom',start:$('window-start').value,end:$('window-end').value};state.interval={start:state.tradeWindow.start,end:state.tradeWindow.end};state.session='';state.fillId='';state.eventId='';render();});
   document.querySelectorAll('[data-event-kind]').forEach(b=>b.addEventListener('click',()=>{state.kind=b.dataset.eventKind;state.fillId='';state.eventId='';renderTrade(current());}));
   $('copy-context').addEventListener('click',async()=>{
-    const v=current(),text=json({question_id:v.research?.question_id,version_ref:v.research?.version_id,run_record_ref:v.research?.run_record_ref,run_id:v.run.run_id,content_digest:v.run.content_digest,signal_ref:v.run.signal_ref,market_ref:v.run.market_ref,profile_ref:v.run.profile_ref,evaluation_ref:v.evaluation?.evaluation_ref,security_id:state.security,session:state.session,interval:state.interval,changes:v.research?.changes,stock_experiment_ref:v.stock_ml?.experiment.experiment_ref,model_ref:v.stock_ml?.experiment.model_ref,signal_evidence_ref:v.stock_ml?.experiment.evidence_ref});
+    const v=current(),text=json({question_id:v.research?.question_id,version_ref:v.research?.version_id,run_record_ref:v.research?.run_record_ref,run_id:v.run.run_id,content_digest:v.run.content_digest,signal_ref:v.run.signal_ref,market_ref:v.run.market_ref,profile_ref:v.run.profile_ref,evaluation_ref:v.evaluation?.evaluation_ref,security_id:state.security,session:state.session,interval:state.interval,changes:v.research?.changes,stock_experiment_ref:v.stock_ml?.experiment.experiment_ref,model_ref:v.stock_ml?.experiment.model_ref,signal_evidence_ref:v.stock_ml?.experiment.evidence_ref,stage_report_ref:v.stock_ml?.stage_report?.stage_report_ref,stage_report_content_digest:v.stock_ml?.stage_report?.content_digest});
     try {await navigator.clipboard.writeText(text);$('toast').textContent='已复制运行上下文与证据引用。';}catch{const area=node('textarea');area.value=text;document.body.append(area);area.select();const copied=document.execCommand('copy');area.remove();$('toast').textContent=copied?'已复制运行上下文与证据引用。':'浏览器未允许复制；来源详情中保留相同引用。';}
     $('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',2500);
   });

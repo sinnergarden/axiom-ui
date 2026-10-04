@@ -32,15 +32,16 @@ def main() -> None:
     parser.add_argument("--experiment", action="append", type=Path, default=[], help="saved Research rotation experiment via public Reader")
     parser.add_argument("--experiment-index", type=Path, help="explicit Research experiment index via public ExperimentReader")
     parser.add_argument("--stock-ml", action="append", type=Path, default=[], help="explicit saved stock ML directory via Research public Readers")
+    parser.add_argument("--stock-stage-report", action="append", type=Path, default=[], help="explicit saved stage report via Research public Reader; requires --stock-ml")
     parser.add_argument("--data-batch", action="append", default=[], metavar="RUN_ID=PATH", help="explicit saved DataBatch public response; no Data query")
     args = parser.parse_args()
     if args.workbench and args.shareable:
         parser.error("--shareable applies to the static report; workbench exports are private local results")
     if args.run is None and not (args.workbench and args.experiment_index and not (args.sample or args.synthetic)):
         parser.error("a saved run or --workbench --experiment-index is required")
-    if not args.workbench and (args.compare or args.evaluation or args.experiment or args.experiment_index or args.data_batch or args.stock_ml):
+    if not args.workbench and (args.compare or args.evaluation or args.experiment or args.experiment_index or args.data_batch or args.stock_ml or args.stock_stage_report):
         parser.error("comparison/evaluation/experiment inputs require --workbench")
-    if args.sample and (args.compare or args.evaluation or args.experiment or args.experiment_index or args.data_batch or args.stock_ml):
+    if args.sample and (args.compare or args.evaluation or args.experiment or args.experiment_index or args.data_batch or args.stock_ml or args.stock_stage_report):
         parser.error("synthetic UI fixtures cannot load saved owner inputs")
     try:
         if args.workbench:
@@ -62,6 +63,7 @@ def main() -> None:
                     evaluation_paths=args.evaluation, experiment_paths=args.experiment,
                     experiment_index_path=args.experiment_index,
                     stock_ml_paths=args.stock_ml,
+                    stock_stage_report_paths=args.stock_stage_report,
                     data_batch_paths=batches,
                     synthetic_run_ids=synthetic_ids)
         elif args.sample:
