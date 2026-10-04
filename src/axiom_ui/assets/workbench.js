@@ -32,7 +32,7 @@
   const securityName = id => (String(id || '').match(/\.(\d{6})\./) || [null, id])[1] || '未提供';
   const json = v => JSON.stringify(v, null, 2);
   const eventKey = event => event.fill_id || event.order_id || json(event);
-  const statusLabel = value => ({COMPLETE:'已完成',FILLED:'已成交',EXPIRED:'已过期',REJECTED:'已拒绝',PARTIAL:'部分数据',FAILED:'失败',BLOCKED:'阻断',NEGATIVE:'负收益',CLOSED:'已闭合',OPEN:'未闭合',MISSING:'缺失',OBSERVED_RECORDS_ONLY:'仅已观察记录',COVERAGE_UNKNOWN:'覆盖范围未提供',PENDING_EX:'待除息',RECOGNIZED:'收入已确认',NO_OBSERVED_ENTITLEMENT:'未观察到分红权益',OBSERVED_ONLY:'仅已观察记录'})[value] || saved(value);
+  const statusLabel = value => ({COMPLETE:'已完成',FILLED:'已成交',EXPIRED:'已过期',REJECTED:'已拒绝',PARTIAL:'部分数据',FAILED:'失败',BLOCKED:'阻断',NEGATIVE:'负收益',CLOSED:'已闭合',OPEN:'未闭合',MISSING:'缺失',OBSERVED_RECORDS_ONLY:'仅已观察记录',COVERAGE_UNKNOWN:'覆盖范围未提供',PENDING_EX:'待除息',RECOGNIZED:'收入已确认',NO_OBSERVED_ENTITLEMENT:'未观察到分红权益',OBSERVED_ONLY:'仅已观察记录',APPLIED:'模型已应用',NO_ENTITLEMENT:'无登记权益',ANNOUNCED_SUSPENSION:'公告全天停牌'})[value] || saved(value);
   const numeric = v => present(v) && Number.isFinite(Number(v)) ? Number(v) : null;
   const positive = v => numeric(v) > 0 ? 'positive' : numeric(v) < 0 ? 'negative' : '';
   function decimal(value, shift = 0) {
@@ -256,6 +256,8 @@
   function pointRow(panel, label, value) {
     const row=node('div',null,'point-row');row.append(node('span',label),node('strong',saved(value)));panel.append(row);
   }
+  const unitEvents = (v,ids) => (v.market.unit_splits || []).filter(item=>ids.includes(item.event.event_id));
+  const unitSources = (v,events) => {const refs=new Set(events.flatMap(item=>item.source_refs || []));return (v.market.unit_split_source_evidence || []).filter(source=>refs.has(source.reference));};
   function renderPoint(v, event = null, kind = state.kind) {
     const panel=clear('trade-point');panel.append(node('h3',event ? (kind==='fills'?'成交原值':kind==='orders'?'委托原值':'决策原值') : '所选行情原值'));
     pointRow(panel,'证券',state.security);pointRow(panel,'交易日',event?.session || event?.trade_session || state.session);
@@ -272,7 +274,9 @@
         pointRow(panel,'信号日',event.feature_session);pointRow(panel,'决策交易日',event.trade_session);
         pointRow(panel,'决策说明',event.trace?'已保存决策依据':'决策依据暂未提供');
       }
-      const detail=node('details');detail.append(node('summary','执行依据与原始记录'),node('pre',json({event,order:(v.run.orders || []).find(o=>o.order_id===event.order_id)})));panel.append(detail);
+      const order=kind==='orders'?event:(v.run.orders || []).find(o=>o.order_id===event.order_id),ids=order?.announced_suspension_event_ids || [];
+      if(ids.length)pointRow(panel,'公告停牌事件来源',ids.join('、'));
+      const events=unitEvents(v,ids),detail=node('details');detail.append(node('summary','执行依据与原始记录'),node('pre',json({event,order,announced_suspension_events:ids.length?events:undefined,unit_event_sources:ids.length?unitSources(v,events):undefined})));panel.append(detail);
     } else {
       const rows=v.market.data_batch?.records || v.market.rows;
       const point=rows.find(p=>p.security_id===state.security && p.session===state.session);
@@ -280,6 +284,11 @@
       else panel.append(node('p','所选日期未保存行情，不填补。','missing'));
       const positions=(v.run.positions || []).filter(p=>p.security_id===state.security && p.session===state.session);
       for(const position of positions) {pointRow(panel,'持仓 / 可卖份额',saved(position.quantity)+' / '+saved(position.sellable_quantity));pointRow(panel,'估值日 / 是否过期',saved(position.mark_session)+' / '+saved(position.is_stale));}
+      for(const position of positions) if(Object.hasOwn(position,'mark_basis_event_id')){
+        pointRow(panel,'账户保存估值价（元/份）',position.mark_price);
+        pointRow(panel,'估值单位依据',position.mark_basis_event_id || '原生报价');
+        const events=position.mark_basis_event_id?unitEvents(v,[position.mark_basis_event_id]):[],detail=node('details');detail.append(node('summary','保存持仓与单位来源'),node('pre',json({position,unit_event:position.mark_basis_event_id?events:null,unit_event_sources:unitSources(v,events)})));panel.append(detail);
+      }
     }
   }
   function selectEvent(v,event,kind) {
@@ -355,6 +364,15 @@
       for(const index of [...new Set([0,Math.floor((sessions.length-1)/2),sessions.length-1])])svg.append(svgEl('text',{x:x(index),y:372,'text-anchor':index===0?'start':index===sessions.length-1?'end':'middle',fill:'#607184','font-size':10},sessions[index]));
     }
     document.querySelectorAll('[data-event-kind]').forEach(b=>b.classList.toggle('active',b.dataset.eventKind===state.kind));
+    const applications=(v.run.unit_split_applications || []).filter(a=>a.security_id===state.security),unitList=clear('unit-split-list');
+    $('unit-split-context').hidden=!applications.length;
+    for(const application of applications){
+      const detail=node('details'),button=node('button',application.session+' · '+statusLabel(application.status)+' · '+saved(application.before_quantity)+' → '+saved(application.after_quantity)+' 份','unit-split-item');
+      button.dataset.unitEventId=application.event_id;
+      button.addEventListener('click',()=>{state.session=application.session;state.interval=null;state.fillId='';state.eventId='';locateDay(v,application.session);renderHeader(v);renderPerformance(v);renderTrade(v);});
+      const events=unitEvents(v,[application.event_id]);
+      detail.append(node('summary','应用与事件原值'),node('pre',json({application,unit_event:events,unit_event_sources:unitSources(v,events)})));unitList.append(button,detail);
+    }
     const list=clear('event-list'), events=(v.run[state.kind] || []).filter(e=>{const day=e.session || e.trade_session;return day>=window.start&&day<=window.end&&(state.kind==='decisions'?(e.selected_security_id===state.security || (e.intents || []).some(i=>i.security_id===state.security)):e.security_id===state.security);});
     if(!events.length)list.append(node('p','此区间没有保存的该类记录。','small'));
     for(const event of events){
@@ -417,7 +435,7 @@
     const panel=clear('source-details');
     for(const text of v.run.limitations || [])panel.append(node('p',String(text)));
     for(const text of v.evaluation?.limitations || [])panel.append(node('p',String(text)));
-    $('source-refs').textContent=json({run_id:v.run.run_id,account_id:v.run.account_id,content_digest:v.run.content_digest,committed_sequence:v.run.committed_sequence,signal_ref:v.run.signal_ref,market_ref:v.run.market_ref,profile_ref:v.run.profile_ref,core_version:v.run.core_version,runtime_version:v.run.runtime_version,implementation_ref:v.run.implementation_ref,evaluation_ref:v.evaluation?.evaluation_ref,evaluation_content_digest:v.evaluation?.content_digest,evaluation_contract:v.evaluation?.contract_version,evaluation_status:v.evaluation?.status,evaluation_version:v.evaluation?.evaluation_version,evaluation_spec_ref:v.evaluation?.spec_ref,period_metrics:v.evaluation?.period_metrics,benchmark_ref:v.evaluation?.benchmark_ref,benchmark:v.evaluation?.benchmark,data_context:v.market.data_batch?.context,research:v.research,registration_history:v.registration_history?.map(h=>h.record)});
+    $('source-refs').textContent=json({run_id:v.run.run_id,run_contract:v.run.contract_version,account_id:v.run.account_id,content_digest:v.run.content_digest,committed_sequence:v.run.committed_sequence,signal_ref:v.run.signal_ref,market_ref:v.run.market_ref,profile_ref:v.run.profile_ref,core_version:v.run.core_version,runtime_version:v.run.runtime_version,implementation_ref:v.run.implementation_ref,unit_split_applications:v.run.unit_split_applications,unit_split_events:v.market.unit_splits,unit_split_source_evidence:v.market.unit_split_source_evidence,evaluation_ref:v.evaluation?.evaluation_ref,evaluation_content_digest:v.evaluation?.content_digest,evaluation_contract:v.evaluation?.contract_version,evaluation_status:v.evaluation?.status,evaluation_version:v.evaluation?.evaluation_version,evaluation_spec_ref:v.evaluation?.spec_ref,period_metrics:v.evaluation?.period_metrics,benchmark_ref:v.evaluation?.benchmark_ref,benchmark:v.evaluation?.benchmark,data_context:v.market.data_batch?.context,research:v.research,registration_history:v.registration_history?.map(h=>h.record)});
     $('generated-note').textContent='页面生成于 '+data.generated_at+'；不是数据更新时间。所有业务数值来自保存产物；浏览没有采集、训练、回测或交易调用。';
   }
   function render() {

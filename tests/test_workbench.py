@@ -42,6 +42,40 @@ def saved_v2(entry):
     return evaluation
 
 
+def saved_unit_run(entry):
+    """Handwritten UI event-link fixture; never an Engine accounting test."""
+    run = entry["run"]
+    security, event_id = run["fills"][0]["security_id"], "synthetic:unit-event"
+    application_session = run["positions"][-1]["session"]
+    run["contract_version"] = "backtest_run_v2"
+    run["plan"]["unit_split_policy"] = "etf_settled_holder_eod_v1"
+    run["plan"]["market_replay"]["unit_splits"] = [{
+        "event": {"event_id": event_id, "security_id": security, "effective_date": application_session,
+                  "process_status": "planned", "effective_phase": "not_stated", "document_refs": "synthetic-plan"},
+        "available_at": "2026-03-27T00:00:00Z", "source_refs": ["synthetic:unit-source"]}]
+    run["plan"]["market_replay"].setdefault("source_evidence", []).append({
+        "reference": "synthetic:unit-source", "batch": {
+            "context": {"domain": "fund_share_conversions", "snapshot_id": "s_synthetic_unit",
+                        "query": {"cutoff": "2026-03-27T00:00:00Z", "pit_policy": "synthetic_saved"}},
+            "records": [deepcopy(run["plan"]["market_replay"]["unit_splits"][0]["event"])],
+            "field_meta": {"ratio_numerator": {"by_key": [{"event_id": event_id, "status": "synthetic_saved"}]}}}})
+    run["unit_split_applications"] = [{"event_id": event_id, "security_id": security,
+        "session": application_session, "phase": "EOD_AFTER_CLOSE_BEFORE_NAV", "status": "APPLIED",
+        "before_quantity": 100, "after_quantity": 500, "rounding_value_minor": 0,
+        "original_quote": {"price": "10.0000"}, "normalized_quote": {"price": "2.0000"},
+        "rounding_extra_fraction": {"numerator": 0, "denominator": 1}}]
+    for position in run["positions"]:
+        position["mark_basis_event_id"] = event_id if position["session"] == application_session else None
+    for order in run["orders"]:
+        order["announced_suspension_event_ids"] = []
+    blocked = deepcopy(run["orders"][0])
+    blocked.update(order_id="synthetic:announced-order", session="2026-04-01", status="EXPIRED",
+                   filled_quantity=0, reason="ANNOUNCED_SUSPENSION", market_state="unknown_status",
+                   state_reason="status_source_missing", announced_suspension_event_ids=[event_id])
+    run["orders"].append(blocked)
+    return run
+
+
 class WorkbenchTests(unittest.TestCase):
     def setUp(self):
         self.sample = json.loads(SAMPLE.read_text())
@@ -125,6 +159,69 @@ class WorkbenchTests(unittest.TestCase):
         self.assertEqual(calls, [("load_run", "run.json"), ("load_evaluation", "v2.json")])
         self.assertEqual(entry, baseline)
         self.assertEqual(payload(html)["views"][0]["evaluation"]["contract_version"], "evaluation_report_v2")
+
+    def test_unit_run_v2_preserves_saved_events_positions_orders_without_new_fills(self):
+        entry = self.sample["runs"][0]
+        run = saved_unit_run(entry)
+        before = deepcopy(self.sample)
+        projected = payload(self.render())["views"][0]
+        self.assertEqual(projected["run"]["unit_split_applications"][0]["after_quantity"], "500")
+        self.assertEqual(projected["run"]["unit_split_applications"][0]["normalized_quote"]["price"], "2.0000")
+        self.assertEqual(projected["market"]["unit_splits"][0]["event"]["process_status"], "planned")
+        self.assertEqual(projected["market"]["unit_splits"][0]["event"]["effective_phase"], "not_stated")
+        evidence = projected["market"]["unit_split_source_evidence"]
+        self.assertEqual(len(evidence), 1)
+        self.assertEqual(evidence[0]["batch"]["context"]["snapshot_id"], "s_synthetic_unit")
+        self.assertEqual(evidence[0]["batch"]["field_meta"]["ratio_numerator"]["by_key"][0]["status"], "synthetic_saved")
+        self.assertEqual(len(projected["run"]["fills"]), len(run["fills"]))
+        self.assertEqual(projected["run"]["orders"][-1]["market_state"], "unknown_status")
+        self.assertEqual(projected["run"]["orders"][-1]["announced_suspension_event_ids"], ["synthetic:unit-event"])
+        self.assertTrue(any(p["mark_basis_event_id"] == "synthetic:unit-event" for p in projected["run"]["positions"]))
+        self.assertEqual(self.sample, before)
+        self.assertNotIn("unit_split_applications", payload(self.render())["views"][1]["run"])
+
+    def test_unit_run_v2_sources_use_saved_context_and_exclude_unrelated_batches(self):
+        run = saved_unit_run(self.sample["runs"][0])
+        native = run["plan"]["market_replay"]["source_evidence"][-1]
+        unrelated = deepcopy(native)
+        unrelated["reference"] = "synthetic:unrelated-unit-source"
+        run["plan"]["market_replay"]["source_evidence"].append(unrelated)
+        before = deepcopy(self.sample)
+        view = payload(self.render())["views"][0]
+        self.assertEqual([s["reference"] for s in view["market"]["unit_split_source_evidence"]], [native["reference"]])
+        facts = {f["key"]: f for f in view["comparison_conditions"]}
+        self.assertIn("s_synthetic_unit", facts["snapshot_id"]["value"])
+        self.assertIn({"cutoff":"2026-03-27T00:00:00Z"}, facts["query.knowledge_time"]["value"])
+        self.assertEqual(self.sample, before)
+
+    def test_unit_run_v2_rejects_unbound_event_links_and_missing_layer(self):
+        run = saved_unit_run(self.sample["runs"][0])
+        original = deepcopy(run)
+        for field in ("unit_split_applications", "mark_basis_event_id", "announced_suspension_event_ids"):
+            with self.subTest(field=field):
+                self.sample["runs"][0]["run"] = deepcopy(original)
+                r = self.sample["runs"][0]["run"]
+                if field == "unit_split_applications":r[field][0]["event_id"] = "unbound"
+                elif field == "mark_basis_event_id":r["positions"][0][field] = "unbound"
+                else:r["orders"][-1][field] = ["unbound"]
+                with self.assertRaisesRegex(ProjectionError, "CONTEXT_MISMATCH"):
+                    self.render()
+        self.sample["runs"][0]["run"] = deepcopy(original)
+        del self.sample["runs"][0]["run"]["unit_split_applications"]
+        with self.assertRaisesRegex(ProjectionError, "unit split applications"):
+            self.render()
+
+    def test_unit_run_v2_uses_public_loader_and_retains_v1_compatibility(self):
+        v2 = saved_unit_run(self.sample["runs"][0])
+        v1 = self.sample["runs"][1]["run"]
+        runtime, calls = ModuleType("axiom_engine.runtime"), []
+        runtime.load_backtest_run = lambda path: calls.append(str(path)) or (v2 if path == "v2.json" else v1)
+        with patch.dict(sys.modules, {"axiom_engine.runtime": runtime}):
+            html = render_saved_workbench(["v2.json", "v1.json"], generated_at=GENERATED)
+        views = payload(html)["views"]
+        self.assertEqual(calls, ["v2.json", "v1.json"])
+        self.assertEqual(views[0]["run"]["contract_version"], "backtest_run_v2")
+        self.assertNotIn("unit_split_applications", views[1]["run"])
 
     def test_json_is_inert_and_template_text_is_not_executed(self):
         text = '{{SCRIPT}}</script><script>alert("owner")</script>&'

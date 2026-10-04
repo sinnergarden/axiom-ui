@@ -32,6 +32,11 @@ _LABELS = {
     "market_state": "市场状态", "state_reason": "状态来源原因",
     "execution_admission": "Owner 执行依据",
     "reason": "Owner 原因", "status": "Owner 状态",
+    "mark_basis_event_id": "估值单位事件依据",
+    "announced_suspension_event_ids": "公告停牌事件来源",
+    "before_quantity": "变化前份额", "after_quantity": "变化后份额",
+    "original_quote": "原参考价与来源", "normalized_quote": "Owner 保存的桥接价与来源",
+    "rounding_value_minor": "取整估值影响（元）",
 }
 _PROFILE_FIELDS = (
     "contract_version", "execution", "approximation", "unknown_status_policy",
@@ -144,7 +149,7 @@ def render_sample_report(run: Any, *, shareable: bool = False, generated_at: str
 
 def _render(run: Any, *, evidence_kind: str, generated_at: str | None, shareable: bool) -> str:
     wire = run.to_dict() if hasattr(run, "to_dict") else run
-    _require(type(wire) is dict and wire.get("contract_version") == "backtest_run_v1",
+    _require(type(wire) is dict and wire.get("contract_version") in {"backtest_run_v1", "backtest_run_v2"},
              "unsupported Engine run contract")
     _require(all(type(wire.get(k)) is str and wire[k] for k in ("run_id", "account_id", "status")),
              "run/account/status identity required")
@@ -153,6 +158,10 @@ def _render(run: Any, *, evidence_kind: str, generated_at: str | None, shareable
     except (ValueError, TypeError) as exc:
         raise ProjectionError("run output must be finite JSON") from exc
     _watermarks(wire)
+    if wire["contract_version"] == "backtest_run_v2":
+        _require(type(wire.get("unit_split_applications")) is list and
+                 all(type(row) is dict for row in wire["unit_split_applications"]),
+                 "malformed saved unit split applications")
     generated = _generated(generated_at)
     source_digest = _digest(wire)
     banner = ("合成展示样例 · 不是真实回测完成证据" if evidence_kind == "synthetic" else
@@ -199,8 +208,9 @@ COMPLETE 仅表示 Owner 保存状态。订单原因与状态来源见委托表�
                    ("<div class=\"scroll\"><table><tbody>" + "".join(
                        f"<tr><th>{escape(_LABELS.get(k, k))}</th>{_cell(k, v)}</tr>" for k, v in metrics.items())
                     + "</tbody></table></div>"))
-    table_html = "".join(_table(k, title, wire) for k, title in _TABLES)
-    links = "".join(f'<a href="#{k}">{title.split(" · ")[0]}</a>' for k, title in _TABLES)
+    tables = _TABLES + (("unit_split_applications", "份额拆分 · 账户变化（非成交）"),) if wire["contract_version"] == "backtest_run_v2" else _TABLES
+    table_html = "".join(_table(k, title, wire) for k, title in tables)
+    links = "".join(f'<a href="#{k}">{title.split(" · ")[0]}</a>' for k, title in tables)
     inputs = ('<p class="muted">分享报告省略冻结计划中的原始市场/信号输入和完整原文；固定引用、版本与结果表保留。</p>'
               if shareable else f'<details><summary>冻结计划与 Data 输入上下文</summary><pre>{_text(wire.get("plan"))}</pre></details>')
     original = ('' if shareable else f'<details><summary>展示输入原文 · 完整保存值</summary><pre>{escape(_json(wire))}</pre></details>')

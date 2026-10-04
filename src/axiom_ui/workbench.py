@@ -48,11 +48,15 @@ def _rows(value: Any, field: str, *, nullable: bool = False) -> list | None:
     return value
 
 
+def _source_context(source: dict) -> dict:
+    return source.get("context") or (source.get("batch") or {}).get("context") or {}
+
+
 def _comparison_conditions(plan: dict) -> list[dict]:
     """Project frozen comparison facts; identities/strategy inputs are not policies."""
     profile, replay = plan.get("profile") or {}, plan.get("market_replay") or {}
     evidence = replay.get("source_evidence") or []
-    contexts = [s.get("context") or {} for s in evidence]
+    contexts = [_source_context(s) for s in evidence]
     queries = [c.get("query") or {} for c in contexts]
     facts = []
     def fact(key: str, label: str, value: Any, provided: bool) -> None:
@@ -86,12 +90,14 @@ def _comparison_conditions(plan: dict) -> list[dict]:
          [{k: q[k] for k in time_keys if k in q} for q in queries],
          bool(queries) and all(any(q.get(k) is not None for k in time_keys) for q in queries))
     fact("cash_dividends", "保存分红事实", replay.get("cash_dividends"), "cash_dividends" in replay)
+    fact("unit_split_policy", "份额拆分应用政策", plan.get("unit_split_policy"),
+         "unit_split_policy" in plan and plan["unit_split_policy"] is not None)
     return facts
 
 
 def _run(run: Any, evidence: str) -> dict:
     wire = _wire(run)
-    _require(wire.get("contract_version") == "backtest_run_v1", "unsupported run contract")
+    _require(wire.get("contract_version") in {"backtest_run_v1", "backtest_run_v2"}, "unsupported run contract")
     _require(all(type(wire.get(k)) is str and wire[k]
                  for k in ("run_id", "account_id", "status")), "missing run identity")
     _watermarks(wire)
@@ -120,7 +126,7 @@ def _run(run: Any, evidence: str) -> dict:
     # Missing high/low is never converted into a synthetic candle.
     market_rows = deepcopy(market.get("rows") or [])
     _rows(market_rows, "saved market rows")
-    return {
+    view = {
         "view_id": wire["run_id"],
         "run": {k: deepcopy(wire.get(k)) for k in (
             "contract_version", "run_id", "account_id", "status", "content_digest",
@@ -137,6 +143,35 @@ def _run(run: Any, evidence: str) -> dict:
         "evidence_kind": evidence, "approximate": approximate, "blocked": blocked,
         "research": None, "evaluation": None,
     }
+    if wire["contract_version"] == "backtest_run_v2":
+        applications = _rows(wire.get("unit_split_applications"), "saved unit split applications")
+        events = _rows(market.get("unit_splits"), "saved unit split events")
+        _require(all(type(item.get("event")) is dict for item in events), "malformed saved unit event")
+        by_event = {item["event"].get("event_id"): item["event"] for item in events}
+        _require(len(by_event) == len(events) and all(type(k) is str and k for k in by_event),
+                 "missing/duplicate saved unit event identity")
+        for application in applications:
+            event = by_event.get(application.get("event_id"))
+            _require(event is not None and application.get("security_id") == event.get("security_id") and
+                     application.get("session") == event.get("effective_date"),
+                     "CONTEXT_MISMATCH: saved unit application/event")
+        for position in wire.get("positions") or []:
+            _require("mark_basis_event_id" in position and
+                     (position["mark_basis_event_id"] is None or position["mark_basis_event_id"] in by_event),
+                     "CONTEXT_MISMATCH: saved mark basis event")
+        for order in wire.get("orders") or []:
+            ids = order.get("announced_suspension_event_ids")
+            _require(type(ids) is list and all(type(i) is str and i in by_event for i in ids),
+                     "CONTEXT_MISMATCH: saved suspension events")
+        view["run"]["unit_split_applications"] = deepcopy(applications)
+        view["market"]["unit_splits"] = deepcopy(events)
+        event_refs = {ref for item in events for ref in item.get("source_refs") or []}
+        view["market"]["unit_split_source_evidence"] = deepcopy([
+            source for source in market.get("source_evidence") or []
+            if source.get("reference") in event_refs and
+            _source_context(source).get("domain") == "fund_share_conversions"])
+        view["configuration"]["unit_split_policy"] = deepcopy((wire.get("plan") or {}).get("unit_split_policy"))
+    return view
 
 
 def _period_metrics(wire: dict, run: Mapping[str, Any]) -> None:

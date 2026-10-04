@@ -6,7 +6,7 @@ session-to-query refs for chart replay, and returns an unavailable state for
 missing Feature or other owner artifacts. No owner output is recomputed or
 inferred from the current Data Snapshot.
 
-An offline HTML report displays Engine's saved `backtest_run_v1`: fixed run and
+An offline HTML report displays Engine's saved `backtest_run_v1/v2`: fixed run and
 account identity, signal/market/profile refs, implementation versions, limitations,
 NAV, positions, decisions, orders, simulated fills, ledgers and owner metrics.
 NAV and positions retain per-session committed watermarks. CNY integer cents are
@@ -39,6 +39,15 @@ An owner profile with `unknown_status_policy=etf_daily_observed` is explicitly
 labelled as an ETF daily simulation approximation. Its saved execution parameters
 and per-order `execution_admission` are shown; the original unknown market state
 remains visible. The UI never chooses or changes this policy.
+Saved v2 unit-split applications appear separately as account changes, with
+position mark-basis events and announced suspension event sources in details.
+The page preserves the frozen issuer event, its provenance and original status;
+Runtime `APPLIED` means the saved model application, not issuer implementation.
+Application selection locates the saved date and position. It adds no fill or
+B/S marker, computes no entitlement or rounding, and leaves original market
+prices unchanged. V1 receives no invented event fields. Explicitly synthetic
+owner 1:5 and holder-ceiling outputs validate this display; they do not establish
+real long-history acceptance.
 For an approved sharing destination, add `--shareable` to omit the frozen
 market/signal input plan and full JSON payload while retaining saved result
 tables, fixed refs, versions and limitations. This option does not publish or
@@ -115,6 +124,8 @@ to the user's authorized private destination; never include it in a public repo
 or public deployment. `--shareable` is supported only by the older static report. Public source includes
 only hand-written synthetic UI fixtures, tests and sanitized acceptance notes.
 Canonical requirements and financial definitions remain in
-[axiom-docs](https://github.com/sinnergarden/axiom-docs/blob/81fdeab265723c54e78218cabff2cf2f5ae02e5b/docs/ui-workbench-read-contract.md).
+[axiom-docs](https://github.com/sinnergarden/axiom-docs/blob/a5a954902e1349199070077984d2473125222a9c/docs/ui-workbench-read-contract.md).
 The saved v2 financial contract is
-[Trade §11.2](https://github.com/sinnergarden/axiom-docs/blob/81fdeab265723c54e78218cabff2cf2f5ae02e5b/docs/design/04_axiom_trade.md#long-history-evaluation).
+[Trade §11.2](https://github.com/sinnergarden/axiom-docs/blob/a5a954902e1349199070077984d2473125222a9c/docs/design/04_axiom_trade.md#long-history-evaluation).
+Saved account event consumption follows
+[Trade §9.2](https://github.com/sinnergarden/axiom-docs/blob/a5a954902e1349199070077984d2473125222a9c/docs/design/04_axiom_trade.md#etf-unit-split-application-proposal).

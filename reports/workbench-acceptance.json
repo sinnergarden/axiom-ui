@@ -4,7 +4,7 @@
   "validation_date": "2026-10-04",
   "unit_tests": {
     "command": "PYTHONPATH=src python3 -m unittest discover -s tests -v",
-    "passed": 27
+    "passed": 32
   },
   "browser": {
     "name": "installed Mac Google Chrome",
@@ -28,7 +28,14 @@
     "owner_short_span_and_missing_boundary_not_zero": true,
     "synthetic_available_cagr_with_partial_evaluation": true,
     "date_and_month_selection_preserve_period_metrics": true,
-    "same_account_one_backtest_four_registrations": true
+    "same_account_one_backtest_four_registrations": true,
+    "saved_account_v2_unit_application_separate_from_trades": true,
+    "unit_application_date_position_basis_linked": true,
+    "announced_suspension_original_status_and_source": true,
+    "issuer_planned_not_stated_preserved": true,
+    "v1_no_unit_application_fields_or_table": true,
+    "unit_application_mobile_no_overflow": true,
+    "native_unit_event_snapshot_cutoff_pit_and_field_meta_in_details": true
   },
   "reader_acceptance": {
     "engine_public_run_and_evaluation_loaders": true,
@@ -47,13 +54,20 @@
     "final_v2_identity_content_and_original_run_triple": true,
     "saved_period_metrics_raw_decimals_and_null_preserved": true,
     "old_v1_and_owner_sources_hash_mtime_size_unchanged": true,
-    "old_html_screenshots_and_paused_library_batch_unchanged": true
+    "old_html_screenshots_and_paused_library_batch_unchanged": true,
+    "same_public_loader_account_v1_v2": true,
+    "saved_unit_applications_and_frozen_event_sources": true,
+    "native_synthetic_owner_cases_validated": true,
+    "unit_increment_23_source_delivery_files_hash_mtime_size_unchanged": true,
+    "native_unit_event_batches_context_and_field_meta_preserved": true
   },
   "independent_review": {
     "static_only": true,
     "remaining_p1": 0,
     "remaining_p2": 0,
-    "v2_increment_reviewed": true
+    "v2_increment_reviewed": true,
+    "account_v2_increment_reviewed": true,
+    "native_event_source_p2_closed": true
   },
   "wheel_assets_included": true,
   "pending": [
@@ -70,11 +84,13 @@
     "custom_window_ms": 29.2
   },
   "owner_contracts": {
-    "docs": "81fdeab265723c54e78218cabff2cf2f5ae02e5b",
+    "docs": "a5a954902e1349199070077984d2473125222a9c",
     "research": "e612430b53fcb4c0beeaed9a1b5c6fd977a31d63",
     "engine_p10": "e74cefb65f175b07837cc7f1f8c7217e450a277b",
     "engine_v2_main": "f0fd9776bfaf4fbb2291a44b225fe9a5e4b13079",
-    "ui_consumer_docs_patch_local": "ea95d2c70e2d103a4f2dc60cef59d46218dbd1f2"
+    "ui_consumer_docs_patch_local": "f8494fc2b708f9a507889f9aa087a2282c9bf41e",
+    "engine_account_v2_local_reader": "59a4e1c7827f241c407e4dce7cd490806560c4ce",
+    "engine_account_v2_publication": "Local source only for this consumer acceptance; Engine publication handled by its owner"
   },
   "saved_v2_display": {
     "source_qualification": "Final saved short real account and explicitly labelled synthetic owner golden; no long-history real backtest acceptance",
@@ -87,5 +103,21 @@
     "frontend_drawdown_annualization": false,
     "frontend_sharpe": false,
     "data_queries_or_owner_compute_save_calls": 0
+  },
+  "saved_account_v2_display": {
+    "source_qualification": "Two explicit synthetic saved Engine outputs only; real long account acceptance remains pending",
+    "synthetic_cases": [
+      "one-to-five",
+      "holder-ceiling"
+    ],
+    "public_run_evaluation_readers_only": true,
+    "applications_position_basis_suspension_event_refs_preserved": true,
+    "model_application_distinct_from_issuer_status": true,
+    "fills_drawn_in_owner_cases": 0,
+    "unit_event_drawn_as_trade": false,
+    "original_prices_unchanged": true,
+    "frontend_entitlement_rounding_or_adjustment_computation": false,
+    "data_queries_or_owner_compute_save_calls": 0,
+    "library_writes": 0
   }
 }
