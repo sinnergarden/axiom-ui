@@ -44,6 +44,5 @@
   "note": "Shareable exports omit raw market/signal plan and full payload; private local reports retain those inputs.",
   "index_artifact": "Axiom_UI_index.html",
   "index_sha256": "decb5e8450572bec9393da79fca04df3b486a1e4681634bf5cd1150f92934296",
-  "github_publication": "not_created; automatic approval review rejected",
-  "library_upload": "not_uploaded; automatic approval review rejected"
+  "validation_scope": "Local shareable export validation; external delivery status is reported separately."
 }
