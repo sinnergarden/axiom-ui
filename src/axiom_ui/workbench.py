@@ -48,6 +48,47 @@ def _rows(value: Any, field: str, *, nullable: bool = False) -> list | None:
     return value
 
 
+def _comparison_conditions(plan: dict) -> list[dict]:
+    """Project frozen comparison facts; identities/strategy inputs are not policies."""
+    profile, replay = plan.get("profile") or {}, plan.get("market_replay") or {}
+    evidence = replay.get("source_evidence") or []
+    contexts = [s.get("context") or {} for s in evidence]
+    queries = [c.get("query") or {} for c in contexts]
+    facts = []
+    def fact(key: str, label: str, value: Any, provided: bool) -> None:
+        facts.append({"key": key, "label": label, "provided": provided, "value": deepcopy(value)})
+    for key, label in (("start_session", "开始日期"), ("end_session", "结束日期"),
+                       ("initial_account", "初始资金与持仓")):
+        fact(key, label, plan.get(key), key in plan and plan[key] is not None)
+    for key, label in (("commission_rate", "佣金率"), ("minimum_commission_minor", "最低佣金"),
+                       ("slippage_bps", "滑点"), ("tax_rate", "税率"),
+                       ("participation_rate", "量约束"), ("execution", "成交价格政策"),
+                       ("settlement_sessions", "结算政策"), ("lot_size", "委托单位"),
+                       ("unknown_status_policy", "市场状态政策"), ("approximation", "执行近似"),
+                       ("decision_time_utc", "决策时间")):
+        fact("profile." + key, label, profile.get(key), key in profile and profile[key] is not None)
+    # Retain future operational keys without turning profile identity/prose into
+    # a condition. The full profile remains available in expanded details.
+    known = {f["key"].split(".")[-1] for f in facts if f["key"].startswith("profile.")}
+    extra = {k: v for k, v in profile.items() if k not in known | {"contract_version", "limitation", "limitations"}}
+    fact("profile.extra", "其他执行配置", extra, True)
+    fact("price_basis", "价格口径", replay.get("price_basis"), replay.get("price_basis") is not None)
+    for key, label in (("snapshot_id", "数据版本"), ("reader_version", "数据读取版本"),
+                       ("contract_id", "数据合同"), ("source_profile_id", "数据来源配置"),
+                       ("coverage", "数据覆盖说明")):
+        values = [c.get(key) for c in contexts]
+        fact(key, label, values, bool(values) and all(v is not None for v in values))
+    for key, label in (("symbols", "证券覆盖"), ("sessions", "交易日覆盖"),
+                       ("pit_policy", "信息时间口径"), ("adjustment_anchor", "复权锚点")):
+        fact("query." + key, label, [q.get(key) for q in queries], bool(queries) and all(key in q for q in queries))
+    time_keys = ("cutoff_by_session", "cutoff", "policy_by_session")
+    fact("query.knowledge_time", "知识截止与逐日政策",
+         [{k: q[k] for k in time_keys if k in q} for q in queries],
+         bool(queries) and all(any(q.get(k) is not None for k in time_keys) for q in queries))
+    fact("cash_dividends", "保存分红事实", replay.get("cash_dividends"), "cash_dividends" in replay)
+    return facts
+
+
 def _run(run: Any, evidence: str) -> dict:
     wire = _wire(run)
     _require(wire.get("contract_version") == "backtest_run_v1", "unsupported run contract")
@@ -90,6 +131,7 @@ def _run(run: Any, evidence: str) -> dict:
                           "end_session": (wire.get("plan") or {}).get("end_session"),
                           "initial_account": deepcopy((wire.get("plan") or {}).get("initial_account")),
                           "profile": deepcopy(profile), "price_basis": market.get("price_basis")},
+        "comparison_conditions": _comparison_conditions(wire.get("plan") or {}),
         "market": {"rows": market_rows, "price_basis": market.get("price_basis"),
                    "source_refs": deepcopy(market.get("source_refs")), "data_batch": None},
         "evidence_kind": evidence, "approximate": approximate, "blocked": blocked,
@@ -182,12 +224,20 @@ def _catalog(reader: Any, views: list[dict]) -> list[dict]:
         _require(type(question) is dict and type(organization) is dict, "malformed Research question")
         runs = _rows(item.get("runs"), "Research runs")
         versions = _rows(item.get("versions"), "Research versions")
+        versions_by_ref = {v["version_ref"]: v for v in versions}
+        differences_by_ref = {v["version_ref"]: _wire(reader.compare_versions(v["parent_version_ref"], v["version_ref"]))
+                              if v.get("parent_version_ref") else None for v in versions}
+        historical_versions = {h.get("version_ref") for r in runs for h in r.get("registration_history") or []}
         for version in versions or [{"question_id": question.get("question_id"), "version_ref": None,
                                      "created_at": question.get("created_at")}]:
             _require(version.get("question_id") == question.get("question_id"), "CONTEXT_MISMATCH: Research version/question")
             records = [r for r in runs if r.get("version_ref") == version.get("version_ref")]
+            if not records and version.get("version_ref") in historical_versions:
+                # One saved account remains one navigation group. Older versions
+                # are accessible through its immutable registration history.
+                continue
             parent = version.get("parent_version_ref")
-            difference = _wire(reader.compare_versions(parent, version["version_ref"])) if parent else None
+            difference = differences_by_ref.get(version.get("version_ref"))
             for record in records or [None]:
                 if record:
                     _require(record.get("question_id") == question.get("question_id") and
@@ -221,7 +271,34 @@ def _catalog(reader: Any, views: list[dict]) -> list[dict]:
                             "configuration": {}, "market": {"rows": [], "data_batch": None},
                             "evaluation": None, "approximate": False, "blocked": False,
                             "evidence_kind": "research_record_only"}
-                view["view_id"] = record["run_record_ref"] if record else (version["version_ref"] or question["question_id"]) + ":unrun"
+                saved_run_ref = record.get("saved_run_ref") if record else None
+                view["view_id"] = question["question_id"] + ":" + saved_run_ref if saved_run_ref else record["run_record_ref"] if record else (version["version_ref"] or question["question_id"]) + ":unrun"
+                history = []
+                for registration in _rows(record.get("registration_history") or [], "Research registration history") if record else []:
+                    _require(registration.get("question_id") == question.get("question_id") and
+                             registration.get("version_ref") in versions_by_ref,
+                             "CONTEXT_MISMATCH: registration history/question or version")
+                    historical_backtest = registration.get("backtest_ref")
+                    if engine and historical_backtest:
+                        _require(all(historical_backtest.get(k) == engine["run"].get(k) for k in
+                                     ("run_id", "content_digest", "signal_ref", "committed_sequence")),
+                                 "CONTEXT_MISMATCH: registration history/backtest")
+                    ref = registration.get("evaluation_ref")
+                    historical = evaluations.get(ref.get("evaluation_ref")) if type(ref) is dict else None
+                    if historical:
+                        saved = historical["evaluation"]
+                        _require(engine is not None and
+                                 all(historical["run"].get(k) == engine["run"].get(k) for k in
+                                     ("run_id", "content_digest", "committed_sequence")) and
+                                 ref.get("evaluation_content_digest") == saved.get("content_digest") and
+                                 ref.get("input_run_ref") == saved.get("input_run_ref"),
+                                 "CONTEXT_MISMATCH: registration history/evaluation")
+                        used.add(historical["view_id"])
+                    history.append({"record": deepcopy(registration),
+                                    "evaluation": deepcopy(historical["evaluation"]) if historical else None})
+                view["registration_history"] = history
+                view["research_versions"] = deepcopy(versions_by_ref)
+                view["research_version_comparisons"] = deepcopy(differences_by_ref)
                 batch_refs = [r for r in (record.get("output_refs") or []) if r.get("artifact_type") == "DataBatch"] if record else []
                 batch = view["market"]["data_batch"]
                 if batch_refs and batch is not None:
@@ -244,6 +321,8 @@ def _catalog(reader: Any, views: list[dict]) -> list[dict]:
                     "no_version": version.get("version_ref") is None, "last_activity_at": item.get("last_activity_at"),
                     "reason": record.get("reason") if record else None, "outcome": record.get("outcome") if record else None,
                     "run_record_ref": record.get("run_record_ref") if record else None,
+                    "saved_run_ref": saved_run_ref, "run_kind": record.get("run_kind") if record else None,
+                    "saved_backtest_count": item.get("saved_backtest_count"), "registration_count": item.get("registration_count"),
                     "output_refs": record.get("output_refs") if record else None,
                     "backtest_ref": backtest, "evaluation_ref": record.get("evaluation_ref") if record else None,
                     "tags": organization.get("tags"), "groups": organization.get("groups"),

@@ -170,6 +170,75 @@ class WorkbenchTests(unittest.TestCase):
             self.assertEqual(output.read_bytes(), saved)
         self.assertEqual(SAMPLE.read_bytes(), before)
 
+    def test_grouped_saved_run_keeps_registration_history_separate(self):
+        run = deepcopy(self.sample["runs"][0]["run"])
+        old = deepcopy(self.sample["runs"][0]["evaluation"])
+        new = deepcopy(old)
+        new.update(evaluation_ref="synthetic:new-evaluation", content_digest="synthetic:new-digest")
+        runtime = ModuleType("axiom_engine.runtime")
+        runtime.load_backtest_run = lambda path: run
+        runtime.load_backtest_evaluation = lambda path: new if path == "new.json" else old
+        ref = {k:run[k] for k in ("run_id","content_digest","signal_ref","committed_sequence")}
+        def registration(name, evaluation):
+            return {"run_record_ref":name,"question_id":"q","version_ref":"v1","status":"COMPLETE",
+                    "backtest_ref":ref,"created_at":"2026-10-04T00:00:00Z","output_refs":[],
+                    "evaluation_ref":{"evaluation_ref":evaluation["evaluation_ref"],"evaluation_content_digest":evaluation["content_digest"],"input_run_ref":evaluation["input_run_ref"]}}
+        before = registration("old-registration",old)
+        after = registration("new-registration",new)
+        after["version_ref"] = "v2"
+        group = {**after,"saved_run_ref":"synthetic:saved-run","run_kind":"SAVED_BACKTEST",
+                 "registration_history":[before,after],"organization":{"revision":2,"favorite":True,"shelved":False}}
+        item = {"question":{"question_id":"q","created_at":"2026-10-04T00:00:00Z"},
+                "organization":{},"last_activity_at":"2026-10-04T00:00:00Z","saved_backtest_count":1,"registration_count":2,
+                "versions":[{"question_id":"q","version_ref":"v1","label":"original"},
+                            {"question_id":"q","version_ref":"v2","label":"revision","parent_version_ref":"v1"}],"runs":[group]}
+        class Reader:
+            def __init__(self, path): pass
+            def index(self): return {"contract_version":"experiment_projection_v1","questions":[deepcopy(item)]}
+            def compare_versions(self, left, right): return {"left_version_ref":left,"right_version_ref":right,"explicit_changes":["saved explanation"]}
+        research = ModuleType("axiom_research")
+        research.ExperimentReader = Reader
+        with patch.dict(sys.modules,{"axiom_engine.runtime":runtime,"axiom_research":research}):
+            views = payload(render_saved_workbench(["run.json"],evaluation_paths=["new.json","old.json"],experiment_index_path="index.json"))["views"]
+            self.assertEqual(len(views),1)
+            self.assertFalse(views[0]["research"]["not_run"])
+            self.assertEqual(views[0]["research"]["version_id"],"v2")
+            self.assertIsNone(views[0]["research_version_comparisons"]["v1"])
+            self.assertEqual(views[0]["research_version_comparisons"]["v2"]["right_version_ref"],"v2")
+            self.assertEqual(views[0]["research"]["saved_backtest_count"],"1")
+            self.assertEqual(views[0]["research"]["registration_count"],"2")
+            self.assertEqual(views[0]["evaluation"]["evaluation_ref"],new["evaluation_ref"])
+            self.assertEqual([h["evaluation"]["evaluation_ref"] for h in views[0]["registration_history"]],[old["evaluation_ref"],new["evaluation_ref"]])
+            before["evaluation_ref"]["evaluation_content_digest"] = "wrong"
+            with self.assertRaisesRegex(ProjectionError,"history/evaluation"):
+                render_saved_workbench(["run.json"],evaluation_paths=["new.json","old.json"],experiment_index_path="index.json")
+            item["versions"],item["runs"] = [],[]
+            empty = payload(render_saved_workbench([],experiment_index_path="index.json"))["views"]
+            self.assertTrue(empty[0]["research"]["no_version"])
+            self.assertIsNone(empty[0]["run"]["run_id"])
+
+    def test_comparison_conditions_exclude_identities_and_retain_missing_policies(self):
+        from axiom_ui.workbench import _run
+        original = deepcopy(self.sample["runs"][0]["run"])
+        changed = deepcopy(original)
+        changed.update(signal_ref="synthetic:other-strategy",account_id="other-account",profile_ref="other-profile-identity")
+        before = _run(original,"synthetic_ui_fixture")["comparison_conditions"]
+        after = _run(changed,"synthetic_ui_fixture")["comparison_conditions"]
+        self.assertEqual(before,after)
+        changed["plan"]["profile"]["lot_size"] = 1
+        after = _run(changed,"synthetic_ui_fixture")["comparison_conditions"]
+        self.assertEqual([a["label"] for a,b in zip(before,after) if a!=b],["委托单位"])
+        missing = next(a for a in before if a["key"]=="profile.commission_rate")
+        self.assertFalse(missing["provided"])
+        self.assertIsNone(missing["value"])
+        changed = deepcopy(original)
+        source = changed["plan"]["market_replay"]["source_evidence"][0]["context"]
+        source["reader_version"] = "other-reader"
+        source["query"]["cutoff_by_session"]["2026-03-30"] = "2026-03-30T01:00:00Z"
+        after = _run(changed,"synthetic_ui_fixture")["comparison_conditions"]
+        self.assertEqual([a["label"] for a,b in zip(before,after) if a!=b],
+                         ["数据读取版本","知识截止与逐日政策"])
+
 
 if __name__ == "__main__":
     unittest.main()

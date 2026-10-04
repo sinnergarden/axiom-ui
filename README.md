@@ -82,14 +82,28 @@ manual changes, saved run timestamps and read-only filters. Tags/groups remain q
 the run organization projection. Question flags are retained separately in
 provenance and cannot silently stand in for run flags. Recent question grouping
 uses owner `last_activity_at`, with saved run/version times inside the group.
-Failed and unrun records, including questions with no version, remain navigable without invented Engine run IDs or
-zero-valued metrics. External account/evaluation paths are loaded only when
+The default tree uses owner `saved_run_ref` groups and owner backtest/registration
+counts. Changing a saved evaluation or registration does not add a backtest.
+Registration history opens its saved version metadata and corresponding parent
+difference; older registered versions are not marked unrun.
+Failed and unrun records, including questions with no version, remain navigable
+without invented Engine run IDs or zero-valued metrics. External account/evaluation paths are loaded only when
 explicitly supplied; index URIs are never auto-followed. Parent-child version
 differences use Research's public `compare_versions` projection. Immutable
 historical evaluation references are kept separate from newer reports on the
 same account run; unregistered loaded reports are explicitly separate contexts.
 
-Workbench HTML embeds private result and provenance data. Keep exports local;
-`--shareable` is supported only by the older static report. Public source includes
+Comparison separates frozen conditions (period, initial account, execution/fee
+policies, price basis, data coverage and knowledge cutoffs) from research changes.
+Different signal or account identity alone does not make conditions incompatible;
+missing conditions remain unverifiable. Dates and episode/month selection only
+clip or highlight saved chart points. Metrics always describe the original full
+run. K-lines default to the last three months, with six-month, full and explicit
+date windows.
+
+Workbench HTML embeds private result and provenance data. Deliver it locally or
+to the user's authorized private destination; never include it in a public repo
+or public deployment. `--shareable` is supported only by the older static report. Public source includes
 only hand-written synthetic UI fixtures, tests and sanitized acceptance notes.
-Canonical requirements and financial definitions remain in axiom-docs.
+Canonical requirements and financial definitions remain in
+[axiom-docs](https://github.com/sinnergarden/axiom-docs/blob/81c7f0c7626cb3e81e6b5a0e528b2b2c6550f82d/docs/ui-workbench-read-contract.md).

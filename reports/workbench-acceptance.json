@@ -4,7 +4,7 @@
   "validation_date": "2026-10-04",
   "unit_tests": {
     "command": "PYTHONPATH=src python3 -m unittest discover -s tests -v",
-    "passed": 22
+    "passed": 24
   },
   "browser": {
     "name": "installed Mac Google Chrome",
@@ -16,7 +16,13 @@
     "comparison_shared_chart_and_saved_metrics": true,
     "saved_fill_order_month_episode_drilldown": true,
     "partial_missing_and_blocked_labels": true,
-    "mobile_navigation_folds": true
+    "mobile_navigation_folds": true,
+    "grouped_saved_run_history_and_version_diff": true,
+    "comparison_conditions_and_signal_changes_separate": true,
+    "month_episode_interval_highlight": true,
+    "kline_date_windows": true,
+    "open_episode_date_context_consistent": true,
+    "raw_status_and_refs_folded": true
   },
   "reader_acceptance": {
     "engine_public_run_and_evaluation_loaders": true,
@@ -27,7 +33,10 @@
     "registered_full_data_wire_and_file_digest": true,
     "owner_source_hash_mtime_size_unchanged": true,
     "no_business_computation_or_current_resolution": true,
-    "private_evidence_retained_locally": true
+    "private_evidence_retained_locally": true,
+    "owner_saved_run_groups_and_counts": true,
+    "owner_registration_history": true,
+    "knowledge_cutoffs_retained_in_comparison": true
   },
   "independent_review": {
     "static_only": true,
@@ -36,8 +45,21 @@
   },
   "wheel_assets_included": true,
   "pending": [
-    "Research grouped saved_run_ref/history projection is under owner review; UI will consume final owner fields",
-    "Long-history fixed Snapshot and saved run are separate parent-coordinated acceptance"
+    "Long-history fixed Snapshot and saved run are separate parent-coordinated acceptance",
+    "Optional owner-saved long-period CAGR awaits frozen evaluation v2 contract and artifact; no frontend annualization"
   ],
-  "publication_scope": "Source, tests and handwritten synthetic fixtures only; private HTML, images, data and results excluded"
+  "publication_scope": "Source, tests and handwritten synthetic fixtures only; private HTML, images, data and results excluded",
+  "synthetic_scale": {
+    "qualification": "Handwritten display scale only, not a long-history backtest",
+    "sessions": 3304,
+    "market_records": 23128,
+    "default_visible_points": 66,
+    "all_window_ms": 39.7,
+    "custom_window_ms": 29.2
+  },
+  "owner_contracts": {
+    "docs": "81c7f0c7626cb3e81e6b5a0e528b2b2c6550f82d",
+    "research": "e612430b53fcb4c0beeaed9a1b5c6fd977a31d63",
+    "engine_p10": "e74cefb65f175b07837cc7f1f8c7217e450a277b"
+  }
 }
