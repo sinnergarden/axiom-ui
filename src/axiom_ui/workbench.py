@@ -491,10 +491,47 @@ def _attach_batch(view: dict, batch: Any, source_run: dict) -> None:
     view["market"]["data_batch"] = wire
 
 
+def _attach_stock_ml(views: list[dict], paths: Sequence[str | Path]) -> None:
+    """Bind explicitly loaded Research stages to their immutable registrations."""
+    if not paths:
+        return
+    from axiom_research import load_stock_ml_experiment, load_stock_model
+    seen = set()
+    for path in paths:
+        saved = load_stock_ml_experiment(path)
+        experiment, model, evidence = _wire(saved), _wire(load_stock_model(path)), _wire(saved.evidence())
+        _require(experiment.get("contract_version") == "stock_ml_experiment_v1" and
+                 model.get("contract_version") == "stock_model_release_v1" and
+                 evidence.get("contract_version") == "stock_signal_evidence_v1", "unsupported stock ML stage contract")
+        ref = experiment.get("experiment_ref")
+        _require(type(ref) is str and ref and ref not in seen, "missing/duplicate stock ML experiment identity")
+        seen.add(ref)
+        _require(model.get("model_ref") == experiment.get("model_ref") and
+                 evidence.get("evidence_ref") == experiment.get("evidence_ref") and
+                 evidence.get("signal_ref") == experiment.get("signal_run_ref"), "CONTEXT_MISMATCH: stock ML stages")
+        _rows(evidence.get("series"), "saved stock signal evidence")
+        bindings = {"StockMLExperiment":"experiment_ref", "FeatureBuild":"feature_ref",
+                    "LabelBuild":"label_ref", "TrainingDataset":"dataset_ref",
+                    "ModelRelease":"model_ref", "SignalRun":"signal_run_ref", "SignalEvidence":"evidence_ref"}
+        matched = False
+        for view in views:
+            refs = (view.get("research") or {}).get("output_refs") or []
+            if not any(r.get("artifact_type") == "StockMLExperiment" and r.get("artifact_id") == ref for r in refs):
+                continue
+            _require(all(any(r.get("artifact_type") == kind and r.get("artifact_id") == experiment.get(key)
+                             for r in refs) for kind, key in bindings.items()), "CONTEXT_MISMATCH: stock ML registration")
+            _require("stock_ml" not in view, "duplicate stock ML registration attachment")
+            view["stock_ml"] = {"experiment": deepcopy(experiment), "model": deepcopy(model),
+                                "signal_evidence": deepcopy(evidence)}
+            matched = True
+        _require(matched, "CONTEXT_MISMATCH: stock ML without registered experiment")
+
+
 def render_saved_workbench(run_paths: Sequence[str | Path], *,
                            evaluation_paths: Sequence[str | Path] = (),
                            experiment_paths: Sequence[str | Path] = (),
                            experiment_index_path: str | Path | None = None,
+                           stock_ml_paths: Sequence[str | Path] = (),
                            data_batches: Mapping[str, Any] | None = None,
                            data_batch_paths: Mapping[str, str | Path] | None = None,
                            synthetic_run_ids: Sequence[str] = (),
@@ -504,9 +541,11 @@ def render_saved_workbench(run_paths: Sequence[str | Path], *,
 Data batches must be responses already obtained from Data's public Reader.
 The workbench does not discover data roots or implicitly issue a Query.
 """
-    for paths, field in ((run_paths, "runs"), (evaluation_paths, "evaluations"), (experiment_paths, "experiments")):
+    for paths, field in ((run_paths, "runs"), (evaluation_paths, "evaluations"), (experiment_paths, "experiments"),
+                         (stock_ml_paths, "stock ML experiments")):
         _paths(paths, field)
     _require(experiment_index_path is None or isinstance(experiment_index_path, (str, Path)), "Research index requires explicit path")
+    _require(not stock_ml_paths or experiment_index_path is not None, "stock ML requires explicit Research index")
     _require(bool(run_paths) or experiment_index_path is not None, "an explicit saved run or Research index is required")
     originals = []
     if run_paths:
@@ -572,6 +611,7 @@ The workbench does not discover data roots or implicitly issue a Query.
     if experiment_index_path is not None:
         from axiom_research import ExperimentReader
         views = _catalog(ExperimentReader(experiment_index_path), views)
+    _attach_stock_ml(views, stock_ml_paths)
     return _render(views, generated_at)
 
 

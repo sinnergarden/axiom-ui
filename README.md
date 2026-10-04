@@ -47,7 +47,8 @@ Application selection locates the saved date and position. It adds no fill or
 B/S marker, computes no entitlement or rounding, and leaves original market
 prices unchanged. V1 receives no invented event fields. Explicitly synthetic
 owner 1:5 and holder-ceiling outputs validate this display; they do not establish
-real long-history acceptance.
+real held-unit conversion acceptance. Real zero-entitlement applications keep
+their saved NO_ENTITLEMENT status and separate native source evidence.
 For an approved sharing destination, add `--shareable` to omit the frozen
 market/signal input plan and full JSON payload while retaining saved result
 tables, fixed refs, versions and limitations. This option does not publish or
@@ -76,7 +77,15 @@ v1 gains no invented annualization. A partial evaluation can retain available
 CAGR, and a completed short sample can retain unavailable CAGR. Date selection
 never changes these saved metrics or their scope. The UI performs no CAGR or
 day-count calculation, does not annualize drawdown, and adds no Sharpe. CSI300
-remains a price index excluding dividends; simulated CAGR is not a forecast.
+remains a price index excluding dividends; the account includes saved dividend
+ledger entries, so their return bases differ. Simulated CAGR is not a forecast.
+Saved NO_DECISION records are shown as account-wide decisions that preserve
+existing holdings, including when no security was selected. The UI creates no
+liquidation or order for them.
+
+Market point details retain DataBatch OHLCV and the same-key Engine market row
+separately. Prices stay in the DataBatch basis; market status, reason and source
+refs stay in the saved Engine evidence without inferring them from a price bar.
 
 ```sh
 PYTHONPATH=src python3 -m axiom_ui examples/synthetic_workbench.json --sample --workbench --output /tmp/axiom-workbench-sample.html
@@ -94,6 +103,22 @@ Snapshot, reader/provenance and unadjusted basis; extending its field set to
 high/low must reproduce the original common DataBatch digest. The renderer does
 not discover roots or issue queries. Without this layer it shows the saved close
 and volume with **K-line unavailable**, rather than inventing high/low.
+
+A Research index can be opened before any account output exists. Explicit
+`stock_ml_paths` / `--stock-ml` directories use Research's public
+`load_stock_ml_experiment` and `load_stock_model` Readers, then bind all stage
+identities to the existing registration. The panel displays saved feature IDs
+and versions, fit cutoff, declared feature/prediction windows, label maturity
+and normalization, daily IC/RankIC and valid/excluded pairs. The current Readers
+do not expose the actual mature training window, aggregate IC/ICIR or timings;
+these are unavailable, without estimates. A blocked stock account retains its
+owner status and reason. With no BacktestRun, account metrics, charts and
+comparison are hidden. Research COMPLETE is a saved research registration;
+it does not establish an account backtest or strategy performance.
+
+```sh
+PYTHONPATH=src:/path/to/axiom-research/src python3 -m axiom_ui --workbench --experiment-index /path/to/index.json --stock-ml /path/to/stock-experiment --output /tmp/axiom-stock-stage.html
+```
 
 Research's `ExperimentReader` supplies question descriptions, version parameters,
 manual changes, saved run timestamps and read-only filters. Tags/groups remain question-level; favorite/shelved use

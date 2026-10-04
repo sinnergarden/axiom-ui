@@ -280,6 +280,64 @@ class WorkbenchTests(unittest.TestCase):
         with self.assertRaisesRegex(ProjectionError, "explicit paths via owner Reader"):
             render_saved_workbench([self.sample["runs"][0]["run"]])
 
+    def test_stock_ml_public_readers_bind_registration_without_account_outputs(self):
+        experiment = {"contract_version":"stock_ml_experiment_v1", "account_status":"BLOCKED_PENDING_STOCK_RUNTIME_ADMISSION",
+                      "account_reason":"synthetic owner reason", "definition":{"config":{"prediction_sessions":["2026-01-02","2026-01-05"]}}}
+        keys = {"StockMLExperiment":"experiment_ref", "FeatureBuild":"feature_ref", "LabelBuild":"label_ref",
+                "TrainingDataset":"dataset_ref", "ModelRelease":"model_ref", "SignalRun":"signal_run_ref", "SignalEvidence":"evidence_ref"}
+        experiment.update({key:"synthetic:"+key for key in keys.values()})
+        model = {"contract_version":"stock_model_release_v1", "model_ref":experiment["model_ref"],
+                 "fit_cutoff":"2025-12-31T12:30:00Z", "ordered_features":["synthetic:feature"],
+                 "label_normalization":{"params":{"ddof":0,"clip":None}}}
+        evidence = {"contract_version":"stock_signal_evidence_v1", "evidence_ref":experiment["evidence_ref"],
+                    "signal_ref":experiment["signal_run_ref"], "series":[{"session":"2026-01-02","ic":-0.125,
+                    "rank_ic":None,"valid_pair_count":20,"reason":None}]}
+        record = {"run_record_ref":"synthetic:stock-record", "question_id":"stock-q", "version_ref":"stock-v", "status":"COMPLETE",
+                  "backtest_ref":None,"evaluation_ref":None,"run_kind":"REGISTRATION_ONLY",
+                  "output_refs":[{"artifact_type":kind,"artifact_id":experiment[key]} for kind,key in keys.items()]}
+        projection = {"contract_version":"experiment_projection_v1", "questions":[{
+            "question":{"question_id":"stock-q","title":"Synthetic stock study"}, "organization":{},
+            "saved_backtest_count":0,"registration_count":1,
+            "versions":[{"question_id":"stock-q","version_ref":"stock-v"}],"runs":[record]}]}
+        before = deepcopy((experiment,model,evidence,projection));calls=[]
+        class Reader:
+            def __init__(self,path):calls.append(("index",str(path)))
+            def index(self):return deepcopy(projection)
+        class Saved:
+            def to_dict(self):return deepcopy(experiment)
+            def evidence(self):calls.append(("evidence",));return deepcopy(evidence)
+        research=ModuleType("axiom_research");research.ExperimentReader=Reader
+        research.load_stock_ml_experiment=lambda path:calls.append(("stock",str(path))) or Saved()
+        research.load_stock_model=lambda path:calls.append(("model",str(path))) or deepcopy(model)
+        with patch.dict(sys.modules,{"axiom_research":research,"axiom_engine.runtime":None}):
+            html=render_saved_workbench([],experiment_index_path="stock-index.json",stock_ml_paths=["stock-dir"],generated_at=GENERATED)
+            view=payload(html)["views"][0]
+            self.assertIsNone(view["run"]["run_id"])
+            self.assertIsNone(view["run"]["nav"])
+            self.assertIsNone(view["run"]["fills"])
+            self.assertIsNone(view["run"]["metrics"])
+            self.assertEqual(view["stock_ml"]["experiment"]["account_status"],experiment["account_status"])
+            self.assertEqual(view["stock_ml"]["signal_evidence"]["series"][0]["ic"],-0.125)
+            self.assertIsNone(view["stock_ml"]["signal_evidence"]["series"][0]["rank_ic"])
+            self.assertEqual(view["research"]["saved_backtest_count"],"0")
+            self.assertEqual((experiment,model,evidence,projection),before)
+            self.assertEqual(calls,[("index","stock-index.json"),("stock","stock-dir"),("model","stock-dir"),("evidence",)])
+            from axiom_ui.__main__ import main
+            with tempfile.TemporaryDirectory() as directory:
+                output=Path(directory)/"stock.html"
+                args=["axiom-ui","--workbench","--experiment-index","stock-index.json","--stock-ml","stock-dir","--output",str(output)]
+                with patch.object(sys,"argv",args),patch("builtins.print"):
+                    main()
+                self.assertEqual(payload(output.read_text())["views"][0]["stock_ml"]["experiment"]["experiment_ref"],experiment["experiment_ref"])
+            record["output_refs"][3]["artifact_id"]="wrong"
+            with self.assertRaisesRegex(ProjectionError,"stock ML registration"):
+                render_saved_workbench([],experiment_index_path="stock-index.json",stock_ml_paths=["stock-dir"])
+            record["output_refs"]=[]
+            with self.assertRaisesRegex(ProjectionError,"without registered"):
+                render_saved_workbench([],experiment_index_path="stock-index.json",stock_ml_paths=["stock-dir"])
+        with self.assertRaisesRegex(ProjectionError,"explicit Research index"):
+            render_saved_workbench([],stock_ml_paths=["stock-dir"])
+
     def test_public_readers_bind_catalog_failed_unrun_and_parent_diff(self):
         run = deepcopy(self.sample["runs"][0]["run"])
         evaluation = deepcopy(self.sample["runs"][0]["evaluation"])

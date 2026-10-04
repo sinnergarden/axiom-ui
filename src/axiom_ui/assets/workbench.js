@@ -76,7 +76,7 @@
   const statusOf = v => v.research?.no_version ? '未登记版本' : v.research?.not_run ? '未运行' : v.research?.status || (v.blocked ? '阻断' : v.run.status);
   function selectRun(id) {
     state.runId = id; state.registration = '';state.security = ''; state.session = ''; state.interval = null;state.tradeWindow={mode:'3'}; state.fillId = ''; state.eventId = '';
-    if (state.compare === id) state.compare = '';
+    if (state.compare === id || !byId.get(id).run.run_id) state.compare = '';
     render();
   }
   function initializeFilters() {
@@ -121,16 +121,23 @@
     document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('active', b.dataset.filter === state.filter));
   }
   function renderHeader(v) {
-    const r = v.run, research = v.research;
+    const r = v.run, research = v.research,stock=v.stock_ml,withoutAccount=!r.run_id;
     $('context-line').textContent = (research?.version_label || '版本说明未提供') + ' / ' + (r.run_id ? 'run ' + short(r.run_id) : research?.not_run ? '尚未运行' : 'record ' + short(research?.run_record_ref)) + (v.evaluation ? ' / eval '+short(v.evaluation.evaluation_ref) : '');
     $('context-line').title = r.run_id || research?.run_record_ref || research?.version_id;
     $('evidence-badge').textContent = v.evidence_kind === 'research_record_only' ? '实验记录 · 账户结果未载入' : v.evidence_kind === 'synthetic_ui_fixture' ? '合成展示样例' : v.evidence_kind === 'synthetic_owner_output' ? '合成模拟回测' : '模拟回测';
+    if(withoutAccount&&stock)$('evidence-badge').textContent='模型与信号 · '+(String(stock.experiment.account_status || '').startsWith('BLOCKED')?'账户未执行':'账户结果未载入');
     $('run-title').textContent = research?.title || '模拟回测 · ' + short(r.run_id);
-    $('hypothesis').textContent = research?.hypothesis || 'Research 尚未保存实验说明。';
+    $('hypothesis').textContent = research?.hypothesis || '实验说明尚未载入。';
     const nav = r.nav || [];
     $('date-range').textContent = saved(v.configuration.start_session || nav[0]?.session) + ' — ' + saved(v.configuration.end_session || nav.at(-1)?.session);
     $('run-status').textContent = statusLabel(statusOf(v)) + (r.status ? '' : ' · 账户结果未载入');
     $('policy-badge').textContent = v.approximate ? 'ETF 日线近似 · 实验假设' : v.blocked ? '市场状态缺证 · 严格阻断' : r.run_id ? '保存的执行假设' : '执行假设未提供';
+    if(withoutAccount&&stock){
+      const sessions=stock.experiment.definition?.config?.prediction_sessions || [],blocked=String(stock.experiment.account_status || '').startsWith('BLOCKED');
+      $('date-range').textContent='预测窗口：'+(sessions.length?sessions[0]+' — '+sessions.at(-1):'未提供');
+      $('run-status').textContent='研究登记：'+statusLabel(statusOf(v));
+      $('policy-badge').textContent=blocked?'股票账户准入阻断':'账户状态见保存说明';
+    }
     const history=byId.get(state.runId).registration_history || [],historySelect=$('registration-select');historySelect.replaceChildren();
     $('registration-context').hidden=history.length<2;
     if(history.length){for(const item of history){const ref=item.record.evaluation_ref,version=v.research_versions?.[item.record.version_ref];option(historySelect,item.record.run_record_ref,(version?.label || '版本说明未提供')+' · '+saved(item.record.created_at)+(ref?' / eval '+short(ref.evaluation_ref):' / 未登记评价')+(ref&&!item.evaluation?' · 评价未载入':''));}historySelect.value=state.registration || research?.run_record_ref;}
@@ -140,6 +147,10 @@
       v.approximate ? 'ETF 日线近似：市场状态仍为未知，按日线价格、量和限价模拟；不保证开盘流动性或实盘成交。' : '已保存模拟回测；处理完成不代表策略有效。';
     if(research?.outcome)$('notice').textContent+=' 保存说明：'+research.outcome;
     const metrics = r.metrics || {}, cards = clear('metrics');
+    cards.hidden=withoutAccount;
+    document.querySelector('.tabs').hidden=withoutAccount;
+    document.querySelectorAll('.pane').forEach(p=>p.hidden=withoutAccount);
+    $('selection-context').hidden=withoutAccount;
     const comparison=byId.get(state.compare),old=comparison?.run.metrics || {};
     const period=v.evaluation?.period_metrics,oldPeriod=comparison?.evaluation?.period_metrics;
     const account=period?.account || metrics,oldAccount=oldPeriod?.account || old;
@@ -162,6 +173,33 @@
     $('period-note').textContent=period || oldPeriod ? '年化区间：'+periodRange(period)+(comparison?' / 对照：'+periodRange(oldPeriod):'')+'；初始财富归属时钟，非新增 NAV 观测。模拟年化不代表预测收益。' : '';
     $('period-note').title=json({current:period?.window,comparison:oldPeriod?.window});
     $('selection-context').textContent = state.interval ? '选中期间 ' + state.interval.start + ' — ' + state.interval.end + (state.session ? ' / ' + state.session : '') + '；指标仍为整段回测。' : '指标范围：整段回测' + (state.session ? ' / 选中 ' + state.session : '');
+  }
+  function renderStockML(v){
+    const stock=v.stock_ml,panel=$('stock-ml-context'),registered=(v.research?.output_refs || []).some(ref=>ref.artifact_type==='StockMLExperiment');panel.hidden=!stock&&!registered;
+    if(!stock){
+      if(registered){
+        $('stock-account-status').textContent='该登记的阶段产物未载入；账户结果不可用。保留原研究记录，不使用其他版本的模型或信号替代。';
+        clear('stock-stage-values');$('stock-stage-config').textContent='阶段原值未载入。';
+        $('stock-ic-note').textContent='对应版本的信号证据未载入；IC / RankIC 与覆盖不可用。';
+        clear('stock-ic-table');$('stock-stage-refs').textContent=json({run_record_ref:v.research?.run_record_ref,version_ref:v.research?.version_id,output_refs:v.research?.output_refs});
+      }
+      return;
+    }
+    const experiment=stock.experiment,model=stock.model,evidence=stock.signal_evidence,config=experiment.definition?.config || {};
+    const blocked=String(experiment.account_status || '').startsWith('BLOCKED');
+    $('stock-account-status').textContent=(blocked?'股票账户未执行 · ':'账户状态：')+saved(experiment.account_status)+'；'+saved(experiment.account_reason)+'。研究登记完成只表示已保存的研究阶段，不代表账户回测完成。';
+    const range=sessions=>sessions?.length?sessions[0]+' — '+sessions.at(-1):'未提供';
+    const values=clear('stock-stage-values');
+    for(const [label,value] of [['训练 fit cutoff',model.fit_cutoff],['声明 Feature session 窗口',range(config.feature_sessions)],['实际成熟训练样本窗口','当前读取输出未提供'],['预测窗口',range(config.prediction_sessions)],['标签评价 cutoff',evidence.evaluation_cutoff],['Feature ID / 语义版本',(model.feature_selection || config.feature_selection || []).map(f=>f.id+' / '+f.semantic_version).join('、') || '未提供'],['特征标准化',model.feature_normalization],['预测目标语义',model.target_semantics || evidence.score_semantics],['标签成熟规则',model.label_normalization?.maturity],['训练 / 预测耗时','当前读取输出未提供']]){
+      const row=node('div',null,'point-row');row.append(node('span',label),node('strong',saved(value)));values.append(row);
+    }
+    $('stock-stage-config').textContent=json({fit_cutoff:model.fit_cutoff,feature_normalization:model.feature_normalization,label_normalization:model.label_normalization,score_semantics:evidence.score_semantics,label_semantics:evidence.label_semantics,minimum_pairs:evidence.minimum_pairs,rank_ties:evidence.rank_ties,parameters:model.parameters,num_boost_round:model.num_boost_round,environment:model.environment});
+    $('stock-ic-note').textContent='IC、RankIC 和有效/排除配对均为 owner 保存值，不表示账户收益。均值与 ICIR 未提供，不从逐日值计算。';
+    const table=node('table'),head=node('tr'),thead=node('thead'),body=node('tbody');
+    for(const label of ['Session','IC','RankIC','有效预测','有效配对','排除配对','原因'])head.append(node('th',label));thead.append(head);table.append(thead,body);
+    for(const row of evidence.series || []){const tr=node('tr');tr.dataset.icSession=row.session;tr.title=json(row);for(const key of ['session','ic','rank_ic','prediction_valid_count','valid_pair_count','excluded_pair_count','reason'])tr.append(node('td',saved(row[key])));body.append(tr);}
+    clear('stock-ic-table').append(table);
+    $('stock-stage-refs').textContent=json({experiment_ref:experiment.experiment_ref,feature_ref:experiment.feature_ref,label_ref:experiment.label_ref,dataset_ref:experiment.dataset_ref,model_ref:experiment.model_ref,signal_run_ref:experiment.signal_run_ref,evidence_ref:experiment.evidence_ref,definition:experiment.definition,signal_evidence:evidence});
   }
   const NS = 'http://www.w3.org/2000/svg';
   function svgEl(tag, attrs = {}, text) {
@@ -207,6 +245,7 @@
   function renderPerformance(v) {
     const r = v.run, nav = r.nav || [], comparison = byId.get(state.compare);
     const select = $('compare-run'); select.replaceChildren(); option(select,'','添加运行对照');
+    select.disabled=!r.run_id;
     for (const view of views) if(view.view_id !== v.view_id && view.run.run_id) option(select,view.view_id,(view.research?.version_label || short(view.run.run_id)) + ' · ' + statusOf(view));
     select.value = state.compare; $('benchmark-toggle').checked = state.benchmark;
     const differences=[],unverified=[],oldConditions=new Map((comparison?.comparison_conditions || []).map(f=>[f.key,f]));
@@ -223,7 +262,7 @@
     $('benchmark-toggle').checked=state.benchmark && !$('benchmark-toggle').disabled;
     const missingReasons=[...new Set((benchmark?.series || []).map(p=>p.missing_reason).filter(present))];
     const period=v.evaluation?.period_metrics,benchMetrics=period?.benchmark || benchmark;
-    $('benchmark-note').textContent = benchmark ? '沪深300价格指数（不含分红） · '+statusLabel(benchmark.status)+' · 累计收益 '+percent(benchMetrics.total_return)+' / 最大回撤 '+percent(benchMetrics.max_drawdown)+(period?' / CAGR '+cagr(period.benchmark)+' · '+periodRange(period):'')+'。'+(missingReasons.length?'存在缺值，详情见数据与运行信息。':'') : '沪深300评价暂未提供。';
+    $('benchmark-note').textContent = benchmark ? '沪深300价格指数（不含分红） · '+statusLabel(benchmark.status)+' · 累计收益 '+percent(benchMetrics.total_return)+' / 最大回撤 '+percent(benchMetrics.max_drawdown)+(period?' / CAGR '+cagr(period.benchmark)+' · '+periodRange(period):'')+'。账户收益包含保存的分红入账，两者收益口径不同。'+(missingReasons.length?'存在缺值，详情见数据与运行信息。':'') : '沪深300评价暂未提供。';
     $('benchmark-note').title=period?cagrRaw(period.benchmark):'';
     if (!nav.length) {missing('performance-chart','净值数据暂未提供。');$('nav-point').textContent='';return;}
     const showBenchmark=state.benchmark && !$('benchmark-toggle').disabled;
@@ -272,7 +311,7 @@
         pointRow(panel,'委托状态',statusLabel(event.status));pointRow(panel,'未成交原因',event.reason==='UNKNOWN_MARKET_STATUS'?'市场状态缺证':statusLabel(event.reason));
       } else {
         pointRow(panel,'信号日',event.feature_session);pointRow(panel,'决策交易日',event.trade_session);
-        pointRow(panel,'决策说明',event.trace?'已保存决策依据':'决策依据暂未提供');
+        pointRow(panel,'决策说明',event.status==='NO_DECISION'?'NO_DECISION：保持原持仓，不隐式清仓':event.trace?'已保存决策依据':'决策依据暂未提供');
       }
       const order=kind==='orders'?event:(v.run.orders || []).find(o=>o.order_id===event.order_id),ids=order?.announced_suspension_event_ids || [];
       if(ids.length)pointRow(panel,'公告停牌事件来源',ids.join('、'));
@@ -280,7 +319,13 @@
     } else {
       const rows=v.market.data_batch?.records || v.market.rows;
       const point=rows.find(p=>p.security_id===state.security && p.session===state.session);
-      if(point) {for(const [key,label] of [['open','开盘'],['high','最高'],['low','最低'],['close','收盘'],['volume','全天量'],['volume_units','全天量（份）']]) if(Object.hasOwn(point,key)) pointRow(panel,label,point[key]);}
+      const ownerPoint=v.market.rows.find(p=>p.security_id===state.security && p.session===state.session);
+      if(point) {
+        for(const [key,label] of [['open','开盘'],['high','最高'],['low','最低'],['close','收盘'],['volume','全天量'],['volume_units','全天量（份）']]) if(Object.hasOwn(point,key)) pointRow(panel,label,point[key]);
+        const marketPoint=ownerPoint || point;
+        for(const [key,label] of [['market_state','保存的市场状态'],['state_reason','保存的状态原因']]) if(Object.hasOwn(marketPoint,key)) pointRow(panel,label,marketPoint[key]);
+        const detail=node('details');detail.append(node('summary','行情原值与来源'),node('pre',json({price_point:point,owner_market_point:ownerPoint || null})));panel.append(detail);
+      }
       else panel.append(node('p','所选日期未保存行情，不填补。','missing'));
       const positions=(v.run.positions || []).filter(p=>p.security_id===state.security && p.session===state.session);
       for(const position of positions) {pointRow(panel,'持仓 / 可卖份额',saved(position.quantity)+' / '+saved(position.sellable_quantity));pointRow(panel,'估值日 / 是否过期',saved(position.mark_session)+' / '+saved(position.is_stale));}
@@ -373,7 +418,7 @@
       const events=unitEvents(v,[application.event_id]);
       detail.append(node('summary','应用与事件原值'),node('pre',json({application,unit_event:events,unit_event_sources:unitSources(v,events)})));unitList.append(button,detail);
     }
-    const list=clear('event-list'), events=(v.run[state.kind] || []).filter(e=>{const day=e.session || e.trade_session;return day>=window.start&&day<=window.end&&(state.kind==='decisions'?(e.selected_security_id===state.security || (e.intents || []).some(i=>i.security_id===state.security)):e.security_id===state.security);});
+    const list=clear('event-list'), events=(v.run[state.kind] || []).filter(e=>{const day=e.session || e.trade_session;return day>=window.start&&day<=window.end&&(state.kind==='decisions'?(e.status==='NO_DECISION' || e.selected_security_id===state.security || (e.intents || []).some(i=>i.security_id===state.security)):e.security_id===state.security);});
     if(!events.length)list.append(node('p','此区间没有保存的该类记录。','small'));
     for(const event of events){
       const day=event.session || event.trade_session,button=node('button',null,'event-item'+(event.fill_id===state.fillId?' selected':''));
@@ -435,11 +480,12 @@
     const panel=clear('source-details');
     for(const text of v.run.limitations || [])panel.append(node('p',String(text)));
     for(const text of v.evaluation?.limitations || [])panel.append(node('p',String(text)));
-    $('source-refs').textContent=json({run_id:v.run.run_id,run_contract:v.run.contract_version,account_id:v.run.account_id,content_digest:v.run.content_digest,committed_sequence:v.run.committed_sequence,signal_ref:v.run.signal_ref,market_ref:v.run.market_ref,profile_ref:v.run.profile_ref,core_version:v.run.core_version,runtime_version:v.run.runtime_version,implementation_ref:v.run.implementation_ref,unit_split_applications:v.run.unit_split_applications,unit_split_events:v.market.unit_splits,unit_split_source_evidence:v.market.unit_split_source_evidence,evaluation_ref:v.evaluation?.evaluation_ref,evaluation_content_digest:v.evaluation?.content_digest,evaluation_contract:v.evaluation?.contract_version,evaluation_status:v.evaluation?.status,evaluation_version:v.evaluation?.evaluation_version,evaluation_spec_ref:v.evaluation?.spec_ref,period_metrics:v.evaluation?.period_metrics,benchmark_ref:v.evaluation?.benchmark_ref,benchmark:v.evaluation?.benchmark,data_context:v.market.data_batch?.context,research:v.research,registration_history:v.registration_history?.map(h=>h.record)});
+    for(const text of v.stock_ml?.signal_evidence?.limitations || [])panel.append(node('p',String(text)));
+    $('source-refs').textContent=json({run_id:v.run.run_id,run_contract:v.run.contract_version,account_id:v.run.account_id,content_digest:v.run.content_digest,committed_sequence:v.run.committed_sequence,signal_ref:v.run.signal_ref,market_ref:v.run.market_ref,profile_ref:v.run.profile_ref,core_version:v.run.core_version,runtime_version:v.run.runtime_version,implementation_ref:v.run.implementation_ref,unit_split_applications:v.run.unit_split_applications,unit_split_events:v.market.unit_splits,unit_split_source_evidence:v.market.unit_split_source_evidence,evaluation_ref:v.evaluation?.evaluation_ref,evaluation_content_digest:v.evaluation?.content_digest,evaluation_contract:v.evaluation?.contract_version,evaluation_status:v.evaluation?.status,evaluation_version:v.evaluation?.evaluation_version,evaluation_spec_ref:v.evaluation?.spec_ref,period_metrics:v.evaluation?.period_metrics,benchmark_ref:v.evaluation?.benchmark_ref,benchmark:v.evaluation?.benchmark,data_context:v.market.data_batch?.context,research:v.research,stock_ml:v.stock_ml,registration_history:v.registration_history?.map(h=>h.record)});
     $('generated-note').textContent='页面生成于 '+data.generated_at+'；不是数据更新时间。所有业务数值来自保存产物；浏览没有采集、训练、回测或交易调用。';
   }
   function render() {
-    const v=current();renderTree();renderHeader(v);renderPerformance(v);renderTrade(v);renderStatistics(v);renderSources(v);
+    const v=current();renderTree();renderHeader(v);renderStockML(v);renderPerformance(v);renderTrade(v);renderStatistics(v);renderSources(v);
     document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('active',p.id===state.pane));document.querySelectorAll('[data-pane]').forEach(b=>b.classList.toggle('active',b.dataset.pane===state.pane));
   }
   document.querySelectorAll('[data-pane]').forEach(b=>b.addEventListener('click',()=>{state.pane=b.dataset.pane;render();}));
@@ -453,7 +499,7 @@
   for(const id of ['window-start','window-end'])$(id).addEventListener('change',()=>{state.tradeWindow={mode:'custom',start:$('window-start').value,end:$('window-end').value};state.interval={start:state.tradeWindow.start,end:state.tradeWindow.end};state.session='';state.fillId='';state.eventId='';render();});
   document.querySelectorAll('[data-event-kind]').forEach(b=>b.addEventListener('click',()=>{state.kind=b.dataset.eventKind;state.fillId='';state.eventId='';renderTrade(current());}));
   $('copy-context').addEventListener('click',async()=>{
-    const v=current(),text=json({question_id:v.research?.question_id,version_ref:v.research?.version_id,run_record_ref:v.research?.run_record_ref,run_id:v.run.run_id,content_digest:v.run.content_digest,signal_ref:v.run.signal_ref,market_ref:v.run.market_ref,profile_ref:v.run.profile_ref,evaluation_ref:v.evaluation?.evaluation_ref,security_id:state.security,session:state.session,interval:state.interval,changes:v.research?.changes});
+    const v=current(),text=json({question_id:v.research?.question_id,version_ref:v.research?.version_id,run_record_ref:v.research?.run_record_ref,run_id:v.run.run_id,content_digest:v.run.content_digest,signal_ref:v.run.signal_ref,market_ref:v.run.market_ref,profile_ref:v.run.profile_ref,evaluation_ref:v.evaluation?.evaluation_ref,security_id:state.security,session:state.session,interval:state.interval,changes:v.research?.changes,stock_experiment_ref:v.stock_ml?.experiment.experiment_ref,model_ref:v.stock_ml?.experiment.model_ref,signal_evidence_ref:v.stock_ml?.experiment.evidence_ref});
     try {await navigator.clipboard.writeText(text);$('toast').textContent='已复制运行上下文与证据引用。';}catch{const area=node('textarea');area.value=text;document.body.append(area);area.select();const copied=document.execCommand('copy');area.remove();$('toast').textContent=copied?'已复制运行上下文与证据引用。':'浏览器未允许复制；来源详情中保留相同引用。';}
     $('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',2500);
   });

@@ -4,7 +4,7 @@
   "validation_date": "2026-10-04",
   "unit_tests": {
     "command": "PYTHONPATH=src python3 -m unittest discover -s tests -v",
-    "passed": 32
+    "passed": 33
   },
   "browser": {
     "name": "installed Mac Google Chrome",
@@ -35,7 +35,18 @@
     "issuer_planned_not_stated_preserved": true,
     "v1_no_unit_application_fields_or_table": true,
     "unit_application_mobile_no_overflow": true,
-    "native_unit_event_snapshot_cutoff_pit_and_field_meta_in_details": true
+    "native_unit_event_snapshot_cutoff_pit_and_field_meta_in_details": true,
+    "real_long_saved_nav_fill_month_episode_navigation": true,
+    "no_decision_retains_positions_without_liquidation": true,
+    "account_dividends_and_price_index_distinct": true,
+    "real_zero_entitlement_separate_from_synthetic_held_unit_conversion": true,
+    "missing_long_ohlcv_explicit_saved_close_volume_fallback": true,
+    "stock_saved_stage_ic_and_pair_coverage": true,
+    "stock_account_blocked_has_no_account_chart_or_metrics": true,
+    "unloaded_old_stock_registration_clears_new_stage": true,
+    "stock_and_synthetic_account_navigation_restore_financial_views": true,
+    "ohlcv_and_owner_market_state_provenance_separate": true,
+    "mac_local_entry_and_screenshot_links": true
   },
   "reader_acceptance": {
     "engine_public_run_and_evaluation_loaders": true,
@@ -59,7 +70,14 @@
     "saved_unit_applications_and_frozen_event_sources": true,
     "native_synthetic_owner_cases_validated": true,
     "unit_increment_23_source_delivery_files_hash_mtime_size_unchanged": true,
-    "native_unit_event_batches_context_and_field_meta_preserved": true
+    "native_unit_event_batches_context_and_field_meta_preserved": true,
+    "final_long_owner_handoff_and_loader_identity_verified": true,
+    "real_long_owner_hash_mtime_size_unchanged": true,
+    "stock_public_experiment_model_evidence_readers": true,
+    "stock_all_seven_stage_registration_refs_bound": true,
+    "stock_only_does_not_import_engine_data_qlib_lightgbm": true,
+    "stock_source_capsule_and_index_hash_mtime_size_unchanged": true,
+    "stock_missing_public_fields_not_inferred": true
   },
   "independent_review": {
     "static_only": true,
@@ -67,12 +85,16 @@
     "remaining_p2": 0,
     "v2_increment_reviewed": true,
     "account_v2_increment_reviewed": true,
-    "native_event_source_p2_closed": true
+    "native_event_source_p2_closed": true,
+    "stock_stage_increment_reviewed": true,
+    "ohlcv_market_state_source_p2_closed": true
   },
   "wheel_assets_included": true,
   "pending": [
-    "Long-history fixed Snapshot and saved run remain separate parent-coordinated acceptance",
-    "Existing private Library batch remains paused; no new upload attempt"
+    "New long Snapshot OHLCV batch and final Research registration were not provided; display uses saved close/volume and frozen experiment identity",
+    "Stock public Readers do not expose mature training window, training/prediction elapsed time or aggregate IC/ICIR",
+    "Existing private Library batch remains paused; no new upload attempt",
+    "Local consumer/source commits await parent publication coordination"
   ],
   "publication_scope": "Source, tests and handwritten synthetic fixtures only; private HTML, images, data and results excluded",
   "synthetic_scale": {
@@ -90,10 +112,11 @@
     "engine_v2_main": "f0fd9776bfaf4fbb2291a44b225fe9a5e4b13079",
     "ui_consumer_docs_patch_local": "f8494fc2b708f9a507889f9aa087a2282c9bf41e",
     "engine_account_v2_local_reader": "59a4e1c7827f241c407e4dce7cd490806560c4ce",
-    "engine_account_v2_publication": "Local source only for this consumer acceptance; Engine publication handled by its owner"
+    "engine_account_v2_publication": "Local source only for this consumer acceptance; Engine publication handled by its owner",
+    "ui_stock_consumer_docs_patch_local": "0782be99fe1a9e252ffa3526fdff5aed2ac10f5e"
   },
   "saved_v2_display": {
-    "source_qualification": "Final saved short real account and explicitly labelled synthetic owner golden; no long-history real backtest acceptance",
+    "source_qualification": "Owner-saved final long real account under explicit ETF daily approximation, historical short output and labelled synthetic golden; saved metrics only",
     "real_short_span_cagr_unavailable": true,
     "synthetic_golden_cagr_available": true,
     "availability_independent_of_top_level_status": true,
@@ -105,7 +128,7 @@
     "data_queries_or_owner_compute_save_calls": 0
   },
   "saved_account_v2_display": {
-    "source_qualification": "Two explicit synthetic saved Engine outputs only; real long account acceptance remains pending",
+    "source_qualification": "Explicit synthetic held-unit golden cases plus final real long zero-entitlement unit applications; real held-unit conversion is not claimed",
     "synthetic_cases": [
       "one-to-five",
       "holder-ceiling"
@@ -117,6 +140,28 @@
     "unit_event_drawn_as_trade": false,
     "original_prices_unchanged": true,
     "frontend_entitlement_rounding_or_adjustment_computation": false,
+    "data_queries_or_owner_compute_save_calls": 0,
+    "library_writes": 0,
+    "real_zero_entitlement_scope_preserved": true
+  },
+  "stock_stage_display": {
+    "qualification": "Real saved Research model/signal/evidence only; stock account blocked and not executed",
+    "research_complete_not_account_backtest_complete": true,
+    "saved_daily_ic_rank_ic_and_pair_counts": true,
+    "actual_mature_training_window_timings_and_aggregate_marked_unprovided": true,
+    "no_account_metrics_charts_positions_orders_or_fills": true,
+    "no_feature_training_prediction_core_account_or_data_execution": true,
+    "library_writes": 0
+  },
+  "final_long_saved_display": {
+    "qualification": "Fixed real inputs with explicit ETF daily execution approximation; not strict PIT/live/strategy validation",
+    "source_identity_and_digest_from_public_loaders": true,
+    "metrics_and_bins_from_saved_owner_evaluation": true,
+    "no_unprovided_registry_counts_or_high_low_fabrication": true,
+    "owner_sources_hash_mtime_size_unchanged": true,
+    "no_decision_hold_semantics_visible": true,
+    "two_zero_entitlement_events_not_claimed_as_held_unit_conversion": true,
+    "private_result_and_screenshots_local_only": true,
     "data_queries_or_owner_compute_save_calls": 0,
     "library_writes": 0
   }
