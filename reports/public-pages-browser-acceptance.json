@@ -1,0 +1,36 @@
+{
+  "status": "PASS_LOCAL_HTTP_PROJECT_PATH",
+  "default_security_Chrome": true,
+  "desktop": [
+    1440,
+    1100
+  ],
+  "mobile": [
+    390,
+    844
+  ],
+  "checks": {
+    "stock_saved_22_candles_sell_fees_point_details": true,
+    "historical_strict_zero_fill": true,
+    "long_etf_continuous_1762_candles_original_units": true,
+    "process_saved_maturity": true
+  },
+  "runtime_exceptions": 0,
+  "no_document_overflow": true,
+  "no_Owner_business_calls": true,
+  "scope": "local HTTP /axiom-ui/ preview, not deployed GitHub Pages URL",
+  "screenshots": [
+    "public-pages-screenshots/stock-trade-desktop.png",
+    "public-pages-screenshots/stock-trade-mobile.png",
+    "public-pages-screenshots/etf-long-trade-desktop.png"
+  ],
+  "public_file_sha256": {
+    "index.html": "fcb616bb35e8c502005e4f8ff74818d74b9b460f60576e949f611986f932aca4",
+    "process.html": "412327541a9a1ccfe657f31369a636d7169344b46d381b6b51d651cf7107ec83",
+    "etf.html": "a4a1558f289b4cfac046ba27bd857cdabb676c93922c425bb647eb31d60cab9d",
+    "performance.html": "9cb1f72b3a56bc5dc163b8ee639b2617e6253ce3b3b982b2f4f2bf4aceb2a259",
+    ".nojekyll": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "publication.json": "a1c4a7333e730854fd9059fae414fca517435ccfe2c84f5e66ac119abc3f07d7",
+    "stock.html": "aa53129fdc5eeaae8cf14d688f5fd9c6d0b05713bd5872e4b47204940b6a5466"
+  }
+}

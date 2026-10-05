@@ -171,13 +171,75 @@ clip or highlight saved chart points. Metrics always describe the original full
 run. K-lines default to the last three months, with six-month, full and explicit
 date windows.
 
-Workbench HTML embeds private result and provenance data. Deliver it locally or
-to the user's authorized private destination; never include it in a public repo
-or public deployment. `--shareable` is supported only by the older static report. Public source includes
-only hand-written synthetic UI fixtures, tests and sanitized acceptance notes.
+Workbench HTML embeds private result and provenance data. Keep the full export
+local or in an authorized private destination. For public publication, use the
+separate exporter below with an explicitly approved selection of saved results.
+`--shareable` remains an option of the older static report; it does not authorize
+public publication. Public source includes synthetic UI fixtures, tests,
+sanitized acceptance notes and the reviewed public projection in `site/`.
 Canonical requirements and financial definitions remain in
 [axiom-docs](https://github.com/sinnergarden/axiom-docs/blob/a5a954902e1349199070077984d2473125222a9c/docs/ui-workbench-read-contract.md).
 The saved v2 financial contract is
 [Trade §11.2](https://github.com/sinnergarden/axiom-docs/blob/a5a954902e1349199070077984d2473125222a9c/docs/design/04_axiom_trade.md#long-history-evaluation).
 Saved account event consumption follows
 [Trade §9.2](https://github.com/sinnergarden/axiom-docs/blob/a5a954902e1349199070077984d2473125222a9c/docs/design/04_axiom_trade.md#etf-unit-split-application-proposal).
+
+## Publish the selected saved results
+
+The deployment target is [sinnergarden.github.io/axiom-ui](https://sinnergarden.github.io/axiom-ui/).
+This is an operating recipe; canonical UI and owner boundaries remain in
+[axiom-docs](https://github.com/sinnergarden/axiom-docs/blob/main/docs/design/06_axiom_ui.md).
+
+1. Select the saved results authorized for public viewing in a private selection
+   file outside this repository. Each entry gives its `slug`, `title` and explicit
+   saved `input` and nonempty `run_ids` list. Omitting run selection is rejected;
+   later accounts in the same input are not automatically included. The exporter does not discover Data roots or a current Snapshot,
+   collect data, train models or replay a backtest.
+2. Export and check the projection:
+
+   ```sh
+   PYTHONPATH=src python3 tools/export_public_site.py --selection /path/to/approved-selection.json --output site
+   python3 tools/check_public_site.py site
+   ```
+
+   The exporter produces the static bundle and sanitized publication provenance
+   in `site/publication.json`. Keep the private selection and source files outside
+   the repository; review the generated public pages and checks before committing.
+   Saved OHLCV for the selected account window and related securities remains
+   available for continuous K-lines and B/S replay through the existing renderer.
+   Original prices, units, basis, nulls and source/file references are preserved;
+   the chart is explicitly a display subset, with no invented complete DataBatch
+   digest. Full batches, coverage and complete per-key proof are omitted.
+   A selection uses `authorization: "explicit_selected_public_results"`,
+   `generated_at`, and `results: [{slug, title, input, run_ids}]`. Optional
+   `performance_html` supplies an existing saved performance summary. Optional
+   `process: {source, target}` binds a saved model/training summary to the exact
+   selected stock signal and account identities; every target account must also
+   be explicitly selected. Neither option runs the owner business functions.
+3. Submit the generated `site/` changes and checks in a draft PR targeting
+   `publish/ui-readonly`. After parent review and merge, publish only the reviewed
+   `site/` tree to the dedicated `gh-pages` branch:
+
+   ```sh
+   # REVIEWED_MERGE must be the exact parent-approved default-branch commit.
+   git subtree split --prefix=site REVIEWED_MERGE
+   # Use the returned publication commit, with no force push.
+   git push origin PUBLICATION_COMMIT:refs/heads/gh-pages
+   ```
+
+   The publishing branch contains only static public files. Confirm its tree
+   matches `REVIEWED_MERGE:site` before pushing. GitHub's built-in Pages deployment
+   publishes that branch automatically; no custom repository workflow is used.
+
+Future updates use the same export, public checks, reviewed PR and static-tree
+publication flow. The checker uses Python's standard library and needs no Owner
+package or backend. Publishing never reads Data roots or runs owner business
+functions. Keep PR/feature branches separate from the configured `gh-pages` source.
+
+One-time repository setup selects **Settings → Pages → Build and deployment →
+Source: Deploy from a branch → gh-pages → /(root)**. The tracked `.nojekyll`
+file means these files need no Jekyll build. This is GitHub's supported branch
+publishing mode; it needs no new token/workflow scope, credentials, custom domain
+or paid service. The current credential cannot upload a custom Actions workflow,
+so that approach was stopped without changing authentication. Pages settings
+remain unchanged until the parent has reviewed the concrete publication.

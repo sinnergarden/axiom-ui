@@ -1,0 +1,126 @@
+{
+  "contract_version": "ui_public_pages_acceptance_v1",
+  "status": "PRE_DEPLOYMENT_VALIDATED",
+  "authorization": "explicit_selected_public_results",
+  "private_inputs_in_public_repository": false,
+  "target_url": "https://sinnergarden.github.io/axiom-ui/",
+  "deployment_verified": false,
+  "review_gate": "Parent must read the fixed PR head and approve merge before deployment.",
+  "tests": {
+    "targeted_public_projection_tests": 10,
+    "targeted_public_artifact_checker_tests": 3,
+    "status": "PASS"
+  },
+  "public_bundle": {
+    "file_count": 7,
+    "allowlist_links_owner_refs_private_path_checks": "PASS",
+    "independent_readonly_review": "PASS",
+    "exact_saved_account_evaluation_values": "PASS",
+    "native_market_records_or_full_proof_included": false,
+    "market_display": "original saved continuous OHLCV in selected run windows and related securities; no manufactured OHLCV; existing renderer unchanged",
+    "future_results_auto_published": false,
+    "Data_roots_current_discovery": false,
+    "accounts": [
+      {
+        "kind": "real_ETF_daily_approximation_short",
+        "nav_points": 65,
+        "fills": 10,
+        "continuous_OHLCV_points": 325
+      },
+      {
+        "kind": "real_ETF_daily_approximation_long",
+        "nav_points": 1762,
+        "fills": 280,
+        "continuous_OHLCV_points": 12334
+      },
+      {
+        "kind": "real_stock_January_merged_code_daily_approximation",
+        "nav_points": 22,
+        "fills": 40,
+        "continuous_OHLCV_points": 440
+      },
+      {
+        "kind": "historical_stock_strict_control_not_rerun_this_cycle",
+        "nav_points": 22,
+        "fills": 0,
+        "continuous_OHLCV_points": 440
+      }
+    ],
+    "OHLCV_exact_selected_keys_values_nulls_units_basis_source_refs": "PASS_INDEPENDENT_READONLY_REVIEW",
+    "full_batch_digest_invented_from_subset": false,
+    "ETF_original_saved_batch_file_ref_and_replay_refs_retained": true,
+    "stock_original_native_source_ref_retained": true,
+    "source_queries_coverage_full_per_key_proof_omitted": true,
+    "all_BS_fill_dates_covered": true
+  },
+  "new_January_integration": {
+    "status": "PASS",
+    "run_id": "sha256:1bc47db1fa35fa231083f1cf6c2c76042cb38359672a0dd47970392d098878cb",
+    "content_digest": "sha256:ed5778a722b8f1ceb36177bc53ce0d505cdbf185cb427e82f02edae117fbc603",
+    "committed_sequence": 85,
+    "evaluation_ref": "sha256:44637dc38bd2314ca53b7712c9994de7e1458bf54ed1d90b2c5ce533ea5b672a",
+    "evaluation_content_digest": "sha256:2b4fbdcaf2d6404f121ce74bddbda543564e4c0bac1649808b2f9f965e80162d",
+    "research_run_record_ref": "sha256:e4281f68a79f7ccc08c24f755f37aa208e57df4656c1d2933f2003e45336594f",
+    "research_saved_run_ref": "sha256:6b69f49a932299cfa8077138ae06f613c15a873cc248a7637404dd262bb098be",
+    "owner_saved_backtest_count": 3,
+    "owner_registration_count": 5,
+    "engine_source": "93de8f7f0a944e8b2ccb9b048feb588e74bffc3e",
+    "engine_merge": "d6655c70088073367b6bf4231bdf484c3acb20d7",
+    "nav_minor": 9409959,
+    "fees_minor": 36441,
+    "quantity_unit": "shares",
+    "price_unit": "CNY/share",
+    "protected_file_count": 68,
+    "protected_file_hash_mtime_size_unchanged": true,
+    "UI_owner_execution_query_save_calls": 0,
+    "successful_export_reader_calls": {
+      "load_backtest_run": 1,
+      "load_backtest_evaluation": 1
+    },
+    "earlier_unsaved_attempt": "A missing output parent directory caused a write failure after read validation; corrected before the successful export. This required one additional load of each saved document, with no business calculation or owner write.",
+    "backend_generation_seconds": "18.611250",
+    "timing_scope": "one fresh January run and evaluation, exact Research registration, saved model/stage report and readonly saved chart; excludes file writes, public bundle export and post-export assertions; not comparable with the older two-account 64.64s export"
+  },
+  "process_display": {
+    "exact_signal_model_feature_dataset_experiment_evidence_cutoff_binding": "PASS",
+    "declared_training_sessions": 59,
+    "actual_mature_training_sessions": 54,
+    "training_rows": 16200,
+    "model_inputs_or_environment_included": false,
+    "fresh_January_target_only": true
+  },
+  "performance_scope": "Saved Mac local measurements; no GitHub Pages visitor timing guarantee or completed full historical rolling account claim.",
+  "publication_plan": {
+    "source_review_branch": "publish/ui-readonly",
+    "deploy_branch": "gh-pages",
+    "deploys_only_reviewed_site_tree": true,
+    "Owner_dependencies_or_calculation": false,
+    "Pages_source": "Deploy from a branch / gh-pages / root",
+    "custom_workflow_included": false,
+    "Pages_settings_changed": false,
+    "platform_limitation": "Initial isolated-branch push was rejected because the existing PAT lacks workflow scope. No token, credential or security setting changed; the unpublished workflow was removed. Official branch publishing is prepared for parent review using existing repository permissions."
+  },
+  "library": {
+    "uploads": 0,
+    "retry": false
+  },
+  "browser": {
+    "status": "PASS_LOCAL_HTTP_PROJECT_PATH",
+    "default_security_Chrome": true,
+    "desktop": [
+      1440,
+      1100
+    ],
+    "mobile": [
+      390,
+      844
+    ],
+    "runtime_exceptions": 0,
+    "no_document_overflow": true,
+    "stock_22_candles_SELL_fee_point_details": true,
+    "long_ETF_1762_continuous_candles": true,
+    "pixels_reviewed": true,
+    "evidence": "public-pages-browser-acceptance.json",
+    "scope": "local HTTP project path only; unsigned deployed public URL remains pending"
+  }
+}
