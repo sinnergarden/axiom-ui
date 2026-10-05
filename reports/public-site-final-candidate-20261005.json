@@ -1,0 +1,134 @@
+{
+  "status": "PASS",
+  "selected_results": {
+    "etf": [
+      {
+        "run_id": "sha256:c2bed666e2509ed1a8747bfae23f5d94a39f6d6db9227cd2a67f181ffcc3d77b",
+        "run_contract": "backtest_run_v1",
+        "evaluation_ref": "sha256:78a6ae102b5b6e17a835f6e362d2668b8c9dc33cc3808425a0c2cdbaebc226d2",
+        "evaluation_contract": "evaluation_report_v2",
+        "evaluation_status": "COMPLETE",
+        "nav_points": 65,
+        "fills": 10,
+        "selected_chart_rows": 325,
+        "selected_review_rows": 0,
+        "adjusted_fill_coordinates": 0,
+        "price_unit": "CNY/fund unit",
+        "benchmark_statuses": {}
+      },
+      {
+        "run_id": "sha256:5db294ae978d841521d0ce6e0a1dbfdd5deba02ea07fecd261da6537856a4f83",
+        "run_contract": "backtest_run_v2",
+        "evaluation_ref": "sha256:2899d3a064c536ddfc8ea3d31049fd4f79b2304e5075a6bf59bdd2ce04617d57",
+        "evaluation_contract": "evaluation_report_v3",
+        "evaluation_status": "PARTIAL",
+        "nav_points": 1762,
+        "fills": 280,
+        "selected_chart_rows": 12334,
+        "selected_review_rows": 12334,
+        "adjusted_fill_coordinates": 280,
+        "price_unit": "CNY/fund unit",
+        "benchmark_statuses": {
+          "CSI300": "COMPLETE",
+          "NASDAQ100": "SOURCE_UNAVAILABLE",
+          "SSE_COMPOSITE": "COMPLETE"
+        }
+      }
+    ],
+    "stock": [
+      {
+        "run_id": "sha256:1bc47db1fa35fa231083f1cf6c2c76042cb38359672a0dd47970392d098878cb",
+        "run_contract": "backtest_run_v3",
+        "evaluation_ref": "sha256:bba8b82a365c4c6b4bf60222f91511ee1d3de0afcce8cf37f066c671a4b43d0e",
+        "evaluation_contract": "evaluation_report_v3",
+        "evaluation_status": "PARTIAL",
+        "nav_points": 22,
+        "fills": 40,
+        "selected_chart_rows": 440,
+        "selected_review_rows": 440,
+        "adjusted_fill_coordinates": 40,
+        "price_unit": "CNY/share",
+        "benchmark_statuses": {
+          "CSI300": "COMPLETE",
+          "NASDAQ100": "SOURCE_UNAVAILABLE",
+          "SSE_COMPOSITE": "COMPLETE"
+        }
+      },
+      {
+        "run_id": "sha256:12bb350e2724348f6ba2c00cbada84f03ae2daacf8b425342fd9af97de7ed311",
+        "run_contract": "backtest_run_v3",
+        "evaluation_ref": "sha256:71d52fc7bf3c0ffcff7ad21184827649c25a768f72314fbd164a600f2cb6512c",
+        "evaluation_contract": "evaluation_report_v2",
+        "evaluation_status": "COMPLETE",
+        "nav_points": 22,
+        "fills": 0,
+        "selected_chart_rows": 440,
+        "selected_review_rows": 0,
+        "adjusted_fill_coordinates": 0,
+        "price_unit": "CNY/share",
+        "benchmark_statuses": {}
+      }
+    ]
+  },
+  "files": {
+    "index.html": {
+      "bytes": 2525,
+      "sha256": "ce00f675a1dd98f1bfbe0aca827c2190f2145b8e4edc76783f2d6ec4ff681472"
+    },
+    "process.html": {
+      "bytes": 15881,
+      "sha256": "f06e197afdb6aa496c5241cc7a6d9e5c24c4952cb978eb1b19635c2b65979afb"
+    },
+    "echarts.vendor.json": {
+      "bytes": 975,
+      "sha256": "2f11f91cce4d25104c76415ddb5a8fecc83ed99aa4f58b1c3805f988eb641b0c"
+    },
+    "etf.html": {
+      "bytes": 20919057,
+      "sha256": "76878402d4b87926a036b560b0ed3e12fa208e852b19886a5614796e3be74734"
+    },
+    "performance.html": {
+      "bytes": 5793,
+      "sha256": "9cb1f72b3a56bc5dc163b8ee639b2617e6253ce3b3b982b2f4f2bf4aceb2a259"
+    },
+    "echarts.NOTICE.txt": {
+      "bytes": 168,
+      "sha256": "d491d358344f842685c1b1585970999db65fe30ecf7ef3867af8814f4016c016"
+    },
+    ".nojekyll": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "echarts.LICENSE.txt": {
+      "bytes": 11990,
+      "sha256": "634293835b43a6dd2094fa39182a3d9a6b9ca43b7fdb9ac354e8037af2a3093a"
+    },
+    "publication.json": {
+      "bytes": 9578,
+      "sha256": "e787a5d1ce493ddccd09270104931dbc9d79d657ad5a401e389c57316eb928d2"
+    },
+    "stock.html": {
+      "bytes": 2364342,
+      "sha256": "275878fe8993606d401a83979b48c30d5bb43ee928c9e70a0565af1ebb9e026d"
+    }
+  },
+  "process": {
+    "target_run_ref": "sha256:1bc47db1fa35fa231083f1cf6c2c76042cb38359672a0dd47970392d098878cb",
+    "target_evaluation_ref": "sha256:bba8b82a365c4c6b4bf60222f91511ee1d3de0afcce8cf37f066c671a4b43d0e",
+    "source_signal_ref": "sha256:d97760a1b5280235e39747012bcd943a3e85f1cb7bdba64ceb1ca03b4142eed9"
+  },
+  "browser": {
+    "status": "PASS_PUBLIC_CANDIDATE_LOCAL_BROWSER",
+    "checks": {
+      "stock_current_adjusted_BS_and_name": true,
+      "stock_v3_short_span_and_sse_saved": true,
+      "etf_adjusted_280_owner_coordinates": true,
+      "etf_saved_22_bin_distribution": true,
+      "recent_episode_page_open_security_filter_unchanged_metrics_and_trade_jump": true,
+      "etf_v3_risk_dd_sse_and_missing_nasdaq": true,
+      "stock_mobile_no_overflow": true
+    },
+    "runtime_exceptions": 0,
+    "external_requests": 0
+  }
+}
