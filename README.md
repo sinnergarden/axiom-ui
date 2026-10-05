@@ -205,6 +205,11 @@ This is an operating recipe; canonical UI and owner boundaries remain in
    The exporter produces the static bundle and sanitized publication provenance
    in `site/publication.json`. Keep the private selection and source files outside
    the repository; review the generated public pages and checks before committing.
+   Saved OHLCV for the selected account window and related securities remains
+   available for continuous K-lines and B/S replay through the existing renderer.
+   Original prices, units, basis, nulls and source/file references are preserved;
+   the chart is explicitly a display subset, with no invented complete DataBatch
+   digest. Full batches, coverage and complete per-key proof are omitted.
    A selection uses `authorization: "explicit_selected_public_results"`,
    `generated_at`, and `results: [{slug, title, input, run_ids}]`. Optional
    `performance_html` supplies an existing saved performance summary. Optional

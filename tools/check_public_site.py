@@ -19,13 +19,14 @@ class Links(HTMLParser):
         if tag=='script':self.in_workbench=False
     def handle_data(self,data):
         if self.in_workbench:self.workbench.append(data)
-def check_json(value):
+def check_json(value,path=()):
     if isinstance(value,dict):
-        assert not FORBIDDEN.intersection(value),FORBIDDEN.intersection(value)
+        allowed={'records','field_meta'} if path and path[-1]=='native_chart' else {'by_key'} if len(path)>1 and path[-2]=='field_meta' else set()
+        assert not (FORBIDDEN-allowed).intersection(value),(FORBIDDEN-allowed).intersection(value)
         for key in value:assert not BAD_PATH.search(key) and not SECRET.search(key),('private JSON key',key)
-        for child in value.values():check_json(child)
+        for key,child in value.items():check_json(child,path+(key,))
     elif isinstance(value,list):
-        for child in value:check_json(child)
+        for child in value:check_json(child,path)
     elif isinstance(value,str):
         assert not BAD_PATH.search(value), 'private decoded JSON path'
         assert not SECRET.search(value), 'credential-like decoded JSON content'
@@ -56,7 +57,14 @@ def check(root):
                 assert {v['run']['run_id'] for v in wire['views']}=={r['run_id'] for r in declared['saved_owner_refs']},('selection mismatch',p)
                 for v in wire['views']:
                     assert v['run']['run_id'] and v['public_display_projection']
-                    assert v['market'].get('data_batch') is None and v['market'].get('native_chart') is None
+                    assert v['market'].get('data_batch') is None
+                    chart=v['market'].get('native_chart')
+                    if chart:
+                        assert chart['public_selected_chart'] and chart['display_projection']
+                        start,end=v['configuration']['start_session'],v['configuration']['end_session']
+                        assert all(start<=row['session']<=end for row in chart['records'])
+                        assert all(set(row)<={'security_id','session','open','high','low','close','volume_units','volume_shares'} for row in chart['records'])
+                        assert all(meta.get('by_key')==[] and set(meta)<={'unit','dtype','by_key'} for meta in chart['field_meta'].values())
                     assert not v.get('registration_history')
                     if v.get('evaluation'):
                         ref=v['evaluation']['input_run_ref']

@@ -100,5 +100,30 @@ class PublicProjectionTests(unittest.TestCase):
                 with self.assertRaises(ValueError):export_result({**item,'run_ids':run_ids},root,'2026-10-05')
             self.assertFalse((root/'saved.html').exists())
 
+    def chart_view(self):
+        value=saved_view();value['configuration']['end_session']='2024-01-03'
+        value['market']['data_batch']=None
+        value['market']['native_chart']={
+            'source_ref':'sha256:original_source','context':{'snapshot_id':'fixed','query':{'price_basis':'unadjusted'},'coverage':['private']},
+            'field_meta':{k:{'unit':'shares' if k=='volume_shares' else 'CNY/share','dtype':'saved','by_key':[{'raw_batch_id':'private'}]}
+                          for k in ('open','high','low','close','volume_shares')},
+            'records':[{'security_id':security,'session':session,'open':'10.01','high':'10.20','low':None,'close':'10.02','volume_shares':'1000'}
+                       for security in ('A','UNRELATED') for session in ('2024-01-01','2024-01-02','2024-01-03')]}
+        return value
+
+    def test_chart_preserves_continuous_saved_ohlcv_in_selected_window(self):
+        value=self.chart_view();result=project_view(value);chart=result['market']['native_chart']
+        self.assertEqual(chart['records'],[r for r in value['market']['native_chart']['records']
+                                           if r['security_id']=='A' and r['session'] in ('2024-01-02','2024-01-03')])
+        self.assertIsNone(chart['records'][0]['low'])
+        self.assertEqual(chart['source_ref'],'sha256:original_source')
+        self.assertNotIn('query',chart['context']);self.assertNotIn('coverage',chart['context'])
+        self.assertNotIn('contract_version',chart['context'])
+        self.assertEqual(chart['field_meta']['open'],{'unit':'CNY/share','dtype':'saved','by_key':[]})
+
+    def test_chart_unit_mismatch_rejects_without_rewriting_prices(self):
+        value=self.chart_view();value['market']['native_chart']['field_meta']['open']['unit']='CNY/fund unit'
+        with self.assertRaisesRegex(ValueError,'unit mismatch'):project_view(value)
+
 
 if __name__=='__main__':unittest.main()

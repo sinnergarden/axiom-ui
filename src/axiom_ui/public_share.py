@@ -37,8 +37,8 @@ EVENT = ('event_id', 'security_id', 'event_type', 'record_date', 'effective_date
          'new_price_basis_session', 'suspension_start', 'suspension_end', 'suspension_scope', 'resume_session')
 SAFE_CONDITIONS = {'start_session', 'end_session', 'initial_account', 'price_basis', 'unit_split_policy',
                    'stock_action_policy'}
-NOTE = ('公开分享投影：仅保留授权选定的保存账户与评价；行情仅附持仓、成交及委托相关的保存收盘价和全天量。'
-        '不附原始行情批次、K线、模型输入或完整证明，不从成交价推造收盘价。原 content_digest 指向完整 owner 保存文件。')
+NOTE = ('公开分享投影：保留授权账户窗口及相关证券的已保存 OHLCV，供连续 K线与成交复盘；缺值不填补。'
+        '不附完整原始 DataBatch、coverage、逐键完整证明或模型输入。图层为展示子集，原 source/file refs 与 content_digest 指向完整保存来源，不是子集身份。')
 DESIGN = 'https://github.com/sinnergarden/axiom-docs/blob/main/README.md'
 
 
@@ -65,6 +65,48 @@ def scalars(value, keys):
     return selected
 
 
+def related_securities(run):
+    ids = {r.get('security_id') for name in ('positions', 'fills', 'orders', 'unit_split_applications')
+           for r in run.get(name) or []}
+    for decision in run.get('decisions') or []:
+        ids.add(decision.get('selected_security_id'))
+        ids.update(decision.get('selected_security_ids') or [])
+        ids.update(i.get('security_id') for i in decision.get('intents') or [])
+    return {i for i in ids if isinstance(i, str) and i}
+
+
+def chart_projection(view, securities, start, end):
+    market = view['market']
+    source = market.get('native_chart') or market.get('data_batch')
+    if not source:
+        return None
+    stock = view['run'].get('contract_version') == 'backtest_run_v3'
+    volume = 'volume_shares' if stock else 'volume_units'
+    fields = ('open', 'high', 'low', 'close', volume)
+    metadata = source.get('field_meta') or {}
+    if not all(field in metadata for field in fields):
+        return None
+    price_unit, volume_unit = ('CNY/share', 'shares') if stock else ('CNY/fund unit', 'fund units')
+    if any(metadata[k].get('unit') != price_unit for k in fields[:4]) or metadata[volume].get('unit') != volume_unit:
+        raise ValueError('saved chart unit mismatch')
+    source_context = source.get('context') or {}
+    basis = (source_context.get('query') or {}).get('price_basis')
+    if basis != market.get('price_basis'):
+        raise ValueError('saved chart price basis mismatch')
+    rows = [scalars(row, ('security_id', 'session', *fields)) for row in source.get('records') or []
+            if row.get('security_id') in securities and start <= row.get('session', '') <= end]
+    context = scalars(source_context, ('snapshot_id', 'domain', 'reader_version', 'contract_id', 'source_profile_id'))
+    context.update(price_basis=basis, adjustment_anchor=clean((source_context.get('query') or {}).get('adjustment_anchor')),
+                   selected_start_session=start, selected_end_session=end,
+                   original_saved_batch_file_ref=clean(market.get('data_batch_file_digest')),
+                   original_saved_replay_source_refs=clean(market.get('source_refs')),
+                   identity_note='Original refs identify saved full sources; this is a selected display projection, not a complete DataBatch.')
+    return {'display_projection': True, 'public_selected_chart': True, 'context': context,
+            'source_ref': clean(source.get('source_ref')), 'records': rows,
+            'field_meta': {k: {**scalars(metadata[k], ('unit', 'dtype')), 'by_key': []} for k in fields},
+            'omitted': ['full DataBatch', 'query', 'coverage', 'full per-key provenance', 'unselected securities and dates']}
+
+
 def project_view(view):
     run = view.get('run') or {}
     if not run.get('run_id'):
@@ -88,12 +130,16 @@ def project_view(view):
     required = {(r['security_id'], r['session']) for name in ('positions', 'fills', 'orders')
                 for r in run.get(name) or [] if r.get('security_id') and r.get('session')}
     market = view['market']
-    rows = [pick(r, ROW) for r in market.get('rows') or [] if (r.get('security_id'), r.get('session')) in required]
+    securities = related_securities(run)
+    start, end = view['configuration']['start_session'], view['configuration']['end_session']
+    rows = [pick(r, ROW) for r in market.get('rows') or []
+            if r.get('security_id') in securities and start <= r.get('session', '') <= end]
     present = {(r['security_id'], r['session']) for r in rows}
     if required - present:
         raise ValueError('public close/volume projection lacks saved account-related market points')
     result['market'] = {'rows': rows, 'price_basis': market.get('price_basis'),
-                        'source_refs': clean(market.get('source_refs')), 'data_batch': None, 'native_chart': None}
+                        'source_refs': clean(market.get('source_refs')), 'data_batch': None,
+                        'native_chart': chart_projection(view, securities, start, end)}
     if market.get('unit_splits') is not None:
         referenced_events = {r.get('event_id') for r in run.get('unit_split_applications') or []}
         referenced_events.update(r.get('mark_basis_event_id') for r in run.get('positions') or [])
@@ -197,7 +243,7 @@ def export_site(selection_path, output):
             raise ValueError('process target contains an unselected saved account')
         process_refs = export_process(p['source'], p['target'], output)
         process = '<section><h2>关键中间过程</h2><p>保存的训练成熟度、信号与交易日期、冻结费用和现金行动范围。</p><a href="process.html">查看过程验收</a></section>'
-    index='''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Axiom · 公开保存结果</title><style>body{margin:0;background:#f3f6fa;color:#25374d;font:15px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}main{max-width:1000px;margin:40px auto;padding:0 22px}section{background:white;border:1px solid #dce5ef;border-radius:12px;padding:22px;margin:18px 0}a{color:#416e99}h1{font-size:30px}.small{font-size:13px;color:#52677e}</style><main><p class="small">AXIOM · 授权选定保存结果 · 公开只读</p><h1>回测结果与性能验收</h1><p><a href="'''+DESIGN+'''">统一设计文档</a></p><p>真实固定输入的模拟回测，保留日线执行近似。处理完成不证明策略有效、开盘流动性或实盘成交。页面指标由 owner 保存，浏览不重算收益或交易。</p>'''+links+process+performance+'''<section><h2>展示范围</h2><p>ETF 与股票的数量单位分别为基金份额与股；费用及执行假设见对应报告。沪深300为不含分红的价格指数，账户含已观测分红，两者口径不同。分红范围为已观测记录，不代表供应完整。</p><p>分享版仅附账户相关保存收盘价与全天量，保留缺值，不附全量行情、K线、模型输入或完整证明。原始身份引用可核对，本页不是完整 owner 文件。</p><a href="publication.json">公开发布记录</a> · <a href="https://github.com/sinnergarden/axiom-ui">源码与更新流程</a></section></main></html>'''
+    index='''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Axiom · 公开保存结果</title><style>body{margin:0;background:#f3f6fa;color:#25374d;font:15px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}main{max-width:1000px;margin:40px auto;padding:0 22px}section{background:white;border:1px solid #dce5ef;border-radius:12px;padding:22px;margin:18px 0}a{color:#416e99}h1{font-size:30px}.small{font-size:13px;color:#52677e}</style><main><p class="small">AXIOM · 授权选定保存结果 · 公开只读</p><h1>回测结果与性能验收</h1><p><a href="'''+DESIGN+'''">统一设计文档</a></p><p>真实固定输入的模拟回测，保留日线执行近似。处理完成不证明策略有效、开盘流动性或实盘成交。页面指标由 owner 保存，浏览不重算收益或交易。</p>'''+links+process+performance+'''<section><h2>展示范围</h2><p>ETF 与股票的数量单位分别为基金份额与股；费用及执行假设见对应报告。沪深300为不含分红的价格指数，账户含已观测分红，两者口径不同。分红范围为已观测记录，不代表供应完整。</p><p>分享版保留选定回测窗口、相关证券的已保存 OHLCV 与连续复盘；缺值不填补。完整 DataBatch、coverage、模型输入和未选结果不随页面公开。图层是展示子集，来源引用指向原完整保存文件。</p><a href="publication.json">公开发布记录</a> · <a href="https://github.com/sinnergarden/axiom-ui">源码与更新流程</a></section></main></html>'''
     (output/'index.html').write_text(index)
     manifest={'contract_version':'public_static_site_v1','generated_at':selection['generated_at'],
               'authorization':'explicit_selected_public_results','selection_note':clean(selection.get('selection_note')),
