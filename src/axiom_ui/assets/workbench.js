@@ -12,7 +12,8 @@
   }
   const initial=views.map((v,i)=>({v,i})).sort(recent)[0].v;
   const state = {runId: initial.view_id, registration: '', pane: 'performance', compare: '', benchmark: true,
-    security: '', session: '', interval: null, tradeWindow: {mode:'all'}, fillId: '', eventId: '', kind: 'fills', filter: 'all', status: '', tag: ''};
+    benchmarkLegendVisible: true, topicOpen: new Map(), security: '', session: '', interval: null,
+    tradeWindow: {mode:'all'}, fillId: '', eventId: '', kind: 'fills', status: '', tag: ''};
   let chartUI;
   const $ = id => document.getElementById(id);
   const current = () => {
@@ -59,6 +60,7 @@
     return (/[1-9]/.test(parts[1].slice(2))?'≈':'')+parts[0]+'.'+parts[1].slice(0,2);
   }
   const percent = v => present(v) ? compact(decimal(v, 2)) + '%' : '未提供';
+  const ratio = v => present(v) && Number.isFinite(Number(v)) ? Number(v).toFixed(5) : saved(v);
   const cagr = leg => !leg ? '未提供' : leg.cagr_status === 'AVAILABLE' ? percent(leg.cagr) : leg.cagr_status === 'INSUFFICIENT_SPAN' ? '样本不足一年' : '起止值缺失';
   const cagrRaw = leg => leg ? json({cagr:leg.cagr,status:leg.cagr_status,reason:leg.cagr_reason}) : '未提供';
   const periodRange = period => period ? saved(period.window.anchor_session)+' — '+saved(period.window.end_session) : '年化区间未提供';
@@ -81,6 +83,8 @@
   const statusOf = v => v.research?.no_version ? '未登记版本' : v.research?.not_run ? '未运行' : v.research?.status || (v.blocked ? '阻断' : v.run.status);
   function selectRun(id) {
     state.runId = id; state.registration = '';state.episodePage=0;state.chainSecurity='';$('chain-search').value='';$('chain-status').value='';state.security = ''; state.session = ''; state.interval = null;state.tradeWindow={mode:'all'}; state.fillId = ''; state.eventId = '';
+    const selected=byId.get(id),topic=selected.research?.question_id || selected.research?.experiment_ref || 'unlinked';
+    state.topicOpen.set(topic,true);state.benchmarkLegendVisible=true;
     $('episode-scope').value='window';$('episode-security').value='';$('episode-status').value='';
     if (state.compare === id || !byId.get(id).run.run_id) state.compare = '';
     render();
@@ -94,8 +98,7 @@
   function renderTree() {
     const tree = clear('run-tree');
     let filtered = views.filter(v => (!state.status || statusOf(v) === state.status) &&
-      (!state.tag || (v.research?.tags || []).includes(state.tag)) &&
-      (state.filter === 'all' || (state.filter === 'favorite' ? v.research?.favorite === true : v.research?.shelved === true)));
+      (!state.tag || (v.research?.tags || []).includes(state.tag)));
     filtered = filtered.map((v,i) => ({v,i})).sort(recent).map(x => x.v);
     const groups = new Map();
     for (const v of filtered) {
@@ -103,29 +106,31 @@
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(v);
     }
-    for (const group of groups.values()) {
-      const wrap = node('div', null, 'question-group');
-      wrap.append(node('div', group[0].research?.title || '研究问题未提供', 'question-title'));
+    for (const [topic,group] of groups) {
+      const wrap = node('details', null, 'question-group'),summary=node('summary',group[0].research?.title || '研究问题未提供','question-title'),body=node('div',null,'topic-runs');
+      wrap.dataset.questionId=topic;
+      wrap.open=state.topicOpen.has(topic)?state.topicOpen.get(topic):group.some(v=>v.view_id===state.runId);
+      wrap.addEventListener('toggle',()=>state.topicOpen.set(topic,wrap.open));
       const counts=group[0].research;
-      if(present(counts?.saved_backtest_count)&&present(counts?.registration_count))wrap.append(node('div',counts.saved_backtest_count+' 份账户回测 · '+counts.registration_count+' 条登记','small'));
+      if(present(counts?.saved_backtest_count)&&present(counts?.registration_count))summary.append(node('span',counts.saved_backtest_count+' 份账户回测 · '+counts.registration_count+' 条登记','small'));
+      wrap.append(summary,body);
       const versions=new Map();
       for(const v of group){const key=v.research?.version_id || v.research?.experiment_ref || 'unlinked';if(!versions.has(key))versions.set(key,[]);versions.get(key).push(v);}
       for (const members of versions.values()) {
         const first=members[0];
-        wrap.append(node('div', first.research?.version_label || (first.research?.experiment_ref ? '冻结实验 ' + short(first.research.experiment_ref) : '版本说明未提供'), 'version-title'));
+        body.append(node('div', first.research?.version_label || (first.research?.experiment_ref ? '冻结实验 ' + short(first.research.experiment_ref) : '版本说明未提供'), 'version-title'));
         for(const v of members){
         const button = node('button', v.research?.no_version ? '尚未登记版本' : v.research?.not_run ? '尚未运行' : runCaption(v), 'run-item' + (v.view_id === state.runId ? ' selected' : ''));
         button.dataset.runId = v.view_id; button.title = v.run.run_id || v.research?.run_record_ref || v.research?.version_id;
         button.append(node('span', statusLabel(statusOf(v)) + (v.evaluation ? ' · 评价已载入' : '') + (v.research?.favorite ? ' · 收藏' : '') + (v.research?.shelved ? ' · 搁置' : '')));
-        button.addEventListener('click', () => selectRun(v.view_id)); wrap.append(button);
+        button.addEventListener('click', () => selectRun(v.view_id)); body.append(button);
         }
       }
       tree.append(wrap);
     }
-    if (!filtered.length) tree.append(node('p', '没有匹配的已保存记录。未提供的标记不会当作已收藏或已搁置。', 'small'));
+    if (!filtered.length) tree.append(node('p', '没有匹配的已保存记录。', 'small'));
     $('navigation-note').textContent = views.some(v => !v.research?.created_at) ? '部分记录未保存运行时间，保留载入顺序；不以文件时间推断近期。' : '按 Research 保存时间排序。';
     if(views.some(v=>v.public_display_projection))$('navigation-note').textContent+=' 本页仅列授权精选运行；总数来自 Research 原组，非当前载入数。';
-    document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('active', b.dataset.filter === state.filter));
   }
   function renderHeader(v) {
     const r = v.run, research = v.research,stock=v.stock_ml,withoutAccount=!r.run_id;
@@ -177,6 +182,17 @@
       const val=node('strong',cagr(leg),leg?.cagr_status==='AVAILABLE'?positive(leg.cagr):'unavailable');
       val.title='Owner 原值：'+cagrRaw(leg);card.append(val,node('small','保存的年化区间'));
       if(comparison){const old=node('span','对照 '+cagr(oldPeriod?.account),'comparison-value');old.title='对照 Owner 原值：'+cagrRaw(oldPeriod?.account);card.append(old);}
+      cards.append(card);
+    }
+    for(const [key,label] of [['sharpe','Sharpe'],['calmar','Calmar']]){
+      const value=v.evaluation?.risk_metrics?.[key],oldValue=comparison?.evaluation?.risk_metrics?.[key];
+      if(value?.status!=='AVAILABLE'||!present(value.value))continue;
+      const card=node('div',null,'metric'),display=node('strong',ratio(value.value));
+      display.title='Owner 原值：'+saved(value.value);
+      card.append(node('span',label),display,node('small','原回测范围 · 保存值'));
+      if(comparison&&oldValue?.status==='AVAILABLE'&&present(oldValue.value)){
+        const old=node('span','对照 '+ratio(oldValue.value),'comparison-value');old.title='对照 Owner 原值：'+saved(oldValue.value);card.append(old);
+      }
       cards.append(card);
     }
     $('period-note').hidden=!(period || oldPeriod);
@@ -466,9 +482,8 @@
     document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('active',p.id===state.pane));document.querySelectorAll('[data-pane]').forEach(b=>b.classList.toggle('active',b.dataset.pane===state.pane));
   }
   document.querySelectorAll('[data-pane]').forEach(b=>b.addEventListener('click',()=>{state.pane=b.dataset.pane;render();}));
-  document.querySelectorAll('[data-filter]').forEach(b=>b.addEventListener('click',()=>{state.filter=b.dataset.filter;renderTree();}));
   $('status-filter').addEventListener('change',e=>{state.status=e.target.value;renderTree();});$('tag-filter').addEventListener('change',e=>{state.tag=e.target.value;renderTree();});
-  $('compare-run').addEventListener('change',e=>{state.compare=e.target.value;renderHeader(current());renderPerformance(current());});$('benchmark-toggle').addEventListener('change',e=>{state.benchmark=e.target.checked;renderPerformance(current());});
+  $('compare-run').addEventListener('change',e=>{state.compare=e.target.value;renderHeader(current());renderPerformance(current());});$('benchmark-toggle').addEventListener('change',e=>{state.benchmark=e.target.checked;if(state.benchmark)state.benchmarkLegendVisible=true;renderPerformance(current());});
   $('registration-select').addEventListener('change',e=>{state.registration=e.target.value;state.session='';state.interval=null;state.tradeWindow={mode:'all'};state.fillId='';state.eventId='';render();});
   for(const id of ['episode-scope','episode-security','episode-status'])$(id).addEventListener('change',()=>{state.episodePage=0;renderEpisodeList(current());});
   $('security-select').addEventListener('change',e=>{state.security=e.target.value;state.chainSecurity=e.target.value;state.session='';state.fillId='';state.eventId='';renderTrade(current());renderHeader(current());});

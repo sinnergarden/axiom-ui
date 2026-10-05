@@ -1,0 +1,64 @@
+{
+  "status": "SOURCE_CANDIDATE_READY_PUBLICATION_BLOCKED_BY_NEW_OWNER_RESULTS",
+  "reviewed_design_commit": "87137d88f82cee60069e2b727eed2e1f31b9ac80",
+  "ui_base_commit": "969145dcff6685116623d61bcf77b151f49dae4c",
+  "scope": "Source changes only; checked local candidate from previously public selected ETF and stock projections. Their embedded owner values remain identical after JSON decode. The tracked site/ subtree remains unchanged.",
+  "checks": {
+    "workbench_unittests": 25,
+    "public_share_unittests": 12,
+    "public_site_check_unittests": 3,
+    "candidate_public_site_files": 10,
+    "node_syntax": "PASS",
+    "git_diff_check": "PASS",
+    "chrome": "Chrome/154.0.8037.97",
+    "chrome_default_security": true,
+    "desktop_viewport": [
+      1440,
+      1000
+    ],
+    "mobile_viewport": [
+      390,
+      844
+    ],
+    "runtime_exceptions": 0,
+    "external_requests": 0,
+    "mobile_document_overflow": false,
+    "topics_selected_open": true,
+    "benchmark_legend_return_and_drawdown_grouped": true,
+    "sse_drawdown_not_fabricated": true,
+    "benchmark_tooltip_switches_current_saved_choice": true,
+    "stock_fill_real_pointer_click_date_and_original_price": true
+  },
+  "local_candidate_html": {
+    "index.html": {
+      "bytes": 2737,
+      "sha256": "b153d17661a19d8c13ce2f619eed5b21d0ef57100d192096371b19f91c31093f"
+    },
+    "etf.html": {
+      "bytes": 20922399,
+      "sha256": "56850430ea0b30749f38bd11ba021853c8edb4a8359ad35140f518c8ca2a79fe"
+    },
+    "stock.html": {
+      "bytes": 2367684,
+      "sha256": "fd3c7927100d5655d1a89edb59366ad7b544f0075b22b15f9f56b6190a011337"
+    }
+  },
+  "local_review_screenshot_sha256": {
+    "home-desktop.png": "3b4aaef9abc232338e526671810bff4c40526268df386b55dc3202a3112e50ef",
+    "etf-performance-desktop.png": "69befafee91878db34626d8c5fc2ac6e3cc057f5e83d698126e12dd9282d1919",
+    "stock-trade-desktop.png": "e735e76e0146649d28125cb026cdd683e4ee9af932a2f1851168389f15153da7",
+    "etf-mobile.png": "ee68a13276445a0ee04714aabed6fca1cb1f5f403872da077211b6197c2bb458"
+  },
+  "publication_gate": "Wait for Engine and Research to save/link real 500000 CNY ETF, stock, and buy-and-hold results. Do not rescale old 10000/100000 CNY owner values. Replace the selected public result set only after identity validation and parent review. Old source files remain archived pending explicit deletion decision.",
+  "owner_dependent_followups": [
+    "Engine-saved SSE pointwise drawdown",
+    "Engine-saved 513100 buy-and-hold reference",
+    "Research independent Signal plus matured Label evaluation for later view"
+  ],
+  "not_part_of_this_change": [
+    "tutorial PR 7 publication",
+    "account/Data rerun",
+    "owner artifact mutation",
+    "Pages deployment"
+  ]
+}
