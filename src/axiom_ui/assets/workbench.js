@@ -436,6 +436,7 @@
     if(all.length>3)panel.append(node('p','另有 '+(all.length-3)+' 条保存限制，可在原始记录中查看。','small'));
     const refs=clear('source-refs');
     for(const [label,value] of [['账户/评价合同',saved(v.run.contract_version)+' / '+saved(v.evaluation?.contract_version)],['账户最终水位',v.run.committed_sequence],['价格/数量单位',priceUnit(v)+' / '+quantityUnit(v)],['来源与固定版本','原值与身份在独立原始记录入口查看']])pointRow(refs,label,value);
+    const display=v.market.review_display;if(display){pointRow(refs,'固定显示锚点 A',display.context.anchor_session);pointRow(refs,'共同截止 C',display.context.knowledge_cutoff);pointRow(refs,'显示范围','原 native 图层的完整运行窗口；缩放不改变 A/C');if(v.market.security_name_scope)pointRow(refs,'名称范围',v.market.security_name_scope);if(v.market.security_label_source){pointRow(refs,'名称独立 Snapshot',v.market.security_label_source.source_snapshot_id);pointRow(refs,'名称观察截止',v.market.security_label_source.label_cutoff);}}
     $('generated-note').textContent='页面生成于 '+data.generated_at+'；不是数据更新时间。指标与交易依据均来自保存产物，浏览没有计算或执行调用。';
   }
   function render() {
@@ -457,6 +458,7 @@
   const mobileNavigation=matchMedia('(max-width:700px)');
   const resizeNavigation=()=>{$('experiment-navigation').open=!mobileNavigation.matches;};
   mobileNavigation.addEventListener('change',resizeNavigation);resizeNavigation();
-  chartUI=createAxiomInteractions({state,$,current,byId,node,saved,present,percent,money,priceUnit,quantityUnit,statusLabel,renderHeader,renderPoint,selectEvent,stockAccount,eventKey,selectEpisode});
+  const openTradeDay=day=>{state.session=day;state.pane='trade';state.fillId='';state.eventId='';render();};
+  chartUI=createAxiomInteractions({state,$,current,byId,node,saved,present,percent,money,priceUnit,quantityUnit,statusLabel,renderHeader,renderPoint,selectEvent,stockAccount,eventKey,selectEpisode,openTradeDay});
   chartUI.bind();initializeFilters();render();
 })();

@@ -199,11 +199,37 @@ explicit binding with `directory`, `manifest_sha256`, `snapshot_id`,
 `load_review_display`, checks the run's Snapshot and units, and retains native
 prices and missing factors. Snapshot name labels do not assert historical name
 validity. Adjusted B/S coordinates require a separately saved Engine mapping;
-native fill prices never masquerade as adjusted coordinates.
+`fill_display_paths={run_id: path}` reads Engine's public saved
+`load_fill_display` document and checks the exact run, Data manifest, original
+fill IDs/prices/units and coordinate coverage. Adjusted B/S uses only its saved
+display prices; unavailable coordinates stay absent. The original fill price
+remains in the transaction details and unadjusted chart. The v3 chart uses
+Owner-saved account and benchmark cumulative-return strings for the percentage
+view; older reports retain the saved normalized-index view.
 
-`enrich_saved_projection(existing, evaluation_paths={run_id: path},
-review_displays={run_id: binding})` can extend a previously validated
+For a saved display originally bound to an older run but proven identical to
+the selected consumer's frozen market inputs, pass
+`review_consumer_receipts={run_id: {"receipt_path": path,
+"receipt_sha256": trusted_external_sha256}}`. The fixed Data receipt must
+bind the current run's full identity, original price manifest and separately
+observed security labels. UI reads both layers through Data's public saved
+loaders; the independent label Snapshot and cutoff are shown explicitly, with
+historical name validity unknown. The expected receipt digest must come from
+the Data handoff, not from hashing an unreviewed file at call time.
+
+`enrich_saved_projection(existing_export_path, projection_file_ref=trusted_external_byte_ref,
+evaluation_paths={run_id: path},
+review_displays={run_id: binding}, fill_display_paths={run_id: path})` can extend a previously validated
 `ui_workbench_projection_v1` without reloading its large account document.
+The required `sha256:...` byte ref comes from a trusted previous export receipt;
+the function verifies the saved file against it and rejects arbitrary dictionaries.
+It never creates trust by hashing untrusted input and accepting that result as
+the expected ref. `render_enriched_workbench` enforces the same check even when
+no new layer is supplied. Unverified mappings belong only in the explicit
+synthetic sample renderer. Display rows must exactly cover the original native
+keys inside the full run window; missing whole rows and extra securities/dates
+are refused. Null prices on present rows remain null. Viewport changes do not
+change that fixed scope or the final anchor.
 New evaluation identity/watermarks are bound to the original account projection;
 only the explicit public saved-file loaders run. This does not replay an account,
 rerun evaluation, register a Research run or write any Owner file.

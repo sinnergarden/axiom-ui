@@ -70,6 +70,7 @@ window.createAxiomInteractions = function(env) {
     for(const id of ['window-note','performance-window-note'])$(id).textContent='显示 '+window.start+' — '+window.end+' · '+visible+' 个账户保存日；指标仍属原回测范围。'+(window.start>window.end?' 起止日期无效。':'');
     $('selection-context').textContent=(state.session?'已锁定 '+state.session+' · ':'')+'窗口 '+window.start+' — '+window.end+'；指标仍为原报告范围。';
     $('unlock-point').disabled=!state.session;
+    $('trade-locked-day').disabled=!indexed(v).nav.has(state.session);
   }
   function setWindow(start,end,sourceId=null){
     if(!start || !end || start>end)return;
@@ -148,7 +149,7 @@ window.createAxiomInteractions = function(env) {
     const index=indexed(v),nav=index.nav.get(day),dd=index.dd.get(day);
     const b=benchmark(v),bench=(b.series || []).find(r=>r.session===day),other=byId.get(state.compare),old=other?indexed(other).nav.get(day):null;
     const analysis=v.evaluation?.analysis_series?.find(p=>p.session===day);
-    return [['策略净值指数',nav?.nav_index],...(analysis?[['策略累计收益',percent(analysis.account_cumulative_return)]]:[]),...(state.benchmark?[[b.name+'归一化指数',bench?.valid===false?null:bench?.nav_index],[b.name+'回撤',bench?.valid===false||!present(bench?.drawdown)?'未提供':percent(bench.drawdown)]]:[]),['策略回撤',present(dd?.drawdown)?percent(dd.drawdown):'未提供'],['净资产（元）',nav?money(nav.nav_minor):'未提供'],...(other?[['对照净值指数',old?.nav_index]]:[])];
+    return [['策略净值指数',nav?.nav_index],...(analysis?[['策略累计收益 · Owner 保存',percent(analysis.account_cumulative_return)]]:[]),...(state.benchmark?[[b.name+'归一化指数',bench?.valid===false?null:bench?.nav_index],[b.name+'累计收益 · Owner 保存',percent(bench?.benchmark_cumulative_return)],[b.name+'回撤',bench?.valid===false||!present(bench?.drawdown)?'未提供':percent(bench.drawdown)],['账户相对价格指数财富 · 事后代理',percent(bench?.account_relative_wealth)]]:[]),['策略回撤',present(dd?.drawdown)?percent(dd.drawdown):'未提供'],['净资产（元）',nav?money(nav.nav_minor):'未提供'],...(other?[['对照净值指数',old?.nav_index]]:[])];
   }
   function lockDay(day,fill=null){
     const v=current();state.session=fill?.session || day;state.fillId=fill?.fill_id || '';state.eventId=state.fillId;state.kind='fills';state.chainPage=0;
@@ -172,14 +173,19 @@ window.createAxiomInteractions = function(env) {
     if(!nav.length){emptyChart('performance-chart','账户净值未载入，不从信号生成收益。');return;}
     const ss=[...new Set([...nav.map(r=>r.session),...(state.benchmark?b.series || []:[]).map(r=>r.session),...(other?.run.nav || []).map(r=>r.session)])].sort();
     const mapSeries=(rows,field)=>{const map=new Map((rows || []).map(r=>[r.session,r]));return ss.map(s=>{const r=map.get(s);return r?.valid===false?null:number(r?.[field]);});};
-    const series=[{id:'account',name:'策略净值指数',type:'line',showSymbol:false,data:mapSeries(nav,'nav_index'),lineStyle:{width:2,color:'#477a9e'},itemStyle:{color:'#477a9e'},connectNulls:false},
+    const accountPct=v.evaluation?.analysis_series || [],oldPct=other?.evaluation?.analysis_series || [];
+    const pctMode=accountPct.length===nav.length && accountPct.every(p=>present(p.account_cumulative_return)) &&
+      (!other || oldPct.length===(other.run.nav || []).length && oldPct.every(p=>present(p.account_cumulative_return))) &&
+      (!state.benchmark || b.status==='SOURCE_UNAVAILABLE' || (b.series || []).some(p=>present(p.benchmark_cumulative_return)));
+    const series=[{id:'account',name:pctMode?'策略累计收益 · Owner 保存':'策略净值指数',type:'line',showSymbol:false,data:mapSeries(pctMode?accountPct:nav,pctMode?'account_cumulative_return':'nav_index'),lineStyle:{width:2,color:'#477a9e'},itemStyle:{color:'#477a9e'},connectNulls:false},
       {id:'drawdown',name:'策略回撤',type:'line',xAxisIndex:1,yAxisIndex:1,showSymbol:false,data:mapSeries(v.evaluation?.series,'drawdown'),lineStyle:{width:1.4,color:'#578471'},areaStyle:{color:'#dcebe3',opacity:.65},itemStyle:{color:'#578471'},connectNulls:false}];
-    if(state.benchmark&&b.status!=='SOURCE_UNAVAILABLE'){series.push({id:'benchmark',name:b.name,type:'line',showSymbol:false,data:mapSeries(b.series,'nav_index'),lineStyle:{type:'dashed',width:1.5,color:'#a88948'},itemStyle:{color:'#a88948'},connectNulls:false});if(b.series.some(p=>present(p.drawdown)))series.push({id:'benchmark-dd',name:'基准回撤',type:'line',xAxisIndex:1,yAxisIndex:1,showSymbol:false,data:mapSeries(b.series,'drawdown'),lineStyle:{type:'dashed',color:'#a88948',width:1},connectNulls:false});}
+    if(state.benchmark&&b.status!=='SOURCE_UNAVAILABLE'){series.push({id:'benchmark',name:b.name+(pctMode?'累计收益 · Owner 保存':''),type:'line',showSymbol:false,data:mapSeries(b.series,pctMode?'benchmark_cumulative_return':'nav_index'),lineStyle:{type:'dashed',width:1.5,color:'#a88948'},itemStyle:{color:'#a88948'},connectNulls:false});if(b.series.some(p=>present(p.drawdown)))series.push({id:'benchmark-dd',name:'基准回撤',type:'line',xAxisIndex:1,yAxisIndex:1,showSymbol:false,data:mapSeries(b.series,'drawdown'),lineStyle:{type:'dashed',color:'#a88948',width:1},connectNulls:false});}
     const dd=v.evaluation?.drawdown_interval,available=dd?.status==='AVAILABLE';
     $('locate-drawdown').disabled=!available;$('locate-drawdown').textContent=available?'定位最大回撤':dd?.status==='NO_DRAWDOWN'?'没有负回撤':'定位最大回撤 · 日期待提供';
     if(available){const start=ss.includes(dd.peak_session)?dd.peak_session:ss[0];series[0].markArea={silent:true,itemStyle:{color:'#e8d3d9',opacity:.23},data:[[{xAxis:start},{xAxis:dd.trough_session}]]};series[1].markArea={silent:true,itemStyle:{color:'#e8d3d9',opacity:.23},data:[[{xAxis:start},{xAxis:dd.trough_session}]]};if(dd.recovery_session)series[0].markLine={silent:true,symbol:'none',lineStyle:{color:'#538772',type:'dotted'},data:[{xAxis:dd.recovery_session,name:'恢复日'}]};}
-    if(other){series.push({id:'comparison',name:'旧运行',type:'line',showSymbol:false,data:mapSeries(other.run.nav,'nav_index'),lineStyle:{type:'dashed',color:'#8d709c',width:1.5},itemStyle:{color:'#8d709c'},connectNulls:false});series.push({id:'comparison-dd',name:'对照回撤',type:'line',xAxisIndex:1,yAxisIndex:1,showSymbol:false,data:mapSeries(other.evaluation?.series,'drawdown'),lineStyle:{type:'dashed',color:'#8d709c',width:1},connectNulls:false});}
-    const base=axes(ss,'净值指数','回撤（%）');base.yAxis[1].axisLabel.formatter=value=>percent(String(value));
+    if(other){series.push({id:'comparison',name:pctMode?'对照累计收益 · Owner 保存':'旧运行',type:'line',showSymbol:false,data:mapSeries(pctMode?oldPct:other.run.nav,pctMode?'account_cumulative_return':'nav_index'),lineStyle:{type:'dashed',color:'#8d709c',width:1.5},itemStyle:{color:'#8d709c'},connectNulls:false});series.push({id:'comparison-dd',name:'对照回撤',type:'line',xAxisIndex:1,yAxisIndex:1,showSymbol:false,data:mapSeries(other.evaluation?.series,'drawdown'),lineStyle:{type:'dashed',color:'#8d709c',width:1},connectNulls:false});}
+    const base=axes(ss,pctMode?'累计收益（%）':'净值指数','回撤（%）');if(pctMode)base.yAxis[0].axisLabel.formatter=value=>percent(String(value));base.yAxis[1].axisLabel.formatter=value=>percent(String(value));
+    $('performance-chart').dataset.valueBasis=pctMode?'owner-saved-cumulative-return':'owner-saved-nav-index';
     chart('performance-chart',{...base,animation:false,legend:{top:5,right:22,textStyle:{fontSize:12,color:'#52677c'},data:series.filter(s=>s.yAxisIndex!==1).map(s=>s.name)},tooltip:{trigger:'axis',triggerOn:'mousemove',confine:true,transitionDuration:0,axisPointer:{type:'cross'},formatter:items=>{
       const day=items[0]?.axisValue;if(!day)return '';const rows=readDay(v,day);
       if(!state.session)$('nav-point').textContent=day+' · '+rows.map(([k,val])=>k+' '+compact(val)).join(' / ');
@@ -197,10 +203,11 @@ window.createAxiomInteractions = function(env) {
     $('session-select').value=state.session;
     const display=v.market.review_display,choice=$('price-basis-select');state.priceBasisByRun ||= {};
     const adjusted=!!display&&(state.priceBasisByRun[v.run.run_id] || 'adjusted')==='adjusted';
+    const coordinates=new Map((v.market.fill_display?.coordinates || []).map(point=>[point.fill_id,point]));
     choice.options[1].disabled=!display;choice.options[1].textContent=display?'共同最终锚点调整价':'调整后 · 尚未提供';choice.value=adjusted?'adjusted':'unadjusted';
     const displayPoints=index.displaySecurities.get(state.security),points=displayPoints?(adjusted?displayPoints:displayPoints.map(p=>({...p,open:p.native_open,high:p.native_high,low:p.native_low,close:p.native_close}))):index.securities.get(state.security) || [],ss=points.map(p=>p.session),window=windowFor(ss),pointByDay=new Map(points.map(p=>[p.session,p]));
     const candle=!!(v.market.data_batch || v.market.native_chart),volume=env.stockAccount(v)?'volume_shares':'volume_units';
-    $('candle-note').textContent=(candle?'':'K线暂未提供，当前仅显示保存的收盘价与全天量。')+(display?(adjusted?'共同最终锚点调整价':'同一显示来源的未复权原价')+' · 固定 A='+display.context.anchor_session+' / C='+display.context.knowledge_cutoff+'；缩放不改变锚点。'+(adjusted?' 成交调整坐标尚未提供，暂不放置 B/S；原成交可在交易链查看。':' B/S 使用保存的原成交价。'):'调整后显示投影尚未提供；下方为保存的未复权'+(candle?' K 线':'收盘价线（非 K 线）')+'。B/S 是保存模拟成交，悬浮卡保留原成交价。')+'价格 '+priceUnit(v)+'，全天量 '+quantityUnit(v)+'。'+(v.market.security_name_scope?' 名称为 Snapshot 标签，历史名称有效期未知。':'');
+    $('candle-note').textContent=(candle?'':'K线暂未提供，当前仅显示保存的收盘价与全天量。')+(display?(adjusted?'调整后价格':'未复权原价')+' · 原始成交量 · 事后复盘。'+(adjusted?(coordinates.size?' B/S 使用 Engine 保存的调整后坐标；缺值不显示。':' 成交调整坐标尚未提供，暂不放置 B/S；原成交见交易链。'):' B/S 为保存模拟成交，保留原成交价。'):'调整后显示投影尚未提供；当前为未复权'+(candle?' K 线':'收盘价线（非 K 线）')+'与原始成交量。B/S 为保存模拟成交。');
     const fills=(v.run.fills || []).filter(f=>f.security_id===state.security),fillByDay=new Map();
     for(const fill of fills){if(!fillByDay.has(fill.session))fillByDay.set(fill.session,[]);fillByDay.get(fill.session).push(fill);}
     const reviewEvents=(v.market.review_events || []).filter(r=>r.event.security_id===state.security).map(item=>({item,day:item.domain==='corporate_actions'?item.event.ex_date:item.event.effective_date,label:item.domain==='corporate_actions'?'除息':'份额折算'}));
@@ -212,7 +219,7 @@ window.createAxiomInteractions = function(env) {
       {id:'prices',name:'保存收盘价（非 K 线）',type:'line',showSymbol:false,data:points.map(p=>number(p.close)),itemStyle:{color:'#547da3'},connectNulls:false};
     prices.markArea={silent:true,itemStyle:{color:'#dde7ef',opacity:.26},data:(v.evaluation?.episodes || []).filter(e=>e.security_id===state.security).map(e=>[{xAxis:e.entry_session || ss[0],itemStyle:{borderType:e.status==='OPEN'?'dashed':'solid'}},{xAxis:e.exit_session || ss.at(-1)}])};
     const series=[prices,{id:'volume',name:'全天量',type:'bar',xAxisIndex:1,yAxisIndex:1,data:points.map(p=>number(p[volume] ?? p.volume)),itemStyle:{color:'#b8c9d7'},barMaxWidth:12},
-      {id:'fills',name:'保存成交',type:'scatter',data:(adjusted?[]:fills).map(fill=>({value:[fill.session,number(fill.price)],fill,symbol:fill.side==='BUY'?'triangle':'diamond',symbolSize:fill.fill_id===state.fillId?22:15,label:{show:true,position:fill.side==='BUY'?'bottom':'top',formatter:fill.side==='BUY'?'B':'S',color:fill.side==='BUY'?'#ad4f6a':'#31795e',fontSize:11},itemStyle:{color:fill.side==='BUY'?'#ad4f6a':'#31795e',borderColor:'white',borderWidth:1}}))}];
+      {id:'fills',name:'保存成交',type:'scatter',data:fills.filter(fill=>!adjusted||coordinates.get(fill.fill_id)?.status==='AVAILABLE').map(fill=>({value:[fill.session,number(adjusted?coordinates.get(fill.fill_id).display_price:fill.price)],fill,symbol:fill.side==='BUY'?'triangle':'diamond',symbolSize:fill.fill_id===state.fillId?22:15,label:{show:true,position:fill.side==='BUY'?'bottom':'top',formatter:fill.side==='BUY'?'B':'S',color:fill.side==='BUY'?'#ad4f6a':'#31795e',fontSize:11},itemStyle:{color:fill.side==='BUY'?'#ad4f6a':'#31795e',borderColor:'white',borderWidth:1}}))}];
     series.push({id:'review-events',name:'发行人事件（非成交）',type:'scatter',symbol:'rect',symbolSize:8,symbolOffset:[0,-14],data:reviewEvents.filter(e=>pointByDay.has(e.day)&&present(pointByDay.get(e.day).close)).map(e=>({value:[e.day,number(pointByDay.get(e.day).close)],day:e.day,reviewEvent:e.item,label:{show:true,position:'top',formatter:e.label,color:'#8a713e',fontSize:10},itemStyle:{color:'#ae935e'}}))});
     chart('trade-chart',{...base,animation:false,tooltip:{trigger:'axis',triggerOn:'mousemove',confine:true,transitionDuration:0,axisPointer:{type:'cross'},formatter:items=>{
       const day=items[0]?.axisValue,p=pointByDay.get(day);if(!p)return '';
@@ -322,7 +329,7 @@ window.createAxiomInteractions = function(env) {
     for(const option of select.options){const comparison=comparisons?.[option.value],available=comparison?comparison.status!=='SOURCE_UNAVAILABLE':option.value==='CSI300'&&!!evaluation?.benchmark;option.textContent=benchmarkNames[option.value]+(available?'':' · 未提供');}
     select.value=state.benchmarkKey || 'CSI300';
     const b=benchmark(v);$('benchmark-toggle').disabled=!b.series?.length;$('benchmark-toggle').checked=state.benchmark&&!!b.series?.length;
-    if(comparisons){$('benchmark-note').textContent=b.name+' · '+(b.status==='SOURCE_UNAVAILABLE'?'原生输入未提供':b.status==='COMPLETE'?'保存点完整':'部分保存点缺失')+' · 币种 '+saved(b.currency)+' / '+(b.return_basis==='price_index_excluding_dividends'?'价格指数，不含分红':saved(b.return_basis))+' · 原生日历 '+saved(b.native_calendar)+' / 时区 '+saved(b.timezone)+'。按同名自然日期展示，不补齐市场假日、不宣称同一时刻可交易。'+(b.currency&&b.currency!=='CNY'?' 未提供 FX，人民币账户相对财富留空。':'');}
+    if(comparisons){$('benchmark-note').textContent=b.status==='SOURCE_UNAVAILABLE'?b.name+'：本次没有保存原生指数序列。':b.name+' · '+(b.status==='COMPLETE'?'保存点完整':'部分保存点缺失')+' · '+(b.return_basis==='price_index_excluding_dividends'?'价格指数不含分红':'保存口径见来源详情')+'；账户包含已入账分红。按当地自然日期回看，不补市场假日。'+(b.currency&&b.currency!=='CNY'?' 未提供汇率，人民币账户相对财富不可用。':'')+'币种、日历、时区和来源引用见原始记录。';}
     const panel=$('risk-analysis');panel.replaceChildren();
     if(!evaluation?.risk_metrics){panel.append(node('p','当前保存评价未提供 Sharpe / Calmar、滚动分析或回撤日期；不从旧报告自行计算。','small'));$('analysis-chart').hidden=true;return;}
     const labels={INSUFFICIENT_SPAN:'范围不足一年',INSUFFICIENT_OBSERVATIONS:'观测少于 30 个',MISSING_RETURN:'收益观测缺失',ZERO_VOLATILITY:'波动为零',MISSING_BOUNDARY:'边界缺失',ZERO_DRAWDOWN:'回撤为零'};
@@ -334,7 +341,7 @@ window.createAxiomInteractions = function(env) {
     const dd=evaluation.drawdown_interval;
     if(dd?.status==='AVAILABLE')panel.append(node('p','最大回撤 '+percent(dd.drawdown)+'：'+dd.peak_session+(dd.peak_is_initial_anchor?'（初始财富锚点，不是保存 NAV 点）':'（保存峰值）')+' → '+dd.trough_session+'（谷值），历时 '+dd.elapsed_calendar_days+' 个自然日；'+(dd.recovery_status==='RECOVERED'?'恢复于 '+dd.recovery_session:'期末尚未恢复')+'。','small'));
     else if(dd?.status==='NO_DRAWDOWN')panel.append(node('p','Owner 报告没有负回撤，不生成峰谷日期。','small'));
-    const raw=node('button','查看保存分析及口径原值','text-button');raw.addEventListener('click',()=>openRaw('Owner 保存的账户分析',{risk_metrics:evaluation.risk_metrics,drawdown_interval:dd,execution_summary:summary,spec:evaluation.spec,base_evaluation_ref:evaluation.base_evaluation_ref,benchmark_refs:evaluation.benchmark_refs}));panel.append(raw);
+    const raw=node('button','查看保存分析及口径原值','text-button');raw.addEventListener('click',()=>openRaw('Owner 保存的账户分析',{risk_metrics:evaluation.risk_metrics,drawdown_interval:dd,execution_summary:summary,spec:evaluation.spec,base_evaluation_ref:evaluation.base_evaluation_ref,benchmark_refs:evaluation.benchmark_refs,benchmark_choices:Object.fromEntries(Object.entries(comparisons || {}).map(([key,item])=>[key,{input_ref:item.input_ref,status:item.status,unavailable_reason:item.unavailable_reason,currency:item.currency,return_basis:item.return_basis,native_calendar:item.native_calendar,timezone:item.timezone,clock_scope:item.clock_scope}]))}));panel.append(raw);
     $('analysis-chart').hidden=false;
     const points=evaluation.analysis_series || [],concentration=new Map((evaluation.concentration_series || []).map(p=>[p.session,p])),ss=points.map(p=>p.session);
     if(!ss.length)return;
@@ -348,6 +355,7 @@ window.createAxiomInteractions = function(env) {
     $('price-basis-select').addEventListener('change',e=>{state.priceBasisByRun ||= {};state.priceBasisByRun[current().run.run_id]=e.target.value;trade(current());});
     $('saved-analysis').addEventListener('toggle',()=>{if($('saved-analysis').open)analysis(current());});
     $('locate-drawdown').addEventListener('click',()=>{const v=current(),dd=v.evaluation?.drawdown_interval;if(dd?.status!=='AVAILABLE')return;const first=v.run.nav?.[0]?.session;setWindow(dd.peak_session<first?first:dd.peak_session,dd.recovery_session || v.run.nav.at(-1).session);lockDay(dd.trough_session);performance(v);});
+    $('trade-locked-day').addEventListener('click',()=>{if(indexed(current()).nav.has(state.session))env.openTradeDay(state.session);});
     $('unlock-point').addEventListener('click',()=>{state.session='';state.fillId='';state.eventId='';selection(current());renderHeader(current());trade(current());performance(current());});
     for(const prefix of ['', 'performance-']){
       $(prefix+'trade-window').addEventListener('change',e=>{state.tradeWindow={mode:e.target.value,start:$(prefix+'window-start').value,end:$(prefix+'window-end').value};const ss=[...indexed(current()).nav.keys()],w=windowFor(ss);state.interval=e.target.value==='all'?null:w;performance(current());trade(current());renderHeader(current());});

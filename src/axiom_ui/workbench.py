@@ -738,6 +738,8 @@ def render_saved_workbench(run_paths: Sequence[str | Path], *,
                            data_batches: Mapping[str, Any] | None = None,
                            data_batch_paths: Mapping[str, str | Path] | None = None,
                            review_displays: Mapping[str, Mapping[str, Any]] | None = None,
+                           review_consumer_receipts: Mapping[str, Mapping[str, Any]] | None = None,
+                           fill_display_paths: Mapping[str, str | Path] | None = None,
                            synthetic_run_ids: Sequence[str] = (),
                            generated_at: str | None = None) -> str:
     """Read explicit saved owner paths, validate refs, and render a private offline UI.
@@ -840,6 +842,27 @@ The workbench does not discover data roots or implicitly issue a Query.
             for view in views:
                 if view is not by_id[run_id] and view["run"]["run_id"] == run_id:
                     view["market"] = deepcopy(by_id[run_id]["market"])
+    if review_consumer_receipts:
+        from .saved_layers import load_consumer_receipt_for_view
+        for run_id, binding in review_consumer_receipts.items():
+            _require(run_id in by_id and run_id not in (review_displays or {}) and
+                     isinstance(binding, Mapping) and set(binding) == {"receipt_path", "receipt_sha256"},
+                     "consumer receipt requires a unique loaded run and fixed byte reference")
+            load_consumer_receipt_for_view(by_id[run_id], **binding)
+            for view in views:
+                if view is not by_id[run_id] and view["run"]["run_id"] == run_id:
+                    view["market"] = deepcopy(by_id[run_id]["market"])
+    if fill_display_paths:
+        from axiom_engine.runtime import load_fill_display
+        from .saved_layers import attach_fill_display
+        for run_id, path in fill_display_paths.items():
+            _require(run_id in by_id and isinstance(path, (str, Path)),
+                     "fill display requires an explicit loaded run/path")
+            report = _wire(load_fill_display(path))
+            attach_fill_display(by_id[run_id], report)
+            for view in views:
+                if view is not by_id[run_id] and view["run"]["run_id"] == run_id:
+                    view["market"]["fill_display"] = deepcopy(by_id[run_id]["market"]["fill_display"])
     if experiment_index_path is not None:
         from axiom_research import ExperimentReader
         views = _catalog(ExperimentReader(experiment_index_path), views)

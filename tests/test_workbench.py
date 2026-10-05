@@ -1,4 +1,5 @@
 from copy import deepcopy
+from hashlib import sha256
 import json
 from pathlib import Path
 import re
@@ -9,7 +10,7 @@ from types import ModuleType
 import unittest
 from unittest.mock import patch
 
-from axiom_ui import ProjectionError, render_sample_workbench, render_saved_workbench, enrich_saved_projection
+from axiom_ui import ProjectionError, render_sample_workbench, render_saved_workbench, enrich_saved_projection, render_enriched_workbench
 from axiom_ui.projection import _digest
 
 SAMPLE = Path(__file__).resolve().parents[1] / "examples" / "synthetic_workbench.json"
@@ -287,17 +288,47 @@ class WorkbenchTests(unittest.TestCase):
         def forbidden(*args, **kwargs):
             self.fail("Enrichment must not reload or replay the large saved account")
         runtime.load_backtest_run = runtime.run_backtest = runtime.evaluate_saved_analysis = forbidden
-        with patch.dict(sys.modules, {"axiom_engine.runtime":runtime}):
-            enriched = enrich_saved_projection(existing, evaluation_paths={entry["run"]["run_id"]:"analysis.json"})
+        with tempfile.TemporaryDirectory() as directory, patch.dict(sys.modules, {"axiom_engine.runtime":runtime}):
+            path = Path(directory)/"validated-projection.json"
+            original_bytes = json.dumps(existing).encode()
+            path.write_bytes(original_bytes)
+            external_ref = "sha256:" + sha256(original_bytes).hexdigest()
+            enriched = enrich_saved_projection(path, projection_file_ref=external_ref,
+                                               evaluation_paths={entry["run"]["run_id"]:"analysis.json"})
             wrong = deepcopy(analysis)
             wrong["input_run_ref"]["content_digest"] = "other-account"
             runtime.load_backtest_evaluation = lambda path:wrong
             with self.assertRaisesRegex(ProjectionError, "CONTEXT_MISMATCH"):
-                enrich_saved_projection(existing, evaluation_paths={entry["run"]["run_id"]:"wrong.json"})
+                enrich_saved_projection(path, projection_file_ref=external_ref,
+                                        evaluation_paths={entry["run"]["run_id"]:"wrong.json"})
         self.assertEqual(calls, ["analysis.json"])
         self.assertEqual(existing, original)
         self.assertEqual(enriched["views"][0]["run"], original["views"][0]["run"])
         self.assertEqual(enriched["views"][0]["evaluation"]["contract_version"], "evaluation_report_v3")
+
+    def test_enrichment_rejects_mutable_dicts_and_changed_bytes_even_without_new_layers(self):
+        existing = payload(self.render())
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/"trusted-export.json"
+            original = json.dumps(existing).encode()
+            path.write_bytes(original)
+            external_ref = "sha256:" + sha256(original).hexdigest()
+            self.assertIn("ui_workbench_projection_v1", render_enriched_workbench(path, projection_file_ref=external_ref))
+            with self.assertRaisesRegex(ProjectionError, "dicts are not trusted"):
+                enrich_saved_projection(existing, projection_file_ref=external_ref)
+            with self.assertRaisesRegex(ProjectionError, "external byte reference"):
+                render_enriched_workbench(path, projection_file_ref=None)
+            for field in ("price", "fee_minor", "close"):
+                modified = deepcopy(existing)
+                if field == "close":
+                    modified["views"][0]["market"]["rows"][0][field] = "999999.99"
+                else:
+                    modified["views"][0]["run"]["fills"][0][field] = "999999.99"
+                self.assertEqual(modified["views"][0]["run"]["run_id"], existing["views"][0]["run"]["run_id"])
+                self.assertEqual(modified["views"][0]["run"]["content_digest"], existing["views"][0]["run"]["content_digest"])
+                path.write_text(json.dumps(modified))
+                with self.subTest(field=field), self.assertRaisesRegex(ProjectionError, "external byte reference"):
+                    render_enriched_workbench(path, projection_file_ref=external_ref)
 
     def test_unit_run_v2_preserves_saved_events_positions_orders_without_new_fills(self):
         entry = self.sample["runs"][0]

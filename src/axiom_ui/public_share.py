@@ -177,9 +177,22 @@ def project_view(view):
         result['market']['security_labels'] = clean({key:value for key,value in (market.get('security_labels') or {}).items()
                                                      if key in securities})
         result['market']['security_name_scope'] = clean(market.get('security_name_scope'))
+        if market.get('security_label_source'):
+            result['market']['security_label_source'] = pick(market['security_label_source'],
+                ('manifest_sha256', 'source_snapshot_id', 'label_cutoff', 'original_display_manifest_sha256'))
         result['market']['review_events'] = [
             {'domain': clean(item['domain']), 'event': pick(item['event'], REVIEW_EVENT)}
             for item in market.get('review_events') or [] if item['event'].get('security_id') in securities]
+        if market.get('fill_display'):
+            owner = market['fill_display']
+            selected_fills = {item['fill_id'] for item in run.get('fills') or []}
+            result['market']['fill_display'] = {
+                **pick(owner, ('contract_version', 'content_digest', 'display_result_ref', 'display_ref',
+                                'status', 'display_projection')),
+                'coordinates': [pick(point, ('fill_id', 'security_id', 'session', 'status', 'reason',
+                                             'display_price', 'source_unit', 'target_unit'))
+                                for point in owner.get('coordinates') or []
+                                if point.get('fill_id') in selected_fills and point.get('security_id') in securities]}
     if market.get('unit_splits') is not None:
         referenced_events = {r.get('event_id') for r in run.get('unit_split_applications') or []}
         referenced_events.update(r.get('mark_basis_event_id') for r in run.get('positions') or [])
