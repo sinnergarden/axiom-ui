@@ -27,29 +27,38 @@
     "benchmark_legend_return_and_drawdown_grouped": true,
     "sse_drawdown_not_fabricated": true,
     "benchmark_tooltip_switches_current_saved_choice": true,
-    "stock_fill_real_pointer_click_date_and_original_price": true
+    "stock_fill_real_pointer_click_date_and_original_price": true,
+    "legend_account_and_comparison_grouped": true,
+    "legend_tooltip_follows_all_hidden_groups": true,
+    "legend_resets_on_run_benchmark_and_comparison": true,
+    "zero_and_nonzero_slippage_display": true,
+    "risk_available_and_insufficient_display": true,
+    "synthetic_browser_regression": "PASS",
+    "synthetic_runtime_exceptions": 0,
+    "synthetic_external_requests": 0,
+    "sse_pointwise_drawdown_not_assumed": true
   },
   "local_candidate_html": {
     "index.html": {
-      "bytes": 2737,
-      "sha256": "b153d17661a19d8c13ce2f619eed5b21d0ef57100d192096371b19f91c31093f"
+      "bytes": 2547,
+      "sha256": "1b05f613ed86eb1dbbc5cb745416b786899d11dfd6086bc220bf9f869139ac4d"
     },
     "etf.html": {
-      "bytes": 20922399,
-      "sha256": "56850430ea0b30749f38bd11ba021853c8edb4a8359ad35140f518c8ca2a79fe"
+      "bytes": 20922246,
+      "sha256": "ba92ec71776661d454b7a22218fa57afe927bdc8cebc976a80c18a704187ad14"
     },
     "stock.html": {
-      "bytes": 2367684,
-      "sha256": "fd3c7927100d5655d1a89edb59366ad7b544f0075b22b15f9f56b6190a011337"
+      "bytes": 2367531,
+      "sha256": "7d9f3b333c29ac4f481188595ef5db78a66e8d53d9e233903811530ff303acae"
     }
   },
   "local_review_screenshot_sha256": {
-    "home-desktop.png": "3b4aaef9abc232338e526671810bff4c40526268df386b55dc3202a3112e50ef",
-    "etf-performance-desktop.png": "69befafee91878db34626d8c5fc2ac6e3cc057f5e83d698126e12dd9282d1919",
-    "stock-trade-desktop.png": "e735e76e0146649d28125cb026cdd683e4ee9af932a2f1851168389f15153da7",
-    "etf-mobile.png": "ee68a13276445a0ee04714aabed6fca1cb1f5f403872da077211b6197c2bb458"
+    "home-desktop.png": "24cf551b7e1c0323f616bf8d06dbf8c0dda4fa9f45b02871cca825955f7d078f",
+    "etf-performance-desktop.png": "acbddd29b05c46d912dcf84c2f80a9a98c993ffc7aa6c6676265b610fa52ea56",
+    "stock-trade-desktop.png": "c649498dbd44532cd00d64eb0749bae288d8b6af9cf1e55a96f058fc25ef6f99",
+    "etf-mobile.png": "f38d54caa420595d28774df821089e98ad2c948abb43823029e6909b063932ad"
   },
-  "publication_gate": "Wait for Engine and Research to save/link real 500000 CNY ETF, stock, and buy-and-hold results. Do not rescale old 10000/100000 CNY owner values. Replace the selected public result set only after identity validation and parent review. Old source files remain archived pending explicit deletion decision.",
+  "publication_gate": "Wait for Engine and Research to save/link real 500000 CNY ETF, stock, and buy-and-hold results. Name zero-slippage baseline and nonzero-slippage comparison explicitly; show saved slippage on/off, basis points, and commission. Do not rescale old 10000/100000 CNY owner values. Replace the selected public result set only after identity validation and parent review. Remove old results from the page but retain their local saved files.",
   "owner_dependent_followups": [
     "Engine-saved SSE pointwise drawdown",
     "Engine-saved 513100 buy-and-hold reference",
@@ -60,5 +69,9 @@
     "account/Data rerun",
     "owner artifact mutation",
     "Pages deployment"
-  ]
+  ],
+  "repeatable_browser_check": "PYTHONPATH=src python tests/browser_voice_refinements.py; handwritten synthetic fixture only, default Mac Chrome sandbox",
+  "synthetic_screenshot_sha256": {
+    "synthetic-nonzero-config.png": "2ab3434887fedb4bdccb809e5933a99cad15af72c7ef8897cbc682a05f172f1b"
+  }
 }
