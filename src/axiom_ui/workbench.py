@@ -149,7 +149,7 @@ def _comparison_conditions(plan: dict) -> list[dict]:
     for key, label in (("snapshot_id", "数据版本"), ("reader_version", "数据读取版本"),
                        ("contract_id", "数据合同"), ("source_profile_id", "数据来源配置"),
                        ("coverage", "数据覆盖说明")):
-        values = [c.get(key) for c in contexts] if key != "coverage" or plan.get("contract_version") != "backtest_request_v3" else [s.get("reference") for s in evidence]
+        values = [c.get(key) for c in contexts] if key != "coverage" or plan.get("contract_version") not in {"backtest_request_v3", "backtest_request_v4"} else [s.get("reference") for s in evidence]
         fact(key, label, values, bool(values) and all(v is not None for v in values))
     for key, label in (("symbols", "证券覆盖"), ("sessions", "交易日覆盖"),
                        ("pit_policy", "信息时间口径"), ("adjustment_anchor", "复权锚点")):
@@ -161,20 +161,46 @@ def _comparison_conditions(plan: dict) -> list[dict]:
     fact("cash_dividends", "保存分红事实", replay.get("cash_dividends"), "cash_dividends" in replay)
     fact("unit_split_policy", "份额拆分应用政策", plan.get("unit_split_policy"),
          "unit_split_policy" in plan and plan["unit_split_policy"] is not None)
-    if plan.get("contract_version") == "backtest_request_v3":
+    if plan.get("contract_version") in {"backtest_request_v3", "backtest_request_v4"}:
         for key, label in (("prediction_universe", "原预测范围"), ("execution_universe", "执行资格子集"),
                            ("portfolio_policy", "股票组合政策"), ("stock_action_policy", "股票现金行动政策")):
             fact(key, label, plan.get(key), plan.get(key) is not None)
     return facts
 
 
+def _saved_fold_summary(plan: dict) -> dict:
+    """Select original saved fold identities and dates from an Owner-validated v4 plan."""
+    schedule = plan.get("prediction_schedule") or {}
+    _require(schedule.get("contract_version") == "stock_prediction_schedule_v1" and
+             type(schedule.get("schedule_ref")) is str and schedule["schedule_ref"],
+             "missing saved prediction schedule")
+    folds = _rows(schedule.get("folds"), "saved prediction folds")
+    _require(bool(folds), "missing saved prediction folds")
+    selected = []
+    for fold in folds:
+        frame, spec = fold.get("prediction_frame") or {}, fold.get("fold_spec") or {}
+        summary = {"fold_ref": fold.get("fold_ref"), "fold_spec_ref": frame.get("fold_spec_ref"),
+                   "signal_run_ref": frame.get("signal_run_ref"), "model_ref": frame.get("model_ref"),
+                   "feature_ref": frame.get("feature_ref"), "fit_session": spec.get("fit_session"),
+                   "oos_trade_sessions": deepcopy(spec.get("oos_trade_sessions"))}
+        _require(all(type(summary[k]) is str and summary[k] for k in
+                     ("fold_ref", "fold_spec_ref", "signal_run_ref", "model_ref", "feature_ref", "fit_session")) and
+                 type(summary["oos_trade_sessions"]) is list and
+                 all(type(day) is str and day for day in summary["oos_trade_sessions"]),
+                 "malformed saved prediction fold summary")
+        selected.append(summary)
+    return {"schedule_ref": schedule["schedule_ref"], "folds": selected}
+
+
 def _run(run: Any, evidence: str) -> dict:
     wire = _wire(run)
-    _require(wire.get("contract_version") in {"backtest_run_v1", "backtest_run_v2", "backtest_run_v3"}, "unsupported run contract")
-    stock = wire["contract_version"] == "backtest_run_v3"
+    _require(wire.get("contract_version") in {"backtest_run_v1", "backtest_run_v2", "backtest_run_v3", "backtest_run_v4"}, "unsupported run contract")
+    stock = wire["contract_version"] in {"backtest_run_v3", "backtest_run_v4"}
+    v4 = wire["contract_version"] == "backtest_run_v4"
     if stock:
         _require((wire.get("runtime_version"), wire.get("core_version"), wire.get("quantity_unit"), wire.get("price_unit")) ==
-                 ("axiom.backtest/3", "axiom.stock_portfolio/1", "shares", "CNY/share"), "unsupported stock version or units")
+                 (("axiom.backtest/4", "axiom.stock_portfolio/2", "shares", "CNY/share") if v4 else
+                  ("axiom.backtest/3", "axiom.stock_portfolio/1", "shares", "CNY/share")), "unsupported stock version or units")
     _require(all(type(wire.get(k)) is str and wire[k]
                  for k in ("run_id", "account_id", "status")), "missing run identity")
     _watermarks(wire)
@@ -253,18 +279,23 @@ def _run(run: Any, evidence: str) -> dict:
         view["configuration"]["unit_split_policy"] = deepcopy((wire.get("plan") or {}).get("unit_split_policy"))
     if stock:
         plan = wire.get("plan") or {}
-        _require(plan.get("contract_version") == "backtest_request_v3" and
+        _require(plan.get("contract_version") == ("backtest_request_v4" if v4 else "backtest_request_v3") and
                  profile.get("unknown_status_policy") in {"stock_daily_observed", "block"}, "unsupported stock request/profile")
         view["run"].update({k: deepcopy(wire.get(k)) for k in
                             ("quantity_unit", "price_unit", "admission_ref", "supported_universe_ref", "stopped")})
         admission = plan.get("admission_evidence") or {}
         view["stock_context"] = {k: deepcopy(plan.get(k)) for k in
                                  ("prediction_universe", "execution_universe", "portfolio_policy", "stock_action_policy")}
-        view["stock_context"].update(signal_inputs={k: deepcopy((plan.get("signal_frame") or {}).get(k)) for k in
-                                                  ("feature_ref", "model_ref", "score_semantics", "score_unit")},
-                                     model_snapshot=(admission.get("model") or {}).get("snapshot"),
+        view["stock_context"].update(model_snapshot=(admission.get("model") or {}).get("snapshot"),
                                      execution_snapshot=(admission.get("execution") or {}).get("snapshot"),
                                      admission_status=admission.get("status"))
+        if v4:
+            summary = _saved_fold_summary(plan)
+            _require(wire.get("signal_ref") == summary["schedule_ref"], "CONTEXT_MISMATCH: run/prediction schedule")
+            view["stock_context"].update(summary)
+        else:
+            view["stock_context"]["signal_inputs"] = {k: deepcopy((plan.get("signal_frame") or {}).get(k)) for k in
+                                                       ("feature_ref", "model_ref", "score_semantics", "score_unit")}
         view["market"]["source_evidence"] = _source_summaries(market.get("source_evidence") or [])
         view["market"]["native_chart"] = _stock_native_chart(market)
         view["market"]["cash_dividends"] = deepcopy(market.get("cash_dividends"))
@@ -391,7 +422,7 @@ def _evaluation(value: Any, run: Mapping[str, Any]) -> dict:
             _analysis_display_binding(wire, run)
     else:
         _require("period_metrics" not in wire, "v1 must not acquire period metrics")
-    return _stock_evaluation_display(wire) if (run.get("contract_version") == "backtest_run_v3" or
+    return _stock_evaluation_display(wire) if (run.get("contract_version") in {"backtest_run_v3", "backtest_run_v4"} or
                                              wire["contract_version"] == "evaluation_report_v3") else wire
 
 
@@ -762,7 +793,7 @@ The workbench does not discover data roots or implicitly issue a Query.
             views.append(_run(original, "synthetic_owner_output" if original["run_id"] in synthetic_run_ids else "saved_backtest_output"))
             # Public validation has finished. Retain only the display projection
             # for stock inputs before loading another large native document.
-            originals.append(original if original["contract_version"] != "backtest_run_v3" else
+            originals.append(original if original["contract_version"] not in {"backtest_run_v3", "backtest_run_v4"} else
                              {"run_id": original["run_id"], "contract_version": original["contract_version"]})
             del original
     by_id = {v["run"]["run_id"]: v for v in views}
@@ -816,7 +847,7 @@ The workbench does not discover data roots or implicitly issue a Query.
     for run_id, batch in batches.items():
         _require(run_id in by_id, "CONTEXT_MISMATCH: Data without loaded run")
         original = next(r for r in originals if r["run_id"] == run_id)
-        if original["contract_version"] == "backtest_run_v3":
+        if original["contract_version"] in {"backtest_run_v3", "backtest_run_v4"}:
             market = by_id[run_id]["market"]
             source_refs = [s["reference"] for s in market.get("source_evidence") or []
                            if s["context"].get("domain") == "market_daily"]

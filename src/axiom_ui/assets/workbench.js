@@ -30,7 +30,7 @@
   };
   const present = v => v !== null && v !== undefined;
   const saved = v => present(v) ? String(v) : '未提供';
-  const stockAccount = v => v.run.contract_version === 'backtest_run_v3';
+  const stockAccount = v => ['backtest_run_v3','backtest_run_v4'].includes(v.run.contract_version);
   const quantityUnit = v => stockAccount(v) ? '股' : '份';
   const priceUnit = v => stockAccount(v) ? '元/股' : '元/份';
   const slipCaption = v => {

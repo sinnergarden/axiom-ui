@@ -90,7 +90,7 @@ def chart_projection(view, securities, start, end):
     source = market.get('native_chart') or market.get('data_batch')
     if not source:
         return None
-    stock = view['run'].get('contract_version') == 'backtest_run_v3'
+    stock = view['run'].get('contract_version') in ('backtest_run_v3', 'backtest_run_v4')
     volume = 'volume_shares' if stock else 'volume_units'
     fields = ('open', 'high', 'low', 'close', volume)
     metadata = source.get('field_meta') or {}
@@ -200,7 +200,7 @@ def project_view(view):
         result['market']['unit_splits'] = [{'event': pick(item['event'], EVENT),
                                           'source_refs': clean(item.get('source_refs'))}
                                          for item in market['unit_splits'] if item['event'].get('event_id') in referenced_events]
-    if run.get('contract_version') == 'backtest_run_v3':
+    if run.get('contract_version') in ('backtest_run_v3', 'backtest_run_v4'):
         context = view.get('stock_context') or {}
         result['stock_context'] = scalars(context, ('stock_action_policy', 'model_snapshot', 'execution_snapshot', 'admission_status'))
         for key in ('prediction_universe', 'execution_universe'):
@@ -210,8 +210,25 @@ def project_view(view):
             result['stock_context'][key] = clean(rows)
         result['stock_context']['portfolio_policy'] = scalars(context.get('portfolio_policy') or {},
                                                              ('budget_basis', 'eligibility_id', 'rebalance', 'top_k'))
-        result['stock_context']['signal_inputs'] = scalars(context.get('signal_inputs') or {},
-                                                         ('feature_ref', 'model_ref', 'score_semantics', 'score_unit'))
+        if run.get('contract_version') == 'backtest_run_v4':
+            if context.get('schedule_ref') != run.get('signal_ref'):
+                raise ValueError('saved run/schedule identity mismatch')
+            result['stock_context']['schedule_ref'] = scalars(context, ('schedule_ref',))['schedule_ref']
+            folds = context.get('folds')
+            if not isinstance(folds, list) or not folds:
+                raise ValueError('missing saved fold summary')
+            result['stock_context']['folds'] = []
+            for fold in folds:
+                selected = scalars(fold, ('fold_ref', 'fold_spec_ref', 'signal_run_ref', 'model_ref',
+                                          'feature_ref', 'fit_session'))
+                days = fold.get('oos_trade_sessions')
+                if not isinstance(days, list) or not days or not all(isinstance(day, str) for day in days):
+                    raise ValueError('malformed saved fold sessions')
+                selected['oos_trade_sessions'] = clean(days)
+                result['stock_context']['folds'].append(selected)
+        else:
+            result['stock_context']['signal_inputs'] = scalars(context.get('signal_inputs') or {},
+                                                             ('feature_ref', 'model_ref', 'score_semantics', 'score_unit'))
     result['run']['limitations'] = list(result['run'].get('limitations') or []) + [NOTE]
     result['public_display_projection'] = True
     return result

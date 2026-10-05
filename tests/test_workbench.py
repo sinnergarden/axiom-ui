@@ -149,6 +149,36 @@ def saved_stock_case(sample):
     return run, evaluation, native
 
 
+def saved_stock_v4_display_case(sample):
+    """Handwritten UI compatibility input, never an Engine saved artifact."""
+    run, evaluation, native = saved_stock_case(sample)
+    run.update(contract_version="backtest_run_v4", runtime_version="axiom.backtest/4",
+               core_version="axiom.stock_portfolio/2", signal_ref="synthetic:schedule")
+    plan = run["plan"]
+    plan["contract_version"] = "backtest_request_v4"
+    plan.pop("signal_frame")
+    plan["prediction_schedule"] = {
+        "contract_version": "stock_prediction_schedule_v1", "schedule_ref": "synthetic:schedule",
+        "folds": [{"fold_ref": "synthetic:fold-1",
+                   "fold_spec": {"fit_session": "2024-01-01", "oos_trade_sessions": ["2024-01-02"]},
+                   "prediction_frame": {"fold_spec_ref": "synthetic:spec-1",
+                                        "signal_run_ref": "synthetic:signal-1", "model_ref": "synthetic:model-1",
+                                        "feature_ref": "synthetic:feature-1", "rows": ["private prediction"]},
+                   "model": {"parameters": {"private": True}}},
+                  {"fold_ref": "synthetic:fold-2",
+                   "fold_spec": {"fit_session": "2024-01-02", "oos_trade_sessions": ["2024-01-03"]},
+                   "prediction_frame": {"fold_spec_ref": "synthetic:spec-2",
+                                        "signal_run_ref": "synthetic:signal-2", "model_ref": "synthetic:model-2",
+                                        "feature_ref": "synthetic:feature-2", "rows": ["private prediction"]},
+                   "model": {"parameters": {"private": True}}}],
+        "trade_schedule": [{"trade_session": "2024-01-02", "feature_session": "2024-01-01",
+                            "signal_run_ref": "synthetic:signal-1", "fold_spec_ref": "synthetic:spec-1"},
+                           {"trade_session": "2024-01-03", "feature_session": "2024-01-02",
+                            "signal_run_ref": "synthetic:signal-2", "fold_spec_ref": "synthetic:spec-2"}]}
+    evaluation["signal_ref"] = run["signal_ref"]
+    return run, evaluation, native
+
+
 class WorkbenchTests(unittest.TestCase):
     def setUp(self):
         self.sample = json.loads(SAMPLE.read_text())
@@ -488,6 +518,32 @@ class WorkbenchTests(unittest.TestCase):
             native["field_meta"]["volume_shares"]["unit"]="fund units"
             with self.assertRaisesRegex(ProjectionError,"stock OHLCV unit"):
                 render_saved_workbench(["stock.json"])
+
+    def test_stock_v4_narrow_saved_schedule_and_existing_evaluation_reader(self):
+        run, evaluation, native = saved_stock_v4_display_case(self.sample)
+        original = deepcopy((run, evaluation, native))
+        calls = []
+        runtime = ModuleType("axiom_engine.runtime")
+        runtime.load_backtest_run = lambda path: calls.append(("run", str(path))) or deepcopy(run)
+        runtime.load_backtest_evaluation = lambda path: calls.append(("evaluation", str(path))) or deepcopy(evaluation)
+        with patch.dict(sys.modules, {"axiom_engine.runtime": runtime, "axiom_data": None}):
+            view = payload(render_saved_workbench(["synthetic-v4.json"],
+                         evaluation_paths=["synthetic-evaluation.json"],
+                         data_batches={run["run_id"]: native}))["views"][0]
+            self.assertEqual(calls, [("run", "synthetic-v4.json"),
+                                     ("evaluation", "synthetic-evaluation.json")])
+            self.assertEqual((view["run"]["quantity_unit"], view["run"]["price_unit"]),
+                             ("shares", "CNY/share"))
+            self.assertEqual(view["stock_context"]["schedule_ref"], run["signal_ref"])
+            self.assertEqual([fold["signal_run_ref"] for fold in view["stock_context"]["folds"]],
+                             ["synthetic:signal-1", "synthetic:signal-2"])
+            self.assertEqual(view["evaluation"]["content_digest"], evaluation["content_digest"])
+            self.assertTrue(view["market"]["native_chart"]["explicit_saved_batch_matched"])
+            self.assertNotIn("private prediction", str(view))
+            self.assertEqual((run, evaluation, native), original)
+            run["signal_ref"] = "synthetic:wrong-schedule"
+            with self.assertRaisesRegex(ProjectionError, "run/prediction schedule"):
+                render_saved_workbench(["synthetic-v4.json"])
 
     def test_stock_v3_without_high_low_keeps_saved_close_volume_fallback(self):
         run, _, native = saved_stock_case(self.sample)
