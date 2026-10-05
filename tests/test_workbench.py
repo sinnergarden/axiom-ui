@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from axiom_ui import ProjectionError, render_sample_workbench, render_saved_workbench, enrich_saved_projection, render_enriched_workbench
 from axiom_ui.projection import _digest
+from axiom_ui.public_share import project_view
 
 SAMPLE = Path(__file__).resolve().parents[1] / "examples" / "synthetic_workbench.json"
 GENERATED = "2026-10-04T12:00:00Z"
@@ -540,6 +541,9 @@ class WorkbenchTests(unittest.TestCase):
             self.assertEqual(view["evaluation"]["content_digest"], evaluation["content_digest"])
             self.assertTrue(view["market"]["native_chart"]["explicit_saved_batch_matched"])
             self.assertNotIn("private prediction", str(view))
+            public = project_view(view)
+            self.assertEqual(public["stock_context"]["folds"][1]["signal_run_ref"], "synthetic:signal-2")
+            self.assertNotIn("private prediction", str(public))
             self.assertEqual((run, evaluation, native), original)
             run["signal_ref"] = "synthetic:wrong-schedule"
             with self.assertRaisesRegex(ProjectionError, "run/prediction schedule"):
