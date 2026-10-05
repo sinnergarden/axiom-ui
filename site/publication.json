@@ -1,14 +1,14 @@
 {
   "contract_version": "public_static_site_v1",
-  "generated_at": "2026-10-05T12:00:00+08:00",
+  "generated_at": "2026-10-05T16:32:59+08:00",
   "authorization": "explicit_selected_public_results",
-  "selection_note": "Selected real ETF/stock saved results and saved performance explicitly authorized for public GitHub Pages. Fresh January observed result uses merged-code run identity; strict control is historical. Future results require another selection and reviewed PR.",
+  "selection_note": "The same explicitly selected real ETF long/short and stock current/strict saved runs; current long ETF and stock views now include independently saved v3 analysis, SSE price-index comparison, fixed Data display and Engine adjusted-fill coordinates. Old short/strict controls remain historical. No future result is auto-published.",
   "results": [
     {
       "slug": "etf",
       "title": "真实 ETF · 短样本与多年保存账户",
       "file": "etf.html",
-      "source_projection_file_ref": "sha256:6d72292aa4e8cb20bd762b5529cc63bfd2356dd5eec63c5be732dbb69cd879e0",
+      "source_projection_file_ref": "sha256:23ed5901d5e1894fa4ebbaae4be6565b239d86f52d1f00a7fd29e52ac0dc8ca6",
       "public_projection": true,
       "saved_owner_refs": [
         {
@@ -24,8 +24,8 @@
           "content_digest": "sha256:f04975da7ea3c26ad55af5bddea296a0a01130229c3aafc0c00462a8a2e4488d",
           "committed_sequence": "2236",
           "implementation_ref": "sha256:86c7fff609e63e06f87bcc4d6777bb6837e04f0611154c819d4d7c2680f89ec4",
-          "evaluation_ref": "sha256:b0fb59184187c6d06653509e9e0ebee3f6865f7dac137c2e769494150385235d",
-          "evaluation_content_digest": "sha256:1b9e56b659229f79fc733c031503da4a0dd7d8b34632d88617522ed9e1da79df"
+          "evaluation_ref": "sha256:2899d3a064c536ddfc8ea3d31049fd4f79b2304e5075a6bf59bdd2ce04617d57",
+          "evaluation_content_digest": "sha256:8570bf808c6c38c3bbfa0fd6f4279aeb5cfca08e6823f3811b182ca85a80ada7"
         }
       ]
     },
@@ -33,7 +33,7 @@
       "slug": "stock",
       "title": "真实股票 · 新 Jan 日线近似与历史严格对照",
       "file": "stock.html",
-      "source_projection_file_ref": "sha256:1b9059a8dfc02d738f8c5bf0c2645e9ee91a5f648a128b57275d313666826cef",
+      "source_projection_file_ref": "sha256:a044f5e454b07f622835416a1af836144305d19a09d34509aa69102cddf580e3",
       "public_projection": true,
       "saved_owner_refs": [
         {
@@ -41,8 +41,8 @@
           "content_digest": "sha256:ed5778a722b8f1ceb36177bc53ce0d505cdbf185cb427e82f02edae117fbc603",
           "committed_sequence": "85",
           "implementation_ref": "sha256:6836f2cf5212377d3ce793a9dfd51aba0d2054d290c2e49a60750e0bd0e926d5",
-          "evaluation_ref": "sha256:44637dc38bd2314ca53b7712c9994de7e1458bf54ed1d90b2c5ce533ea5b672a",
-          "evaluation_content_digest": "sha256:2b4fbdcaf2d6404f121ce74bddbda543564e4c0bac1649808b2f9f965e80162d"
+          "evaluation_ref": "sha256:bba8b82a365c4c6b4bf60222f91511ee1d3de0afcce8cf37f066c671a4b43d0e",
+          "evaluation_content_digest": "sha256:b489ba244009ac44586ee38e0da492849bce18b497b62d885fa11b5648885b2e"
         },
         {
           "run_id": "sha256:12bb350e2724348f6ba2c00cbada84f03ae2daacf8b425342fd9af97de7ed311",
@@ -91,13 +91,13 @@
     "stage_report_ref": "sha256:7639732c0c841760fce4c7a4dcffd9938269a2c659b394bfba8bb7490ed2698a",
     "stage_report_content_digest": "sha256:8e8f16229517a07a08695e79fd32920d7873068bfef9b05ab100d3318e09cd0f",
     "source_projection_file_ref": "sha256:8204296620c80124febbbbc19844fdd9b06ee9b3bd410b0b30dab71760554fac",
-    "target_projection_file_ref": "sha256:1b550f65f6ff07fdd11c8c9efe392bf21b8a23708e3019561091cec3ee2629bd",
+    "target_projection_file_ref": "sha256:c8f6ba7aabd22e7f60632a8bba9aebbf87cd8ccd999e5fd850356e6523a0be0b",
     "target_run_ref": {
       "run_id": "sha256:1bc47db1fa35fa231083f1cf6c2c76042cb38359672a0dd47970392d098878cb",
       "content_digest": "sha256:ed5778a722b8f1ceb36177bc53ce0d505cdbf185cb427e82f02edae117fbc603",
       "committed_sequence": "85",
       "signal_ref": "sha256:d97760a1b5280235e39747012bcd943a3e85f1cb7bdba64ceb1ca03b4142eed9",
-      "evaluation_ref": "sha256:44637dc38bd2314ca53b7712c9994de7e1458bf54ed1d90b2c5ce533ea5b672a"
+      "evaluation_ref": "sha256:bba8b82a365c4c6b4bf60222f91511ee1d3de0afcce8cf37f066c671a4b43d0e"
     },
     "target_run_refs": [
       {
@@ -105,7 +105,7 @@
         "content_digest": "sha256:ed5778a722b8f1ceb36177bc53ce0d505cdbf185cb427e82f02edae117fbc603",
         "committed_sequence": "85",
         "signal_ref": "sha256:d97760a1b5280235e39747012bcd943a3e85f1cb7bdba64ceb1ca03b4142eed9",
-        "evaluation_ref": "sha256:44637dc38bd2314ca53b7712c9994de7e1458bf54ed1d90b2c5ce533ea5b672a"
+        "evaluation_ref": "sha256:bba8b82a365c4c6b4bf60222f91511ee1d3de0afcce8cf37f066c671a4b43d0e"
       }
     ],
     "training": {
