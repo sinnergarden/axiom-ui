@@ -1,4 +1,5 @@
 from copy import deepcopy
+from hashlib import sha256
 import json
 from pathlib import Path
 import re
@@ -9,7 +10,7 @@ from types import ModuleType
 import unittest
 from unittest.mock import patch
 
-from axiom_ui import ProjectionError, render_sample_workbench, render_saved_workbench
+from axiom_ui import ProjectionError, render_sample_workbench, render_saved_workbench, enrich_saved_projection, render_enriched_workbench
 from axiom_ui.projection import _digest
 
 SAMPLE = Path(__file__).resolve().parents[1] / "examples" / "synthetic_workbench.json"
@@ -74,6 +75,42 @@ def saved_unit_run(entry):
                    state_reason="status_source_missing", announced_suspension_event_ids=[event_id])
     run["orders"].append(blocked)
     return run
+
+
+def saved_v3(entry):
+    """Handwritten display contract, not an Engine analytics acceptance."""
+    old = deepcopy(saved_v2(entry))
+    run = entry["run"]
+    evaluation = entry["evaluation"]
+    evaluation.update(contract_version="evaluation_report_v3", evaluation_version="axiom.evaluation/3",
+        base_evaluation=old, base_evaluation_ref=old["evaluation_ref"],
+        base_evaluation_content_digest=old["content_digest"],
+        benchmark_refs={"CSI300": old.get("benchmark_ref"), "SSE_COMPOSITE": None, "NASDAQ100": None},
+        benchmark_inputs={"CSI300": {"source_evidence": [{"batch":{"records":[{"private":"PRIVATE_NATIVE_RECORD"}]}}]},
+                          "SSE_COMPOSITE": None, "NASDAQ100": None},
+        analysis_series=[{"session":p["session"],"committed_sequence":p["committed_sequence"],
+            "account_cumulative_return":"0.01234567890123456789","rolling_return_20":None,
+            "rolling_volatility_20":None,"rolling_status":"INSUFFICIENT_WINDOW"} for p in run["nav"]],
+        risk_metrics={"sharpe":{"status":"INSUFFICIENT_SPAN","value":None,"risk_free":{
+            "currency":"CNY","annual_effective_rate":"0","source":"EXPLICIT_ZERO_ASSUMPTION"}},
+            "calmar":{"status":"INSUFFICIENT_SPAN","value":None}},
+        drawdown_interval={"status":"AVAILABLE","peak_session":run["nav"][0]["session"],
+            "trough_session":run["nav"][-1]["session"],"drawdown":run["metrics"]["max_drawdown"],
+            "peak_is_initial_anchor":False,"recovery_session":None,"recovery_status":"OPEN",
+            "elapsed_calendar_days":34,"peak_nav_minor":1000000,"trough_nav_minor":990000},
+        return_distribution={"status":"INSUFFICIENT_SAMPLE","metric":"net_return","unit":"fraction",
+            "included_episode_count":1,"minimum_episodes":10,"edges":["-0.02","0.00","0.02"],"bins":[]},
+        execution_summary={"turnover_status":"AVAILABLE","two_sided_turnover":"0.25","fee_ratio":"0.01"},
+        concentration_series=[{"session":p["session"],"committed_sequence":p["committed_sequence"],
+            "maximum_single_security_weight":"0.1","status":"AVAILABLE"} for p in run["nav"]],
+        episode_points=[{k:e[k] for k in ("episode_id","net_return","entry_session","exit_session")}
+                        for e in old["episodes"] if e["statistics_eligible"]],execution_trace=None)
+    evaluation["benchmark_comparisons"] = {key:{"status":"SOURCE_UNAVAILABLE","input_ref":None,
+        "series":[],"native_series":[],"currency":None} for key in ("CSI300","SSE_COMPOSITE","NASDAQ100")}
+    evaluation["benchmark_comparisons"]["CSI300"].update(status="COMPLETE",currency="CNY",
+        input_ref=old.get("benchmark_ref"),series=[{"account_session":p["session"],"native_session":p["session"],
+            "normalized_index":p.get("nav_index"),"account_relative_wealth":None} for p in old["benchmark"]["series"]])
+    return evaluation
 
 
 def saved_stock_case(sample):
@@ -195,6 +232,103 @@ class WorkbenchTests(unittest.TestCase):
         self.assertEqual(calls, [("load_run", "run.json"), ("load_evaluation", "v2.json")])
         self.assertEqual(entry, baseline)
         self.assertEqual(payload(html)["views"][0]["evaluation"]["contract_version"], "evaluation_report_v2")
+
+    def test_v3_saved_nulls_precision_and_native_closure_display(self):
+        saved_v3(self.sample["runs"][0])
+        before = deepcopy(self.sample)
+        html = self.render()
+        projected = payload(html)["views"][0]["evaluation"]
+        self.assertIsNone(projected["risk_metrics"]["sharpe"]["value"])
+        self.assertEqual(projected["analysis_series"][0]["account_cumulative_return"], "0.01234567890123456789")
+        self.assertEqual(projected["return_distribution"]["bins"], [])
+        self.assertEqual(projected["base_evaluation_ref"], before["runs"][0]["evaluation"]["base_evaluation_ref"])
+        self.assertNotIn("PRIVATE_NATIVE_RECORD", html)
+        self.assertEqual(before, self.sample)
+
+    def test_v3_rejects_cross_account_dates_watermark_and_fx_values(self):
+        baseline = deepcopy(saved_v3(self.sample["runs"][0]))
+        mutations = [lambda e:e["base_evaluation"].update(content_digest="wrong"),
+            lambda e:e["analysis_series"][0].update(committed_sequence=9999),
+            lambda e:e["analysis_series"][0].update(session="2099-01-01"),
+            lambda e:e["drawdown_interval"].update(trough_session="2099-01-01"),
+            lambda e:e["base_evaluation"]["monthly_returns"][0].update({"return":"0.9"}),
+            lambda e:e["benchmark_comparisons"]["CSI300"].update(currency="USD",series=[{
+                "account_session":self.sample["runs"][0]["run"]["nav"][0]["session"],
+                "native_session":None,"account_relative_wealth":"0.1"}])]
+        for i, mutation in enumerate(mutations):
+            with self.subTest(case=i):
+                self.sample["runs"][0]["evaluation"] = deepcopy(baseline)
+                mutation(self.sample["runs"][0]["evaluation"])
+                with self.assertRaises(ProjectionError):
+                    self.render()
+
+    def test_v3_public_loader_only_without_owner_analysis(self):
+        entry = self.sample["runs"][0]
+        saved_v3(entry)
+        before, calls, runtime = deepcopy(entry), [], ModuleType("axiom_engine.runtime")
+        runtime.load_backtest_run = lambda path:calls.append("load_run") or entry["run"]
+        runtime.load_backtest_evaluation = lambda path:calls.append("load_evaluation") or entry["evaluation"]
+        def forbidden(*args, **kwargs):
+            self.fail("UI must not compute or save owner analysis")
+        runtime.run_backtest = runtime.evaluate_saved_analysis = runtime.save_backtest_evaluation = forbidden
+        with patch.dict(sys.modules, {"axiom_engine.runtime":runtime}):
+            html = render_saved_workbench(["run.json"], evaluation_paths=["saved-v3.json"], generated_at=GENERATED)
+        self.assertEqual(calls, ["load_run", "load_evaluation"])
+        self.assertEqual(entry, before)
+        self.assertEqual(payload(html)["views"][0]["evaluation"]["contract_version"], "evaluation_report_v3")
+
+    def test_enrichment_reuses_validated_browser_account_and_binds_new_owner_report(self):
+        entry = self.sample["runs"][0]
+        saved_v2(entry)
+        existing = payload(self.render())
+        original = deepcopy(existing)
+        analysis = saved_v3(entry)
+        runtime, calls = ModuleType("axiom_engine.runtime"), []
+        runtime.load_backtest_evaluation = lambda path:calls.append(str(path)) or analysis
+        def forbidden(*args, **kwargs):
+            self.fail("Enrichment must not reload or replay the large saved account")
+        runtime.load_backtest_run = runtime.run_backtest = runtime.evaluate_saved_analysis = forbidden
+        with tempfile.TemporaryDirectory() as directory, patch.dict(sys.modules, {"axiom_engine.runtime":runtime}):
+            path = Path(directory)/"validated-projection.json"
+            original_bytes = json.dumps(existing).encode()
+            path.write_bytes(original_bytes)
+            external_ref = "sha256:" + sha256(original_bytes).hexdigest()
+            enriched = enrich_saved_projection(path, projection_file_ref=external_ref,
+                                               evaluation_paths={entry["run"]["run_id"]:"analysis.json"})
+            wrong = deepcopy(analysis)
+            wrong["input_run_ref"]["content_digest"] = "other-account"
+            runtime.load_backtest_evaluation = lambda path:wrong
+            with self.assertRaisesRegex(ProjectionError, "CONTEXT_MISMATCH"):
+                enrich_saved_projection(path, projection_file_ref=external_ref,
+                                        evaluation_paths={entry["run"]["run_id"]:"wrong.json"})
+        self.assertEqual(calls, ["analysis.json"])
+        self.assertEqual(existing, original)
+        self.assertEqual(enriched["views"][0]["run"], original["views"][0]["run"])
+        self.assertEqual(enriched["views"][0]["evaluation"]["contract_version"], "evaluation_report_v3")
+
+    def test_enrichment_rejects_mutable_dicts_and_changed_bytes_even_without_new_layers(self):
+        existing = payload(self.render())
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/"trusted-export.json"
+            original = json.dumps(existing).encode()
+            path.write_bytes(original)
+            external_ref = "sha256:" + sha256(original).hexdigest()
+            self.assertIn("ui_workbench_projection_v1", render_enriched_workbench(path, projection_file_ref=external_ref))
+            with self.assertRaisesRegex(ProjectionError, "dicts are not trusted"):
+                enrich_saved_projection(existing, projection_file_ref=external_ref)
+            with self.assertRaisesRegex(ProjectionError, "external byte reference"):
+                render_enriched_workbench(path, projection_file_ref=None)
+            for field in ("price", "fee_minor", "close"):
+                modified = deepcopy(existing)
+                if field == "close":
+                    modified["views"][0]["market"]["rows"][0][field] = "999999.99"
+                else:
+                    modified["views"][0]["run"]["fills"][0][field] = "999999.99"
+                self.assertEqual(modified["views"][0]["run"]["run_id"], existing["views"][0]["run"]["run_id"])
+                self.assertEqual(modified["views"][0]["run"]["content_digest"], existing["views"][0]["run"]["content_digest"])
+                path.write_text(json.dumps(modified))
+                with self.subTest(field=field), self.assertRaisesRegex(ProjectionError, "external byte reference"):
+                    render_enriched_workbench(path, projection_file_ref=external_ref)
 
     def test_unit_run_v2_preserves_saved_events_positions_orders_without_new_fills(self):
         entry = self.sample["runs"][0]

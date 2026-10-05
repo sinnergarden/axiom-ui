@@ -1,0 +1,55 @@
+{
+  "status": "LOCAL_FINAL_OWNER_BUNDLE_PASS_AWAITING_PARENT_REVIEW",
+  "source_kind": "saved_real_account_and_fixed_Data_inputs; offline read-only preview",
+  "engine_source_merge_commit": "27d0cf8991e3cca8c566528aef08254dd3db1ebd",
+  "owner_documents": {
+    "etf_long": {
+      "run_id": "sha256:5db294ae978d841521d0ce6e0a1dbfdd5deba02ea07fecd261da6537856a4f83",
+      "run_content_digest": "sha256:f04975da7ea3c26ad55af5bddea296a0a01130229c3aafc0c00462a8a2e4488d",
+      "committed_sequence": 2236,
+      "evaluation_ref": "sha256:2899d3a064c536ddfc8ea3d31049fd4f79b2304e5075a6bf59bdd2ce04617d57",
+      "evaluation_content_digest": "sha256:8570bf808c6c38c3bbfa0fd6f4279aeb5cfca08e6823f3811b182ca85a80ada7",
+      "evaluation_file_sha256": "e990fe632bc80dc2f94170649284cbd30486e17f7017b405b36b5cd985792351",
+      "fill_display_ref": "sha256:007c7c9aade50a9a7c45e188db624a689c6a715525b97a8b79885760831c17c1",
+      "fill_display_content_digest": "sha256:d9cdf1b6784eef356f61fb9b490035106ecefcd8d5a64063532fb6462daf275c",
+      "fill_display_file_sha256": "9b008e07461565abca0162e593cb2c5e61a423a35897b83f476aef480e22d156",
+      "Data_display_manifest_sha256": "28960c37de9d6fc37f2c5207acbd4e0f389e06b68baadc983d87664ed4e6cdec",
+      "saved_display_rows": 12334,
+      "saved_adjusted_fill_coordinates": 280,
+      "saved_return_bins": 22,
+      "saved_episodes": 135,
+      "saved_closed_episodes": 134,
+      "saved_open_episodes": 1
+    },
+    "stock_current": {
+      "run_id": "sha256:1bc47db1fa35fa231083f1cf6c2c76042cb38359672a0dd47970392d098878cb",
+      "run_content_digest": "sha256:ed5778a722b8f1ceb36177bc53ce0d505cdbf185cb427e82f02edae117fbc603",
+      "committed_sequence": 85,
+      "evaluation_ref": "sha256:bba8b82a365c4c6b4bf60222f91511ee1d3de0afcce8cf37f066c671a4b43d0e",
+      "evaluation_content_digest": "sha256:b489ba244009ac44586ee38e0da492849bce18b497b62d885fa11b5648885b2e",
+      "evaluation_file_sha256": "2aadc62af507502d2f9a5b4ab79384c3cf411df393651f7896f60f3124672aec",
+      "fill_display_ref": "sha256:e626fd6a71b3df1f52781261b779cb80de32e1b0321eb46541f8bad9114eabb8",
+      "fill_display_content_digest": "sha256:eb6a2ef379dce62b0d060545d6d5827e70f0c4ca8511adc9ab40b992b3fe6a95",
+      "fill_display_file_sha256": "52b1eb02646b838929a34c015837cf3f2d1a248002e873ebbd38d94d50057a85",
+      "Data_display_manifest_sha256": "b54a3123f9ddd69a0d6ef438340d6a6347dce55d701f2ad327453e2bdbdabc32",
+      "Data_consumer_receipt_sha256": "3ad06fff14fe00aeb952896094e832627e1c30e50d6eaed0d4867f79bdb2eaf3",
+      "independent_label_manifest_sha256": "be75f5c7a6cdc4a5840d4125e774b002d8ab70a3e917e3b1bb1b7372142c1498",
+      "saved_display_rows": 1826,
+      "observed_security_names": 83,
+      "saved_adjusted_fill_coordinates": 40,
+      "name_scope": "independently observed Snapshot labels; historical validity unknown"
+    }
+  },
+  "browser": {
+    "status": "PASS_FINAL_OWNER_BUNDLE_LOCAL_BROWSER",
+    "checks": ["saved trade chain and adjusted B/S", "Owner-saved cumulative percentage lines and SSE comparison", "ETF 22-bin distribution and drawdown dates", "episode list defaults to latest 12 with pagination", "current display window narrowed 135 episodes to 3 without changing full-run metrics", "open/security filters selected one episode and clicked through to its original fill date", "stock short-span risk unavailable", "NASDAQ100 source unavailable", "mobile no horizontal overflow"],
+    "runtime_exceptions": 0,
+    "external_requests": 0,
+    "screenshots": ["stock-current-adjusted-trade.png", "stock-current-percentage-sse.png", "etf-final-adjusted-trade.png", "etf-final-percentage-sse.png", "etf-final-distribution.png", "etf-episode-recent-page.png", "etf-episode-current-window.png", "etf-episode-open-filter.png", "etf-episode-trade-jump.png"]
+  },
+  "checks": {"tests_passed": 61, "javascript_syntax": "PASS", "owner_loaders": ["load_backtest_evaluation", "load_fill_display", "load_review_display", "load_review_security_labels"], "owner_business_computation_calls": 0, "Data_query_calls": 0, "source_file_hash_mtime_size_matches_owner_acceptance": true},
+  "limitations": ["Both reports remain PARTIAL where NASDAQ100 native source is unavailable.", "Stock Sharpe/Calmar are unavailable because the saved sample is shorter than one year.", "Stock Chinese names are independent observed labels, not historical decision-time names.", "Owner results remain daily retrospective approximations, not live execution or out-of-sample proof."],
+  "remaining": ["Parent's personal code and actual-page review before merge or Pages update."],
+  "publication_changed": false,
+  "private_owner_documents_committed": false
+}

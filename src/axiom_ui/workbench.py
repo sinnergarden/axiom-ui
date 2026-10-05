@@ -92,7 +92,8 @@ def _stock_native_chart(market: dict) -> dict | None:
 
 
 def _stock_evaluation_display(wire: dict) -> dict:
-    projected = {k: deepcopy(v) for k, v in wire.items() if k not in ("benchmark_input", "dividend_scope")}
+    projected = {k: deepcopy(v) for k, v in wire.items()
+                 if k not in ("benchmark_input", "dividend_scope", "base_evaluation", "benchmark_inputs")}
     for name in ("benchmark_input", "dividend_scope"):
         source = wire.get(name)
         if source is None:
@@ -104,6 +105,19 @@ def _stock_evaluation_display(wire: dict) -> dict:
         projected[name]["display_projection"] = True
         projected[name]["omitted"] = ["coverage", "coverage_bundle.payload", "source_evidence.batch.records",
                                      "source_evidence.batch.field_meta.by_key"]
+    if "base_evaluation" in wire:
+        # The public Owner loader has checked the complete source closure. The
+        # browser needs the unchanged values and refs, not a second native copy.
+        projected["base_evaluation"] = _stock_evaluation_display(wire["base_evaluation"])
+        projected["benchmark_inputs"] = {
+            key: None if value is None else {
+                k: deepcopy(v) for k, v in value.items()
+                if k not in ("source_evidence", "coverage", "coverage_bundle")}
+            for key, value in wire["benchmark_inputs"].items()}
+        for value in projected["benchmark_inputs"].values():
+            if value is not None:
+                value["display_projection"] = True
+                value["omitted"] = ["source_evidence", "coverage", "coverage_bundle"]
     return projected
 
 
@@ -310,7 +324,7 @@ def _period_metrics(wire: dict, run: Mapping[str, Any]) -> None:
 
 def _evaluation(value: Any, run: Mapping[str, Any]) -> dict:
     wire = _wire(value)
-    _require(wire.get("contract_version") in {"evaluation_report_v1", "evaluation_report_v2"}, "unsupported evaluation contract")
+    _require(wire.get("contract_version") in {"evaluation_report_v1", "evaluation_report_v2", "evaluation_report_v3"}, "unsupported evaluation contract")
     binding = wire.get("input_run_ref")
     _require(type(binding) is dict and all(binding.get(k) == run.get(k)
              for k in ("run_id", "content_digest", "committed_sequence")),
@@ -369,12 +383,76 @@ def _evaluation(value: Any, run: Mapping[str, Any]) -> dict:
                  "invalid saved distribution bin")
     _require(distribution["status"] != "INSUFFICIENT_SAMPLE" or not distribution["bins"],
              "insufficient sample must not claim owner distribution bins")
-    if wire["contract_version"] == "evaluation_report_v2":
-        _require(wire.get("evaluation_version") == "axiom.evaluation/2", "unsupported saved evaluation version")
+    if wire["contract_version"] in {"evaluation_report_v2", "evaluation_report_v3"}:
+        version = "axiom.evaluation/3" if wire["contract_version"] == "evaluation_report_v3" else "axiom.evaluation/2"
+        _require(wire.get("evaluation_version") == version, "unsupported saved evaluation version")
         _period_metrics(wire, run)
+        if wire["contract_version"] == "evaluation_report_v3":
+            _analysis_display_binding(wire, run)
     else:
         _require("period_metrics" not in wire, "v1 must not acquire period metrics")
-    return _stock_evaluation_display(wire) if run.get("contract_version") == "backtest_run_v3" else wire
+    return _stock_evaluation_display(wire) if (run.get("contract_version") == "backtest_run_v3" or
+                                             wire["contract_version"] == "evaluation_report_v3") else wire
+
+
+def _analysis_display_binding(wire: dict, run: Mapping[str, Any]) -> None:
+    """Check saved display links. No risk, return, binning or price calculation."""
+    base = wire.get("base_evaluation")
+    _require(type(base) is dict and base.get("contract_version") == "evaluation_report_v2" and
+             base.get("evaluation_ref") == wire.get("base_evaluation_ref") and
+             base.get("content_digest") == wire.get("base_evaluation_content_digest") and
+             base.get("input_run_ref") == wire.get("input_run_ref"),
+             "CONTEXT_MISMATCH: saved analysis/base evaluation")
+    for key in ("series", "monthly_returns", "episodes", "episode_metrics", "pnl_distribution", "period_metrics"):
+        _require(base.get(key) == wire.get(key), "CONTEXT_MISMATCH: saved analysis changed base values")
+    nav = {p["session"]: p for p in run["nav"]}
+    series = _rows(wire.get("analysis_series"), "saved analysis series")
+    _require([p.get("session") for p in series] == list(nav), "CONTEXT_MISMATCH: saved analysis dates")
+    for point in series:
+        _require(point.get("committed_sequence") == nav[point["session"]]["committed_sequence"],
+                 "CONTEXT_MISMATCH: saved analysis watermark")
+        for key in ("account_cumulative_return", "rolling_return_20", "rolling_volatility_20"):
+            _decimal(point.get(key), "saved " + key, nullable=key != "account_cumulative_return")
+    dd = wire.get("drawdown_interval")
+    _require(type(dd) is dict and dd.get("status") in {"AVAILABLE", "NO_DRAWDOWN"} and
+             dd.get("drawdown") == wire["period_metrics"]["account"]["max_drawdown"],
+             "CONTEXT_MISMATCH: saved drawdown range")
+    if dd["status"] == "AVAILABLE":
+        _require(dd.get("trough_session") in nav and
+                 (dd.get("peak_session") in nav or (dd.get("peak_is_initial_anchor") is True and
+                  dd.get("peak_session") == wire["period_metrics"]["window"]["anchor_session"])),
+                 "CONTEXT_MISMATCH: saved drawdown dates")
+    distribution = wire.get("return_distribution")
+    _require(type(distribution) is dict and distribution.get("metric") == "net_return" and
+             distribution.get("unit") == "fraction" and distribution.get("status") in
+             {"AVAILABLE", "INSUFFICIENT_SAMPLE"}, "unsupported saved return distribution")
+    for bucket in _rows(distribution.get("bins"), "saved return bins"):
+        _require(type(bucket.get("count")) is int and bucket["count"] >= 0, "invalid saved return count")
+        for key in ("lower", "upper"):
+            _decimal(bucket.get(key), "saved bin " + key, nullable=True)
+    _require(distribution["status"] != "INSUFFICIENT_SAMPLE" or not distribution["bins"],
+             "insufficient sample must not claim return bins")
+    for metric in ("sharpe", "calmar"):
+        value = (wire.get("risk_metrics") or {}).get(metric)
+        _require(type(value) is dict and type(value.get("status")) is str, "missing saved risk status")
+        _decimal(value.get("value"), "saved " + metric, nullable=True)
+    episodes = {e["episode_id"]: e for e in wire["episodes"]}
+    for point in _rows(wire.get("episode_points"), "saved episode points"):
+        episode = episodes.get(point.get("episode_id"))
+        _require(episode and episode["statistics_eligible"] and point.get("net_return") == episode.get("net_return"),
+                 "CONTEXT_MISMATCH: saved episode point")
+    comparisons = wire.get("benchmark_comparisons")
+    _require(type(comparisons) is dict and set(comparisons) == {"CSI300", "SSE_COMPOSITE", "NASDAQ100"},
+             "missing saved benchmark choices")
+    for key, comparison in comparisons.items():
+        _require(type(comparison) is dict and comparison.get("input_ref") == wire.get("benchmark_refs", {}).get(key),
+                 "CONTEXT_MISMATCH: saved benchmark identity")
+        for point in _rows(comparison.get("series"), "saved benchmark comparison"):
+            _require(point.get("account_session") in nav and
+                     point.get("native_session") in {None, point.get("account_session")},
+                     "CONTEXT_MISMATCH: saved benchmark dates")
+            if comparison.get("currency") != "CNY":
+                _require(point.get("account_relative_wealth") is None, "FX evidence required for account-relative wealth")
 
 
 def _paths(values: Sequence[str | Path], field: str) -> None:
@@ -659,6 +737,9 @@ def render_saved_workbench(run_paths: Sequence[str | Path], *,
                            stock_stage_report_paths: Sequence[str | Path] = (),
                            data_batches: Mapping[str, Any] | None = None,
                            data_batch_paths: Mapping[str, str | Path] | None = None,
+                           review_displays: Mapping[str, Mapping[str, Any]] | None = None,
+                           review_consumer_receipts: Mapping[str, Mapping[str, Any]] | None = None,
+                           fill_display_paths: Mapping[str, str | Path] | None = None,
                            synthetic_run_ids: Sequence[str] = (),
                            generated_at: str | None = None) -> str:
     """Read explicit saved owner paths, validate refs, and render a private offline UI.
@@ -751,6 +832,37 @@ The workbench does not discover data roots or implicitly issue a Query.
         for view in views:
             if view is not by_id[run_id] and view["run"]["run_id"] == run_id:
                 view["market"] = deepcopy(by_id[run_id]["market"])
+    if review_displays:
+        from .saved_layers import load_review_display_for_view
+        for run_id, binding in review_displays.items():
+            _require(run_id in by_id and isinstance(binding, Mapping) and set(binding) ==
+                     {"directory", "manifest_sha256", "snapshot_id", "anchor_session", "knowledge_cutoff", "run_ref"},
+                     "saved display requires an explicit run and full clock binding")
+            load_review_display_for_view(by_id[run_id], **binding)
+            for view in views:
+                if view is not by_id[run_id] and view["run"]["run_id"] == run_id:
+                    view["market"] = deepcopy(by_id[run_id]["market"])
+    if review_consumer_receipts:
+        from .saved_layers import load_consumer_receipt_for_view
+        for run_id, binding in review_consumer_receipts.items():
+            _require(run_id in by_id and run_id not in (review_displays or {}) and
+                     isinstance(binding, Mapping) and set(binding) == {"receipt_path", "receipt_sha256"},
+                     "consumer receipt requires a unique loaded run and fixed byte reference")
+            load_consumer_receipt_for_view(by_id[run_id], **binding)
+            for view in views:
+                if view is not by_id[run_id] and view["run"]["run_id"] == run_id:
+                    view["market"] = deepcopy(by_id[run_id]["market"])
+    if fill_display_paths:
+        from axiom_engine.runtime import load_fill_display
+        from .saved_layers import attach_fill_display
+        for run_id, path in fill_display_paths.items():
+            _require(run_id in by_id and isinstance(path, (str, Path)),
+                     "fill display requires an explicit loaded run/path")
+            report = _wire(load_fill_display(path))
+            attach_fill_display(by_id[run_id], report)
+            for view in views:
+                if view is not by_id[run_id] and view["run"]["run_id"] == run_id:
+                    view["market"]["fill_display"] = deepcopy(by_id[run_id]["market"]["fill_display"])
     if experiment_index_path is not None:
         from axiom_research import ExperimentReader
         views = _catalog(ExperimentReader(experiment_index_path), views)
@@ -795,7 +907,13 @@ def _render(views: list[dict], generated_at: str | None) -> str:
     data = json.dumps(browser_values(payload), ensure_ascii=False, separators=(",", ":"), allow_nan=False)
     data = data.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     css = (ASSETS / "workbench.css").read_text()
-    script = (ASSETS / "workbench.js").read_text()
+    vendor_manifest = json.loads((ASSETS / "echarts.vendor.json").read_text())
+    vendor = (ASSETS / "echarts.6.1.0.min.js").read_bytes()
+    _require(sha256(vendor).hexdigest() == vendor_manifest["files"]["echarts.6.1.0.min.js"]["sha256"],
+             "chart vendor digest mismatch")
+    # One hash-authorized inline script keeps exported HTML usable offline;
+    # no CDN, eval permission, browser Owner dependency or business computation.
+    script = vendor.decode("utf-8") + "\n;\n" + (ASSETS / "workbench-interactions.js").read_text() + "\n;\n" + (ASSETS / "workbench.js").read_text()
     script_hash = base64.b64encode(sha256(script.encode()).digest()).decode()
     template = (ASSETS / "workbench.html").read_text()
     replacements = {"SCRIPT_HASH": script_hash, "CSS": css, "DATA": data, "SCRIPT": script}

@@ -60,6 +60,23 @@ class PublicProjectionTests(unittest.TestCase):
         self.assertIn('[本地路径已隐藏]',result['research']['outcome'])
         self.assertEqual([c['key'] for c in result['comparison_conditions']],['profile.lot_size'])
 
+    def test_public_replay_keeps_narrow_saved_target_reason_and_causal_ids(self):
+        value=saved_view()
+        value['run']['decisions']=[{'trade_session':'2024-01-02','targets':{'A':'100','UNRELATED':'500'},
+                                  'trace':[{'reason':'RAW_TOP5','sizing':'previous_native_close',
+                                            'records':['private'],'parameters':{'model':'private'}}],
+                                  'intents':[{'intent_id':'saved:intent','security_id':'A','quantity':'100'}]}]
+        value['run']['orders']=[{'intent_id':'saved:intent','order_id':'saved:order','security_id':'A',
+                                'session':'2024-01-02','quantity':'100'}]
+        value['run']['fills'][0]['order_id']='saved:order'
+        result=project_view(value);decision=result['run']['decisions'][0]
+        self.assertEqual(decision['targets'],{'A':'100'})
+        self.assertEqual(decision['trace'],[{'reason':'RAW_TOP5','sizing':'previous_native_close'}])
+        self.assertEqual(decision['intents'][0]['intent_id'],result['run']['orders'][0]['intent_id'])
+        self.assertEqual(result['run']['orders'][0]['order_id'],result['run']['fills'][0]['order_id'])
+        value['run']['decisions'][0]['trace'][0]['sizing']={'payload':'private'}
+        with self.assertRaisesRegex(ValueError,'nested public summary'):project_view(value)
+
     def test_missing_saved_market_point_rejects_instead_of_fabricating(self):
         value=saved_view();value['market']['rows']=[]
         with self.assertRaisesRegex(ValueError,'lacks saved account-related'):project_view(value)
@@ -124,6 +141,28 @@ class PublicProjectionTests(unittest.TestCase):
     def test_chart_unit_mismatch_rejects_without_rewriting_prices(self):
         value=self.chart_view();value['market']['native_chart']['field_meta']['open']['unit']='CNY/fund unit'
         with self.assertRaisesRegex(ValueError,'unit mismatch'):project_view(value)
+
+    def test_selected_review_layer_keeps_adjusted_native_prices_clock_and_snapshot_names(self):
+        value=self.chart_view()
+        records=[{'security_id':security,'session':'2024-01-02','close':None,'native_close':'10.02',
+                  'display_scale':None,'display_missing_reason':'missing_factor'} for security in ('A','UNRELATED')]
+        value['market']['review_display']={'contract_version':'review_display_v1','manifest_sha256':'a'*64,
+            'display_projection':True,'context':{'snapshot_id':'fixed','anchor_session':'2024-01-03',
+                'knowledge_cutoff':'2024-02-01T00:00:00Z','price_source':{'query':'private'}},
+            'records':records,'field_units':{'close':'CNY/share'}}
+        value['market']['security_labels']={'A':'保存名称','UNRELATED':'不公开名称'}
+        value['market']['review_events']=[{'domain':'corporate_actions','event':{'security_id':security,
+            'ex_date':'2024-01-03','cash_dividend_per_unit':'0.1','document_refs':'private'}} for security in ('A','UNRELATED')]
+        before=deepcopy(value)
+        result=project_view(value)
+        self.assertEqual(result['market']['review_display']['records'],records[:1])
+        self.assertIsNone(result['market']['review_display']['records'][0]['display_scale'])
+        self.assertEqual(result['market']['review_display']['context']['anchor_session'],'2024-01-03')
+        self.assertNotIn('price_source',result['market']['review_display']['context'])
+        self.assertEqual(result['market']['security_labels'],{'A':'保存名称'})
+        self.assertEqual(result['market']['review_events'],[{'domain':'corporate_actions','event':{
+            'security_id':'A','ex_date':'2024-01-03','cash_dividend_per_unit':'0.1'}}])
+        self.assertEqual(value,before)
 
 
 if __name__=='__main__':unittest.main()

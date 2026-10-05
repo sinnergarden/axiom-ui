@@ -21,7 +21,7 @@ class Links(HTMLParser):
         if self.in_workbench:self.workbench.append(data)
 def check_json(value,path=()):
     if isinstance(value,dict):
-        allowed={'records','field_meta'} if path and path[-1]=='native_chart' else {'by_key'} if len(path)>1 and path[-2]=='field_meta' else set()
+        allowed={'records','field_meta'} if path and path[-1]=='native_chart' else {'records'} if path and path[-1]=='review_display' else {'by_key'} if len(path)>1 and path[-2]=='field_meta' else {'trace'} if path[-2:]==('run','decisions') else set()
         assert not (FORBIDDEN-allowed).intersection(value),(FORBIDDEN-allowed).intersection(value)
         for key in value:assert not BAD_PATH.search(key) and not SECRET.search(key),('private JSON key',key)
         for key,child in value.items():check_json(child,path+(key,))
@@ -39,7 +39,7 @@ def check(root):
     for p in files:
         assert not p.is_symlink(),p
         if not p.is_file():continue
-        assert p.suffix in ('.html','.json') or p.name=='.nojekyll',p
+        assert p.suffix in ('.html','.json') or p.name in {'.nojekyll','echarts.LICENSE.txt','echarts.NOTICE.txt'},p
         text=p.read_text();assert not BAD_PATH.search(text),('private path',p)
         assert not SECRET.search(text),('credential-like content',p)
         if p.suffix=='.json':check_json(json.loads(text))
@@ -65,12 +65,20 @@ def check(root):
                         assert all(start<=row['session']<=end for row in chart['records'])
                         assert all(set(row)<={'security_id','session','open','high','low','close','volume_units','volume_shares'} for row in chart['records'])
                         assert all(meta.get('by_key')==[] and set(meta)<={'unit','dtype','by_key'} for meta in chart['field_meta'].values())
+                    display=v['market'].get('review_display')
+                    if display:
+                        assert display['public_selected_chart'] and display['display_projection']
+                        assert display['contract_version']=='review_display_v1'
+                        start,end=v['configuration']['start_session'],v['configuration']['end_session']
+                        assert all(start<=row['session']<=end for row in display['records'])
                     assert not v.get('registration_history')
                     if v.get('evaluation'):
                         ref=v['evaluation']['input_run_ref']
                         assert all(str(ref[k])==str(v['run'][k]) for k in ('run_id','content_digest','committed_sequence'))
         count+=1
     expected={r['file'] for r in manifest['results']}|{'index.html','publication.json','.nojekyll'}
+    for vendor in ('echarts.LICENSE.txt','echarts.NOTICE.txt','echarts.vendor.json'):
+        if (root/vendor).exists():expected.add(vendor)
     if (root/'performance.html').exists():expected.add('performance.html')
     if manifest.get('process_refs'):
         assert (root/'process.html').is_file()

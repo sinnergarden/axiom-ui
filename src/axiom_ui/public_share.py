@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 import re
 
-from .workbench import _render
+from .workbench import ASSETS, _render
 
 PATH = re.compile(r'(?:file://)?/(?:Users|tmp|private|var/folders|home)/[^\s"<>;,]+|[A-Za-z]:\\[^\s"<>;,]+|(?:\.?/?\.artifacts/)[^\s"<>;,]+')
 SECRET = re.compile(r'github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[A-Z0-9]{16}|-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----')
@@ -26,15 +26,25 @@ RUN = ('contract_version', 'run_id', 'account_id', 'status', 'content_digest', '
 EVALUATION = ('benchmark', 'benchmark_ref', 'content_digest', 'contract_version', 'dividend_scope_ref',
               'episode_metrics', 'episodes', 'evaluation_ref', 'evaluation_version', 'implementation_ref',
               'input_run_ref', 'limitations', 'market_ref', 'monthly_returns', 'period_metrics',
-              'pnl_distribution', 'profile_ref', 'series', 'signal_ref', 'spec', 'spec_ref', 'status')
+              'pnl_distribution', 'profile_ref', 'series', 'signal_ref', 'spec', 'spec_ref', 'status',
+              'base_evaluation_ref', 'base_evaluation_content_digest', 'benchmark_refs', 'benchmark_comparisons',
+              'risk_metrics', 'drawdown_interval', 'return_distribution', 'analysis_series',
+              'execution_summary', 'concentration_series', 'episode_points')
 RESEARCH = ('question_id', 'question_ref', 'experiment_ref', 'title', 'hypothesis', 'version_id',
             'version_label', 'version_explanation', 'created_at', 'status', 'reason', 'outcome',
-            'run_record_ref', 'saved_run_ref', 'run_kind')
+            'run_record_ref', 'saved_run_ref', 'run_kind', 'changes', 'favorite', 'shelved',
+            'last_activity_at', 'saved_backtest_count', 'registration_count')
+TRACE = ('reason', 'rule', 'budget_basis', 'cash_check', 'eligible_count', 'reference_budget_minor',
+         'score_semantics', 'sizing', 'tie_break', 'security_id', 'target_quantity', 'quantity',
+         'selected_security_id', 'selected_security_ids', 'feature_session', 'trade_session',
+         'threshold', 'signal', 'condition', 'result', 'action')
 ROW = ('security_id', 'session', 'close', 'volume', 'volume_units', 'volume_shares', 'market_state',
        'state_reason', 'close_available_at', 'execution_evidence_cutoff', 'source_refs')
 EVENT = ('event_id', 'security_id', 'event_type', 'record_date', 'effective_date', 'effective_phase',
          'ratio_numerator', 'ratio_denominator', 'quantity_rounding', 'quantity_rounding_scope',
          'new_price_basis_session', 'suspension_start', 'suspension_end', 'suspension_scope', 'resume_session')
+REVIEW_EVENT = (*EVENT, 'announcement_date', 'implementation_announcement_date', 'cash_dividend_per_unit',
+                'ex_date', 'pay_date', 'process_status', 'source_code', 'new_price_basis_basis', 'announcement_precision')
 SAFE_CONDITIONS = {'start_session', 'end_session', 'initial_account', 'price_basis', 'unit_split_policy',
                    'stock_action_policy'}
 NOTE = ('公开分享投影：保留授权账户窗口及相关证券的已保存 OHLCV，供连续 K线与成交复盘；缺值不填补。'
@@ -122,15 +132,26 @@ def project_view(view):
               'registration_history': []}
     result['run']['decisions'] = [pick(d, ('contract_version', 'feature_session', 'trade_session', 'status',
                                          'selected_security_id', 'selected_security_ids', 'signal_ref',
-                                         'expected_account_version', 'intents')) for d in run.get('decisions') or []]
-    for d in result['run']['decisions']:
+                                         'expected_account_version', 'intents', 'reason', 'top_k')) for d in run.get('decisions') or []]
+    securities = related_securities(run)
+    for d, original in zip(result['run']['decisions'], run.get('decisions') or []):
+        # These narrow saved facts are required for public trade replay. Keep
+        # generic clean() stripping arbitrary trace/payloads everywhere else.
+        if original.get('targets') is not None:
+            targets = {k: v for k, v in original['targets'].items() if k in securities}
+            if any(isinstance(v, (dict, list)) for v in targets.values()):
+                raise ValueError('unexpected nested public target quantity')
+            d['targets'] = clean(targets)
+        if original.get('trace') is not None:
+            if not isinstance(original['trace'], list) or not all(isinstance(row, dict) for row in original['trace']):
+                raise ValueError('unexpected public decision trace')
+            d['trace'] = [scalars(row, TRACE) for row in original['trace']]
         if 'intents' in d:
             d['intents'] = [pick(i, ('intent_id', 'security_id', 'side', 'quantity', 'quantity_unit', 'reason',
                                    'session', 'valid_until')) for i in d['intents']]
     required = {(r['security_id'], r['session']) for name in ('positions', 'fills', 'orders')
                 for r in run.get(name) or [] if r.get('security_id') and r.get('session')}
     market = view['market']
-    securities = related_securities(run)
     start, end = view['configuration']['start_session'], view['configuration']['end_session']
     rows = [pick(r, ROW) for r in market.get('rows') or []
             if r.get('security_id') in securities and start <= r.get('session', '') <= end]
@@ -140,6 +161,38 @@ def project_view(view):
     result['market'] = {'rows': rows, 'price_basis': market.get('price_basis'),
                         'source_refs': clean(market.get('source_refs')), 'data_batch': None,
                         'native_chart': chart_projection(view, securities, start, end)}
+    display = market.get('review_display')
+    if display is not None:
+        fields = ('security_id', 'session', 'open', 'high', 'low', 'close', 'native_open', 'native_high',
+                  'native_low', 'native_close', 'native_pre_close', 'volume_shares', 'volume_units',
+                  'amount_cny', 'display_scale', 'display_missing_reason')
+        result['market']['review_display'] = {
+            **scalars(display, ('contract_version', 'manifest_sha256', 'display_projection', 'names_status', 'events_status')),
+            'public_selected_chart': True,
+            'context': pick(display.get('context') or {}, ('usage', 'snapshot_id', 'anchor_session', 'knowledge_cutoff',
+                                                         'pit_policy', 'default_price_basis', 'native_price_basis', 'limitations')),
+            'field_units': clean(display.get('field_units') or {}),
+            'records': [scalars(row, fields) for row in display.get('records') or []
+                        if row.get('security_id') in securities and start <= row.get('session', '') <= end]}
+        result['market']['security_labels'] = clean({key:value for key,value in (market.get('security_labels') or {}).items()
+                                                     if key in securities})
+        result['market']['security_name_scope'] = clean(market.get('security_name_scope'))
+        if market.get('security_label_source'):
+            result['market']['security_label_source'] = pick(market['security_label_source'],
+                ('manifest_sha256', 'source_snapshot_id', 'label_cutoff', 'original_display_manifest_sha256'))
+        result['market']['review_events'] = [
+            {'domain': clean(item['domain']), 'event': pick(item['event'], REVIEW_EVENT)}
+            for item in market.get('review_events') or [] if item['event'].get('security_id') in securities]
+        if market.get('fill_display'):
+            owner = market['fill_display']
+            selected_fills = {item['fill_id'] for item in run.get('fills') or []}
+            result['market']['fill_display'] = {
+                **pick(owner, ('contract_version', 'content_digest', 'display_result_ref', 'display_ref',
+                                'status', 'display_projection')),
+                'coordinates': [pick(point, ('fill_id', 'security_id', 'session', 'status', 'reason',
+                                             'display_price', 'source_unit', 'target_unit'))
+                                for point in owner.get('coordinates') or []
+                                if point.get('fill_id') in selected_fills and point.get('security_id') in securities]}
     if market.get('unit_splits') is not None:
         referenced_events = {r.get('event_id') for r in run.get('unit_split_applications') or []}
         referenced_events.update(r.get('mark_basis_event_id') for r in run.get('positions') or [])
@@ -253,5 +306,13 @@ def export_site(selection_path, output):
               'owner_digest_note':'Saved owner content_digest identifies the original complete owner result, not public HTML.',
               'future_results_auto_published':False,'Data_roots_current_discovery':False}
     (output/'publication.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')
+    for name in ('echarts.LICENSE.txt', 'echarts.NOTICE.txt', 'echarts.vendor.json'):
+        (output/name).write_bytes((ASSETS/name).read_bytes())
+    index = (output/'index.html').read_text().replace('</main>',
+        '<p class="small">图表：Apache ECharts 6.1.0 · '
+        '<a href="echarts.LICENSE.txt">Apache-2.0</a> · '
+        '<a href="echarts.NOTICE.txt">NOTICE</a> · '
+        '<a href="echarts.vendor.json">固定来源与摘要</a></p></main>')
+    (output/'index.html').write_text(index)
     (output/'.nojekyll').write_text('')
     return manifest
