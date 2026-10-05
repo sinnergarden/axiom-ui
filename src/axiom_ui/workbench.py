@@ -198,9 +198,11 @@ def _run(run: Any, evidence: str) -> dict:
     stock = wire["contract_version"] in {"backtest_run_v3", "backtest_run_v4"}
     v4 = wire["contract_version"] == "backtest_run_v4"
     if stock:
-        _require((wire.get("runtime_version"), wire.get("core_version"), wire.get("quantity_unit"), wire.get("price_unit")) ==
-                 (("axiom.backtest/4", "axiom.stock_portfolio/2", "shares", "CNY/share") if v4 else
-                  ("axiom.backtest/3", "axiom.stock_portfolio/1", "shares", "CNY/share")), "unsupported stock version or units")
+        _require(wire.get("runtime_version") == ("axiom.backtest/4" if v4 else "axiom.backtest/3") and
+                 wire.get("core_version") in ({"axiom.stock_portfolio/2"} if v4 else
+                                               {"axiom.stock_portfolio/1", "axiom.stock_portfolio/2"}) and
+                 (wire.get("quantity_unit"), wire.get("price_unit")) == ("shares", "CNY/share"),
+                 "unsupported stock version or units")
     _require(all(type(wire.get(k)) is str and wire[k]
                  for k in ("run_id", "account_id", "status")), "missing run identity")
     _watermarks(wire)

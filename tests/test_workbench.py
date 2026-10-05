@@ -520,6 +520,42 @@ class WorkbenchTests(unittest.TestCase):
             with self.assertRaisesRegex(ProjectionError,"stock OHLCV unit"):
                 render_saved_workbench(["stock.json"])
 
+    def test_stock_v3_topk_core2_display_and_invalid_version_tuples(self):
+        """UI tuple gate only; Owner loader acceptance uses its saved fixture separately."""
+        run, _, _ = saved_stock_case(self.sample)
+        runtime = ModuleType("axiom_engine.runtime")
+        runtime.load_backtest_run = lambda _path: deepcopy(run)
+        with patch.dict(sys.modules, {"axiom_engine.runtime": runtime}):
+            for k in (3, 5):
+                run["core_version"] = "axiom.stock_portfolio/2"
+                run["plan"]["portfolio_policy"]["top_k"] = k
+                for decision in run["decisions"]:
+                    decision.update(contract_version="axiom.stock_portfolio/2", top_k=k)
+                view = payload(render_saved_workbench(["synthetic-v3-topk.json"]))["views"][0]
+                public = project_view(view)
+                self.assertEqual((public["run"]["contract_version"], public["run"]["core_version"],
+                                  public["stock_context"]["portfolio_policy"]["top_k"]),
+                                 ("backtest_run_v3", "axiom.stock_portfolio/2", str(k)))
+                self.assertEqual((public["run"]["quantity_unit"], public["run"]["price_unit"]),
+                                 ("shares", "CNY/share"))
+            for field, invalid in (("runtime_version", "axiom.backtest/4"),
+                                   ("core_version", "axiom.stock_portfolio/3"),
+                                   ("quantity_unit", "fund units"),
+                                   ("price_unit", "CNY/fund unit")):
+                before = run[field]
+                run[field] = invalid
+                with self.subTest(field=field), self.assertRaisesRegex(ProjectionError, "stock version or units"):
+                    render_saved_workbench(["synthetic-v3-topk.json"])
+                run[field] = before
+            run["plan"]["contract_version"] = "backtest_request_v4"
+            with self.assertRaisesRegex(ProjectionError, "stock request/profile"):
+                render_saved_workbench(["synthetic-v3-topk.json"])
+            run["contract_version"] = "backtest_run_v4"
+            run["runtime_version"] = "axiom.backtest/4"
+            run["core_version"] = "axiom.stock_portfolio/1"
+            with self.assertRaisesRegex(ProjectionError, "stock version or units"):
+                render_saved_workbench(["synthetic-v3-topk.json"])
+
     def test_stock_v4_narrow_saved_schedule_and_existing_evaluation_reader(self):
         run, evaluation, native = saved_stock_v4_display_case(self.sample)
         original = deepcopy((run, evaluation, native))
