@@ -301,6 +301,25 @@ publication flow. The checker uses Python's standard library and needs no Owner
 package or backend. Publishing never reads Data roots or runs owner business
 functions. Keep PR/feature branches separate from the configured `gh-pages` source.
 
+An optional ML engineering teaching page is derived from the already rendered,
+reviewed HTML in axiom-docs. Its Notebook/HTML remains the only editable body;
+the UI repository records the fixed Docs commit and source SHA-256. After the
+selected result export, attach the tutorial and repeat the public check:
+
+```sh
+python3 tools/attach_public_ml_tutorial.py \
+  --source-html /path/to/axiom-docs/notebooks/ml_engineering_tutorial.html \
+  --source-commit FULL_REVIEWED_DOCS_COMMIT \
+  --expected-source-sha256 sha256:REVIEWED_HTML_SHA256 \
+  --site site
+python3 tools/check_public_site.py site
+```
+
+This only rewrites Docs links, validates the embedded public architecture SVG, and adds one
+index entry. It does not execute cells or read private receipts. Its two generated
+files must pass the same reviewed PR and `gh-pages` subtree process as the saved
+result pages.
+
 One-time repository setup selects **Settings → Pages → Build and deployment →
 Source: Deploy from a branch → gh-pages → /(root)**. The tracked `.nojekyll`
 file means these files need no Jekyll build. This is GitHub's supported branch

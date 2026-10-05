@@ -1,7 +1,9 @@
 """Standard-library public artifact and relative-link checks; no Owner dependencies."""
 from html.parser import HTMLParser
 from pathlib import Path
-import json,re,sys
+from hashlib import sha256
+import base64,json,re,sys
+from xml.etree import ElementTree
 
 BAD_PATH=re.compile(r'(?:file://)?/(?:Users|tmp|private|var/folders|home)/|[A-Za-z]:\\|\.artifacts/|sediment://')
 SECRET=re.compile(r'github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[A-Z0-9]{16}|-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----')
@@ -47,10 +49,14 @@ def check(root):
             links=Links();links.feed(text)
             for link in links.links:
                 if link.startswith(('https://','#','mailto:')):continue
+                if p.name=='ml-engineering.html' and link.startswith('data:image/svg+xml;base64,'):continue
                 assert not link.startswith(('/', 'http:', 'file:')),link
                 target=(p.parent/link.split('#')[0].split('?')[0]).resolve()
                 assert target.is_relative_to(root) and target.is_file(),(p,link)
             if p.name in {r['file'] for r in manifest['results']}:assert links.workbench,('missing result projection',p)
+            if p.name=='ml-engineering.html':
+                assert not links.workbench and '<script' not in text.lower()
+                assert text.count('id="section-')>=13 and 'href="index.html"' in text
             if links.workbench:
                 wire=json.loads(''.join(links.workbench));check_json(wire)
                 declared=next(r for r in manifest['results'] if r['file']==p.name)
@@ -83,6 +89,31 @@ def check(root):
     if manifest.get('process_refs'):
         assert (root/'process.html').is_file()
         expected.add('process.html')
+    if manifest.get('tutorial'):
+        tutorial=manifest['tutorial']
+        assert tutorial['file']=='ml-engineering.html' and tutorial['diagram_embedded'] is True
+        assert tutorial['source_repo']=='sinnergarden/axiom-docs'
+        assert re.fullmatch(r'[0-9a-f]{40}',tutorial['source_commit'])
+        assert tutorial['source_path']=='notebooks/ml_engineering_tutorial.html'
+        assert tutorial['status']=='public_readonly_teaching' and tutorial['business_execution'] is False
+        page=(root/tutorial['file']).read_bytes()
+        assert tutorial['published_html_sha256']=='sha256:'+sha256(page).hexdigest()
+        images=re.findall(rb'src="data:image/svg\+xml;base64,([A-Za-z0-9+/=]+)"',page)
+        assert len(images)==1
+        svg=base64.b64decode(images[0],validate=True)
+        assert tutorial['diagram_sha256']=='sha256:'+sha256(svg).hexdigest()
+        decoded=svg.decode('utf-8');assert not BAD_PATH.search(decoded) and not SECRET.search(decoded)
+        svg_root=ElementTree.fromstring(decoded)
+        assert svg_root.tag.rsplit('}',1)[-1]=='svg'
+        assert all(value.strip(' "\'').startswith('#') for value in re.findall(r'url\(([^)]+)\)',decoded,flags=re.I))
+        for element in svg_root.iter():
+            assert element.tag.rsplit('}',1)[-1].lower() not in {'script','foreignobject'}
+            for key,value in element.attrib.items():
+                name=key.rsplit('}',1)[-1].lower()
+                assert not name.startswith('on') and not (name.endswith('href') and not value.startswith('#'))
+        assert re.fullmatch(r'sha256:[0-9a-f]{64}',tutorial['source_html_sha256'])
+        assert 'href="ml-engineering.html"' in (root/'index.html').read_text()
+        expected.add(tutorial['file'])
     assert {str(p.relative_to(root)) for p in files if p.is_file()}==expected,'unexpected public artifact'
     print('Public site PASS: '+str(count)+' allowlisted files; links, owner refs and disclosure checks passed.')
 if __name__=='__main__':check(sys.argv[1])
