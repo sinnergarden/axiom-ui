@@ -60,6 +60,7 @@ class PublicProjectionTests(unittest.TestCase):
             project_view(value)
         value['stock_context']['schedule_ref'] = 'sha256:schedule'
         for container, key, private in ((value['run'], 'prediction_schedule', {'rows':['PRIVATE']}),
+                                        (value['run'], 'unit_split_applications', [{'event_id':'ETF-only'}]),
                                         (value['stock_context'], 'private_prediction', ['PRIVATE']),
                                         (value['stock_context']['folds'][0], 'model', {'parameters':{'private':True}}),
                                         (value['stock_context']['portfolio_policy'], 'private_strategy', 'PRIVATE')):

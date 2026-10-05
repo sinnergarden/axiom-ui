@@ -128,7 +128,7 @@ def project_view(view):
         raise ValueError('public results require an explicit saved account')
     v4 = run.get('contract_version') == 'backtest_run_v4'
     if v4:
-        reject_extra(run, (*RUN, 'decisions'), 'run field')
+        reject_extra(run, (*[key for key in RUN if key != 'unit_split_applications'], 'decisions'), 'run field')
         if view.get('stock_ml') is not None:
             raise ValueError('unexpected private or unknown v4 single-signal model')
     result = {'view_id': view['view_id'], 'run': pick(run, RUN),
