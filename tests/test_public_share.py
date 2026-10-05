@@ -41,24 +41,34 @@ class PublicProjectionTests(unittest.TestCase):
         value = self.chart_view()
         value['run']['contract_version'] = 'backtest_run_v4'
         value['run']['signal_ref'] = 'sha256:schedule'
+        value.pop('stock_ml')
+        value['stock_context']['portfolio_policy'] = {'top_k': 3}
         value['stock_context'].update(schedule_ref='sha256:schedule', folds=[{
             'fold_ref':'sha256:fold', 'fold_spec_ref':'sha256:spec',
             'signal_run_ref':'sha256:original-signal', 'model_ref':'sha256:model',
             'feature_ref':'sha256:feature', 'fit_session':'2024-01-01',
-            'oos_trade_sessions':['2024-01-02'], 'prediction_frame':{'rows':['PRIVATE']},
-            'model':{'parameters':{'private':True}}}])
+            'oos_trade_sessions':['2024-01-02']}])
         original = deepcopy(value)
         result = project_view(value)
         self.assertEqual(value, original)
         self.assertEqual(result['stock_context']['schedule_ref'], 'sha256:schedule')
         self.assertEqual(result['stock_context']['folds'][0]['signal_run_ref'], 'sha256:original-signal')
         self.assertEqual(result['stock_context']['folds'][0]['oos_trade_sessions'], ['2024-01-02'])
-        self.assertNotIn('prediction_frame', result['stock_context']['folds'][0])
-        self.assertNotIn('model', result['stock_context']['folds'][0])
-        self.assertNotIn('PRIVATE', json.dumps(result))
         self.assertEqual(result['market']['native_chart']['field_meta']['volume_shares']['unit'], 'shares')
         value['stock_context']['schedule_ref'] = 'sha256:wrong'
         with self.assertRaisesRegex(ValueError, 'run/schedule identity'):
+            project_view(value)
+        value['stock_context']['schedule_ref'] = 'sha256:schedule'
+        for container, key, private in ((value['run'], 'prediction_schedule', {'rows':['PRIVATE']}),
+                                        (value['stock_context'], 'private_prediction', ['PRIVATE']),
+                                        (value['stock_context']['folds'][0], 'model', {'parameters':{'private':True}}),
+                                        (value['stock_context']['portfolio_policy'], 'private_strategy', 'PRIVATE')):
+            container[key] = private
+            with self.assertRaisesRegex(ValueError, 'private or unknown v4'):
+                project_view(value)
+            del container[key]
+        value['stock_ml'] = {'model': {'parameters': {'private': True}}}
+        with self.assertRaisesRegex(ValueError, 'single-signal model'):
             project_view(value)
 
     def test_account_facts_preserved_and_real_close_not_inferred_from_fill(self):

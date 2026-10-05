@@ -75,6 +75,11 @@ def scalars(value, keys):
     return selected
 
 
+def reject_extra(value, keys, label):
+    if not isinstance(value, dict) or set(value) - set(keys):
+        raise ValueError('unexpected private or unknown v4 ' + label)
+
+
 def related_securities(run):
     ids = {r.get('security_id') for name in ('positions', 'fills', 'orders', 'unit_split_applications')
            for r in run.get(name) or []}
@@ -121,6 +126,11 @@ def project_view(view):
     run = view.get('run') or {}
     if not run.get('run_id'):
         raise ValueError('public results require an explicit saved account')
+    v4 = run.get('contract_version') == 'backtest_run_v4'
+    if v4:
+        reject_extra(run, (*RUN, 'decisions'), 'run field')
+        if view.get('stock_ml') is not None:
+            raise ValueError('unexpected private or unknown v4 single-signal model')
     result = {'view_id': view['view_id'], 'run': pick(run, RUN),
               'configuration': pick(view['configuration'], ('start_session', 'end_session', 'initial_account',
                                                            'profile', 'price_basis', 'unit_split_policy')),
@@ -210,7 +220,12 @@ def project_view(view):
             result['stock_context'][key] = clean(rows)
         result['stock_context']['portfolio_policy'] = scalars(context.get('portfolio_policy') or {},
                                                              ('budget_basis', 'eligibility_id', 'rebalance', 'top_k'))
-        if run.get('contract_version') == 'backtest_run_v4':
+        if v4:
+            reject_extra(context, ('stock_action_policy', 'model_snapshot', 'execution_snapshot',
+                                   'admission_status', 'prediction_universe', 'execution_universe',
+                                   'portfolio_policy', 'schedule_ref', 'folds'), 'schedule field')
+            reject_extra(context.get('portfolio_policy') or {},
+                         ('budget_basis', 'eligibility_id', 'rebalance', 'top_k'), 'portfolio policy')
             if context.get('schedule_ref') != run.get('signal_ref'):
                 raise ValueError('saved run/schedule identity mismatch')
             result['stock_context']['schedule_ref'] = scalars(context, ('schedule_ref',))['schedule_ref']
@@ -219,6 +234,8 @@ def project_view(view):
                 raise ValueError('missing saved fold summary')
             result['stock_context']['folds'] = []
             for fold in folds:
+                reject_extra(fold, ('fold_ref', 'fold_spec_ref', 'signal_run_ref', 'model_ref',
+                                    'feature_ref', 'fit_session', 'oos_trade_sessions'), 'fold field')
                 selected = scalars(fold, ('fold_ref', 'fold_spec_ref', 'signal_run_ref', 'model_ref',
                                           'feature_ref', 'fit_session'))
                 days = fold.get('oos_trade_sessions')
