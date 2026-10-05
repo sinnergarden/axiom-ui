@@ -81,6 +81,7 @@
   const statusOf = v => v.research?.no_version ? '未登记版本' : v.research?.not_run ? '未运行' : v.research?.status || (v.blocked ? '阻断' : v.run.status);
   function selectRun(id) {
     state.runId = id; state.registration = '';state.episodePage=0;state.chainSecurity='';$('chain-search').value='';$('chain-status').value='';state.security = ''; state.session = ''; state.interval = null;state.tradeWindow={mode:'all'}; state.fillId = ''; state.eventId = '';
+    $('episode-scope').value='window';$('episode-security').value='';$('episode-status').value='';
     if (state.compare === id || !byId.get(id).run.run_id) state.compare = '';
     render();
   }
@@ -381,9 +382,35 @@
       button.dataset.unitEventId=application.event_id;button.addEventListener('click',()=>{state.session=application.session;chartUI.setWindow(application.session,application.session);chartUI.openRaw('保存账户单位事件',application);});unitList.append(button);
     }
   }
+  function renderEpisodeList(v) {
+    const list=clear('episode-list'),pager=clear('episode-pager'),summary=$('episode-filter-summary');
+    const episodes=v.evaluation?.episodes || [],security=$('episode-security'),selected=security.value;
+    security.replaceChildren();option(security,'','全部证券');
+    for(const id of [...new Set(episodes.map(e=>e.security_id))].sort())option(security,id,securityName(id));
+    security.value=[...security.options].some(o=>o.value===selected)?selected:'';
+    const status=$('episode-status').value,scope=$('episode-scope').value;
+    const runEnd=v.run.nav?.at(-1)?.session,start=state.interval?.start || v.run.nav?.[0]?.session,end=state.interval?.end || runEnd;
+    const matches=episodes.filter(e=>(!security.value||e.security_id===security.value) &&
+      (!status||e.status===status) && (scope!=='window'||!start||!end||
+        (e.entry_session || start)<=end && (e.exit_session || runEnd || end)>=start))
+      .sort((a,b)=>(b.exit_session || runEnd || b.entry_session).localeCompare(a.exit_session || runEnd || a.entry_session) ||
+            (b.entry_session || '').localeCompare(a.entry_session || '') || String(a.episode_id).localeCompare(String(b.episode_id)));
+    const pageSize=12,total=Math.ceil(matches.length/pageSize);
+    state.episodePage=Math.max(0,Math.min(state.episodePage || 0,Math.max(0,total-1)));
+    summary.textContent=matches.length+' / '+episodes.length+' 段匹配 · 最近优先，每页最多 '+pageSize+' 段；上方统计仍为原回测全段。';
+    if(!matches.length){list.append(node('p','当前筛选没有保存持仓段。','small'));return;}
+    for(const episode of matches.slice(state.episodePage*pageSize,(state.episodePage+1)*pageSize)){
+      const button=node('button',null,'episode-item');button.dataset.episodeId=episode.episode_id;
+      const left=node('div',securityName(episode.security_id)+' · '+statusLabel(episode.status));left.append(node('span',saved(episode.entry_session)+' → '+(episode.status==='OPEN'?'未闭合':saved(episode.exit_session))+' · '+statusLabel(episode.income_status)));
+      const right=node('div',present(episode.net_pnl_minor)?money(episode.net_pnl_minor)+' 元净盈亏':episode.status==='OPEN'?'期末仍持有 · 完整净盈亏未提供':'完整净盈亏未提供');right.append(node('span',episode.statistics_eligible?'纳入统计':'未纳入统计 · 原因见定义'));button.title=json(episode);button.append(left,right);button.addEventListener('click',()=>selectEpisode(episode));list.append(button);
+    }
+    const previous=node('button','上一页'),next=node('button','下一页');previous.disabled=state.episodePage===0;next.disabled=state.episodePage>=total-1;
+    previous.addEventListener('click',()=>{state.episodePage--;renderEpisodeList(v);});next.addEventListener('click',()=>{state.episodePage++;renderEpisodeList(v);});
+    pager.append(previous,node('span',(state.episodePage+1)+' / '+total+' · 每页 '+pageSize+' 段','small'),next);
+  }
   function renderStatistics(v) {
     const evaluation=v.evaluation;
-    if(!evaluation){clear('episode-pager');for(const id of ['month-heatmap','legacy-episode-chart','episode-metrics','episode-list'])missing(id,'账户评价数据暂未提供。');$('episode-definition').textContent='未保存定义，不从成交构造完整持仓段。';$('distribution-note').textContent='未保存分布，不从成交或持仓重算。';}
+    if(!evaluation){clear('episode-pager');for(const id of ['month-heatmap','legacy-episode-chart','episode-metrics','episode-list'])missing(id,'账户评价数据暂未提供。');$('episode-filter-summary').textContent='持仓段暂未提供。';$('episode-definition').textContent='未保存定义，不从成交构造完整持仓段。';$('distribution-note').textContent='未保存分布，不从成交或持仓重算。';}
     else {
       const months=evaluation.monthly_returns || [],years=[...new Set(months.map(m=>m.month.slice(0,4)))].sort(),grid=node('div',null,'heat-grid');
       grid.append(node('div',''));for(let month=1;month<=12;month++)grid.append(node('div',String(month).padStart(2,'0'),'month-label'));
@@ -419,17 +446,12 @@
         closed.forEach((e,i)=>{const circle=svgEl('circle',{cx:x(Number(e.net_pnl_minor)/100),cy:70+(i%3)*16,r:6,fill:Number(e.net_pnl_minor)>0?'#c16583':Number(e.net_pnl_minor)<0?'#428766':'#607184',role:'button',tabindex:0,'data-episode-id':e.episode_id});circle.append(svgEl('title',{},money(e.net_pnl_minor)+' 元 · '+e.episode_id));circle.addEventListener('click',()=>selectEpisode(e));circle.addEventListener('keydown',event=>{if(event.key==='Enter')selectEpisode(e);});svg.append(circle);});
         svg.append(svgEl('text',{x:40,y:155,fill:'#607184','font-size':11},range[0].toFixed(2)));svg.append(svgEl('text',{x:390,y:155,'text-anchor':'end',fill:'#607184','font-size':11},range[1].toFixed(2)+' 元'));
       }
-      const list=clear('episode-list'),pageSize=12;state.episodePage=Math.max(0,Math.min(state.episodePage || 0,Math.max(0,Math.ceil(episodes.length/pageSize)-1)));for(const episode of episodes.slice(state.episodePage*pageSize,(state.episodePage+1)*pageSize)){
-        const button=node('button',null,'episode-item');button.dataset.episodeId=episode.episode_id;
-        const left=node('div',securityName(episode.security_id)+' · '+statusLabel(episode.status));left.append(node('span',saved(episode.entry_session)+' → '+(episode.status==='OPEN'?'未闭合':saved(episode.exit_session))+' · '+statusLabel(episode.income_status)));
-        const right=node('div',present(episode.net_pnl_minor)?money(episode.net_pnl_minor)+' 元净盈亏':episode.status==='OPEN'?'期末仍持有 · 完整净盈亏未提供':'完整净盈亏未提供');right.append(node('span',episode.statistics_eligible?'纳入统计':'未纳入统计 · 原因见定义'));button.title=json(episode);button.append(left,right);button.addEventListener('click',()=>selectEpisode(episode));list.append(button);
-      }
-      const pager=clear('episode-pager'),previous=node('button','上一页'),next=node('button','下一页');previous.disabled=state.episodePage===0;next.disabled=(state.episodePage+1)*pageSize>=episodes.length;previous.addEventListener('click',()=>{state.episodePage--;renderStatistics(v);});next.addEventListener('click',()=>{state.episodePage++;renderStatistics(v);});pager.append(previous,node('span',(state.episodePage+1)+' / '+Math.max(1,Math.ceil(episodes.length/pageSize))+' · 每页 '+pageSize+' 段','small'),next);
+      renderEpisodeList(v);
     }
     chartUI.returnPoints(v);
     $('signal-evaluation').textContent=v.research?.signal_evaluation?json(v.research.signal_evaluation):'未保存适用的信号评价；不从账户结果推导 IC/ICIR。';
   }
-  function selectEpisode(episode){state.security=episode.security_id;state.interval={start:episode.entry_session || current().run.nav?.[0]?.session,end:episode.exit_session || current().run.nav?.at(-1)?.session};state.tradeWindow={mode:'custom',...state.interval};state.session=episode.exit_session || state.interval.end;state.pane='trade';state.kind='fills';state.fillId=episode.status==='OPEN'?'':episode.fill_refs?.at(-1)?.fill_id || '';state.eventId=state.fillId;render();}
+  function selectEpisode(episode){const fillId=episode.fill_refs?.at(-1)?.fill_id || '',linkedFill=(current().run.fills || []).find(f=>f.fill_id===fillId);state.security=episode.security_id;state.chainSecurity=episode.security_id;$('chain-search').value='';$('chain-status').value='';state.interval={start:episode.entry_session || current().run.nav?.[0]?.session,end:episode.exit_session || current().run.nav?.at(-1)?.session};state.tradeWindow={mode:'custom',...state.interval};state.session=episode.exit_session || linkedFill?.session || episode.entry_session || state.interval.end;state.pane='trade';state.kind='fills';state.fillId=fillId;state.eventId=fillId;render();requestAnimationFrame(()=>$('trade-chart').scrollIntoView({block:'center'}));}
   function renderSources(v) {
     const panel=clear('source-details'),all=[...(v.run.limitations || []),...(v.evaluation?.limitations || [])];
     for(const text of all.slice(0,3))panel.append(node('p',String(text),'small'));
@@ -448,6 +470,7 @@
   $('status-filter').addEventListener('change',e=>{state.status=e.target.value;renderTree();});$('tag-filter').addEventListener('change',e=>{state.tag=e.target.value;renderTree();});
   $('compare-run').addEventListener('change',e=>{state.compare=e.target.value;renderHeader(current());renderPerformance(current());});$('benchmark-toggle').addEventListener('change',e=>{state.benchmark=e.target.checked;renderPerformance(current());});
   $('registration-select').addEventListener('change',e=>{state.registration=e.target.value;state.session='';state.interval=null;state.tradeWindow={mode:'all'};state.fillId='';state.eventId='';render();});
+  for(const id of ['episode-scope','episode-security','episode-status'])$(id).addEventListener('change',()=>{state.episodePage=0;renderEpisodeList(current());});
   $('security-select').addEventListener('change',e=>{state.security=e.target.value;state.chainSecurity=e.target.value;state.session='';state.fillId='';state.eventId='';renderTrade(current());renderHeader(current());});
   $('session-select').addEventListener('change',e=>{state.session=e.target.value;state.fillId='';state.eventId='';locateDay(current(),state.session);renderTrade(current());renderHeader(current());renderPerformance(current());});
   $('copy-context').addEventListener('click',async()=>{

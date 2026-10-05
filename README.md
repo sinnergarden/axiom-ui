@@ -166,10 +166,12 @@ same account run; unregistered loaded reports are explicitly separate contexts.
 Comparison separates frozen conditions (period, initial account, execution/fee
 policies, price basis, data coverage and knowledge cutoffs) from research changes.
 Different signal or account identity alone does not make conditions incompatible;
-missing conditions remain unverifiable. Dates and episode/month selection only
-clip or highlight saved chart points. Metrics always describe the original full
-run. The common chart window defaults to the full saved range, with three/six-month and explicit
-date windows.
+missing conditions remain unverifiable. Date and month selection only show or
+locate saved points. The episode list shows the latest 12 first, paginates older
+records, and filters by the current date window, security and closed/open state;
+clicking one follows its saved fill date into the trade chain. Metrics always
+describe the original full run. The common chart window defaults to the full
+saved range, with three/six-month and explicit date windows.
 
 ## Reviewed interaction remediation
 

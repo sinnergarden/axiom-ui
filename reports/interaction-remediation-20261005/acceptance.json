@@ -16,7 +16,10 @@
       "Data_display_manifest_sha256": "28960c37de9d6fc37f2c5207acbd4e0f389e06b68baadc983d87664ed4e6cdec",
       "saved_display_rows": 12334,
       "saved_adjusted_fill_coordinates": 280,
-      "saved_return_bins": 22
+      "saved_return_bins": 22,
+      "saved_episodes": 135,
+      "saved_closed_episodes": 134,
+      "saved_open_episodes": 1
     },
     "stock_current": {
       "run_id": "sha256:1bc47db1fa35fa231083f1cf6c2c76042cb38359672a0dd47970392d098878cb",
@@ -39,10 +42,10 @@
   },
   "browser": {
     "status": "PASS_FINAL_OWNER_BUNDLE_LOCAL_BROWSER",
-    "checks": ["saved trade chain and adjusted B/S", "Owner-saved cumulative percentage lines and SSE comparison", "ETF 22-bin distribution and drawdown dates", "stock short-span risk unavailable", "NASDAQ100 source unavailable", "mobile no horizontal overflow"],
+    "checks": ["saved trade chain and adjusted B/S", "Owner-saved cumulative percentage lines and SSE comparison", "ETF 22-bin distribution and drawdown dates", "episode list defaults to latest 12 with pagination", "current display window narrowed 135 episodes to 3 without changing full-run metrics", "open/security filters selected one episode and clicked through to its original fill date", "stock short-span risk unavailable", "NASDAQ100 source unavailable", "mobile no horizontal overflow"],
     "runtime_exceptions": 0,
     "external_requests": 0,
-    "screenshots": ["stock-current-adjusted-trade.png", "stock-current-percentage-sse.png", "etf-final-adjusted-trade.png", "etf-final-percentage-sse.png", "etf-final-distribution.png"]
+    "screenshots": ["stock-current-adjusted-trade.png", "stock-current-percentage-sse.png", "etf-final-adjusted-trade.png", "etf-final-percentage-sse.png", "etf-final-distribution.png", "etf-episode-recent-page.png", "etf-episode-current-window.png", "etf-episode-open-filter.png", "etf-episode-trade-jump.png"]
   },
   "checks": {"tests_passed": 61, "javascript_syntax": "PASS", "owner_loaders": ["load_backtest_evaluation", "load_fill_display", "load_review_display", "load_review_security_labels"], "owner_business_computation_calls": 0, "Data_query_calls": 0, "source_file_hash_mtime_size_matches_owner_acceptance": true},
   "limitations": ["Both reports remain PARTIAL where NASDAQ100 native source is unavailable.", "Stock Sharpe/Calmar are unavailable because the saved sample is shorter than one year.", "Stock Chinese names are independent observed labels, not historical decision-time names.", "Owner results remain daily retrospective approximations, not live execution or out-of-sample proof."],
