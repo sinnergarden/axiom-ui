@@ -76,7 +76,7 @@ and maximum drawdown. The page preserves each leg's availability, null and reaso
 v1 gains no invented annualization. A partial evaluation can retain available
 CAGR, and a completed short sample can retain unavailable CAGR. Date selection
 never changes these saved metrics or their scope. The UI performs no CAGR or
-day-count calculation, does not annualize drawdown, and adds no Sharpe. CSI300
+day-count calculation and does not annualize drawdown. Saved v1/v2 have no invented Sharpe. CSI300
 remains a price index excluding dividends; the account includes saved dividend
 ledger entries, so their return bases differ. Simulated CAGR is not a forecast.
 Saved NO_DECISION records are shown as account-wide decisions that preserve
@@ -168,8 +168,45 @@ policies, price basis, data coverage and knowledge cutoffs) from research change
 Different signal or account identity alone does not make conditions incompatible;
 missing conditions remain unverifiable. Dates and episode/month selection only
 clip or highlight saved chart points. Metrics always describe the original full
-run. K-lines default to the last three months, with six-month, full and explicit
+run. The common chart window defaults to the full saved range, with three/six-month and explicit
 date windows.
+
+## Reviewed interaction remediation
+
+The implementation follows the approved [UI design](https://github.com/sinnergarden/axiom-docs/blob/6ea946fa26cb978bfd94bb825f791245b4e85adc/docs/design/06_axiom_ui.md#8-本轮整页交互与视觉规范).
+Apache ECharts **6.1.0** is vendored from its fixed official tag. Its SHA-256,
+upstream commit, Apache-2.0 license and NOTICE are retained in `assets/echarts.vendor.json`.
+The standalone page embeds the checked bundle under its existing script-hash CSP;
+there is no CDN, runtime fetch or frontend dependency installation.
+
+Hover anywhere within the plot to see the nearest saved date. Click to lock it;
+further hovering leaves the locked details intact. Drag to pan, use Ctrl+wheel
+to zoom, drag the bottom overview or enter precise dates. The common range only
+controls saved-point display. Original metrics and the final adjustment anchor
+keep their full saved scope. Trade chains use actual decision/intent/order/fill
+references, load year/month/batch details on demand and paginate long lists.
+
+Saved `evaluation_report_v3` uses the same public Engine loader. It adds the
+Owner's drawdown range, risk availability, rolling series, percentage-return bins
+and benchmark choices; the UI performs no statistical computation. Old v1/v2
+stay readable. Short-span nulls and missing benchmark inputs are displayed with
+their reasons. The financial definition remains in [Trade §11.3](https://github.com/sinnergarden/axiom-docs/blob/c648cfc38571c1a4bad37c9a0010cd7d9659285b/docs/design/04_axiom_trade.md#saved-account-analysis).
+
+`render_saved_workbench(..., review_displays={run_id: binding})` accepts an
+explicit binding with `directory`, `manifest_sha256`, `snapshot_id`,
+`anchor_session`, `knowledge_cutoff`, and the consumer's exact `run_ref`
+(run ID, content digest, committed sequence). It only calls Data's saved
+`load_review_display`, checks the run's Snapshot and units, and retains native
+prices and missing factors. Snapshot name labels do not assert historical name
+validity. Adjusted B/S coordinates require a separately saved Engine mapping;
+native fill prices never masquerade as adjusted coordinates.
+
+`enrich_saved_projection(existing, evaluation_paths={run_id: path},
+review_displays={run_id: binding})` can extend a previously validated
+`ui_workbench_projection_v1` without reloading its large account document.
+New evaluation identity/watermarks are bound to the original account projection;
+only the explicit public saved-file loaders run. This does not replay an account,
+rerun evaluation, register a Research run or write any Owner file.
 
 Workbench HTML embeds private result and provenance data. Keep the full export
 local or in an authorized private destination. For public publication, use the

@@ -1,0 +1,78 @@
+{
+  "status": "PARTIAL_REMEDIATION_REVIEWABLE_NOT_PUBLISHED",
+  "design_commit": "374a722e1679b997ff8e86845c2cf80b628ca3cb",
+  "design_merge_commit": "6ea946fa26cb978bfd94bb825f791245b4e85adc",
+  "package_version": "0.3.0",
+  "browser": {
+    "status": "PASS_FOUNDATION_AND_REAL_SAVED_ETF_DISPLAY_NOT_FULL_REMEDIATION",
+    "checks": {
+      "whole_plot_hover_and_click_lock": true,
+      "physical_overview_drag_and_unchanged_metrics": true,
+      "saved_targets_trace_and_order_fill_chain": true,
+      "historical_strict_no_false_fills": true,
+      "long_1762_points_and_bounded_chain_dom": 47,
+      "Data_adjusted_default_fixed_anchor_chinese_names_and_events": true,
+      "native_toggle_retains_original_fill_prices": true,
+      "monthly_heatmap_retained_and_missing_new_distribution_honest": true,
+      "mobile_no_document_overflow": true
+    },
+    "timings": {
+      "etf_html_load_seconds": 0.2609202089952305,
+      "long_etf_switch_and_chart_seconds": 0.1418739170767367
+    },
+    "runtime_exceptions": 0,
+    "external_requests": 0,
+    "chart_vendor": "ECharts 6.1.0",
+    "vendor_bytes": 1121883,
+    "Owner_business_calls": 0,
+    "scope": "local static preview; Data adjusted layer consumed; Engine adjusted fills/v3/stock names pending; no Pages update",
+    "screenshots": [
+      "stock-performance-hover.png",
+      "etf-adjusted-event.png",
+      "stock-trade-mobile.png"
+    ]
+  },
+  "saved_etf_display": {
+    "run_ref": {
+      "run_id": "sha256:5db294ae978d841521d0ce6e0a1dbfdd5deba02ea07fecd261da6537856a4f83",
+      "content_digest": "sha256:f04975da7ea3c26ad55af5bddea296a0a01130229c3aafc0c00462a8a2e4488d",
+      "committed_sequence": 2236
+    },
+    "manifest_sha256": "28960c37de9d6fc37f2c5207acbd4e0f389e06b68baadc983d87664ed4e6cdec",
+    "records": 12334,
+    "events": 25,
+    "original_sources_hash_mtime_size_unchanged": true,
+    "account_and_evaluation_unchanged": true,
+    "fixed_anchor": "2026-09-30",
+    "fixed_cutoff": "2026-10-05T06:17:55.480001+00:00",
+    "counts": {
+      "saved_loader": 1,
+      "queries": 0,
+      "transforms": 0,
+      "export_calls": 0
+    },
+    "seconds": 0.8718044590204954,
+    "peak_process_rss_bytes": 1226752000,
+    "projection_bytes": 53571304
+  },
+  "checks": {
+    "workbench_tests": 24,
+    "saved_display_binding_tests": 3,
+    "public_projection_tests": 15,
+    "wheel_assets_and_vendor_hashes": "PASS",
+    "javascript_syntax": "PASS",
+    "public_preview_allowlisted_files": 10
+  },
+  "remaining": [
+    "Engine final v3 analysis file and actual saved-report binding/browser acceptance",
+    "Engine adjusted fill display coordinates",
+    "current Jan stock display receipt identity alignment",
+    "stock Chinese labels need Owner source contract",
+    "benchmark percentage series need Owner saved values; main plot currently preserves indexed values",
+    "parent personal code and actual page review before merge/publish"
+  ],
+  "publication_changed": false,
+  "production_roots_accessed_by_UI": false,
+  "external_requests": 0,
+  "owner_computation_calls": 0
+}
