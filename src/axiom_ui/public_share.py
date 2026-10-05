@@ -244,7 +244,7 @@ def export_result(item, output, generated_at):
     if {v['run']['run_id'] for v in views} != set(run_ids):
         raise ValueError('selected run identity not present')
     html = _render(views, generated_at)
-    banner = '<nav style="padding:8px 20px;background:#eef3f8;font-size:12px"><a href="index.html">← 公开结果入口</a> · 授权选定的保存结果 · 日线近似/单位/基准限制见页面 · 分享投影不是完整原始数据</nav>'
+    banner = '<nav style="padding:8px 20px;background:#eef3f8;font-size:12px"><a href="index.html">← 实验结果入口</a> · 保存的模拟回测</nav>'
     html = html.replace('<body>', '<body>'+banner, 1)
     (output/(slug+'.html')).write_text(html)
     return {'slug': slug, 'title': clean(item['title']), 'file': slug+'.html',
@@ -268,7 +268,7 @@ def export_site(selection_path, output):
         raise ValueError('duplicate public selection slug')
     output.mkdir(parents=True, exist_ok=True)
     results = [export_result(item, output, selection['generated_at']) for item in selection['results']]
-    links = ''.join('<section><h2>'+escape(r['title'])+'</h2><a href="'+r['file']+'">打开保存结果</a></section>' for r in results)
+    links = ''.join('<section class="result-card"><h2>'+escape(r['title'])+'</h2><a href="'+r['file']+'">打开实验结果</a></section>' for r in results)
     performance = ''
     if selection.get('performance_html'):
         text = Path(selection['performance_html']).read_text()
@@ -284,7 +284,7 @@ def export_site(selection_path, output):
             added = '<tr><td>本次新 Jan 结果读取</td><td>'+escape(str(values['run_read_seconds']))+' ＋ '+escape(str(values['evaluation_read_seconds']))+' 秒</td><td>新账户与评价各一次公共 Reader 读取；UI 业务计算为 0。</td></tr>'
             added += '<tr><td>本次新 Jan 页面生成</td><td>'+escape(str(values['generation_seconds']))+' 秒</td><td>'+escape(str(values['scope']))+'</td></tr>'
             text = text.replace('<tr><td>Reader 前后对照</td>', added+'<tr><td>Reader 前后对照</td>', 1)
-        (output/'performance.html').write_text(clean(text));performance='<section><h2>性能验收</h2><p>Mac 本地有界实测；股票 Rolling 5–6 年全段尚未实跑，范围见详情。</p><a href="performance.html">查看性能摘要</a></section>'
+        (output/'performance.html').write_text(clean(text));performance='<p class="small secondary-link"><a href="performance.html">性能验收与发布证据</a> · Mac 本地有界实测，范围见详情。</p>'
     process_refs = None;process = ''
     if selection.get('process'):
         from .public_process import export_process
@@ -295,8 +295,8 @@ def export_site(selection_path, output):
         if not targets or not targets.issubset(selected):
             raise ValueError('process target contains an unselected saved account')
         process_refs = export_process(p['source'], p['target'], output)
-        process = '<section><h2>关键中间过程</h2><p>保存的训练成熟度、信号与交易日期、冻结费用和现金行动范围。</p><a href="process.html">查看过程验收</a></section>'
-    index='''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Axiom · 公开保存结果</title><style>body{margin:0;background:#f3f6fa;color:#25374d;font:15px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}main{max-width:1000px;margin:40px auto;padding:0 22px}section{background:white;border:1px solid #dce5ef;border-radius:12px;padding:22px;margin:18px 0}a{color:#416e99}h1{font-size:30px}.small{font-size:13px;color:#52677e}</style><main><p class="small">AXIOM · 授权选定保存结果 · 公开只读</p><h1>回测结果与性能验收</h1><p><a href="'''+DESIGN+'''">统一设计文档</a></p><p>真实固定输入的模拟回测，保留日线执行近似。处理完成不证明策略有效、开盘流动性或实盘成交。页面指标由 owner 保存，浏览不重算收益或交易。</p>'''+links+process+performance+'''<section><h2>展示范围</h2><p>ETF 与股票的数量单位分别为基金份额与股；费用及执行假设见对应报告。沪深300和上证综指是价格指数，不含分红；账户含已观测分红，两者口径不同。纳斯达克100本次缺少可核验来源，页面明确标为不可用。分红范围为已观测记录，不代表供应完整。</p><p>分享版保留选定回测窗口、相关证券的已保存 OHLCV 与连续复盘；缺值不填补。完整 DataBatch、coverage、模型输入和未选结果不随页面公开。图层是展示子集，来源引用指向原完整保存文件。</p><a href="publication.json">公开发布记录</a> · <a href="https://github.com/sinnergarden/axiom-ui">源码与更新流程</a></section></main></html>'''
+        process = '<p class="small secondary-link"><a href="process.html">查看保存的关键中间过程</a> · 训练、信号与交易日期及执行范围。</p>'
+    index='''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Axiom · 研究工作台</title><style>body{margin:0;background:#f3f6fa;color:#25374d;font:15px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}main{max-width:1000px;margin:40px auto;padding:0 22px}section{background:white;border:1px solid #dce5ef;border-radius:12px;padding:22px;margin:18px 0}.result-card{border-left:4px solid #547da3}.secondary-link{margin:12px 2px}a{color:#416e99}h1{font-size:30px;margin-bottom:0}.subhead{font-size:17px;color:#416e99;margin:0 0 18px}.small{font-size:13px;color:#52677e}summary{cursor:pointer;color:#416e99}</style><main><p class="small">AXIOM · 授权选定保存结果 · 公开只读</p><h1>Axiom 研究工作台</h1><p class="subhead">实验结果入口</p><p>打开已保存实验，查看收益风险、交易复盘与统计。结果为模拟回测，执行假设和费用见各运行。</p>'''+links+process+performance+'''<section><details><summary>结果口径与来源</summary><p>ETF 与股票分别按基金份额与股显示；保存的日线执行近似不验证实际开盘流动性或实盘成交。沪深300和上证综指是价格指数，不含分红；账户收益含已入账分红。数据与分红仅覆盖已保存来源，不补缺值。</p><p>分享版仅包含授权选定的回测窗口与相关证券行情。完整 DataBatch、coverage、模型输入和未选结果不随页面公开；来源引用保留在各报告中。</p></details><p><a href="publication.json">公开发布记录</a> · <a href="'''+DESIGN+'''">统一设计文档</a> · <a href="https://github.com/sinnergarden/axiom-ui">源码与更新流程</a></p></section></main></html>'''
     (output/'index.html').write_text(index)
     manifest={'contract_version':'public_static_site_v1','generated_at':selection['generated_at'],
               'authorization':'explicit_selected_public_results','selection_note':clean(selection.get('selection_note')),

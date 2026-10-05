@@ -12,7 +12,8 @@
   }
   const initial=views.map((v,i)=>({v,i})).sort(recent)[0].v;
   const state = {runId: initial.view_id, registration: '', pane: 'performance', compare: '', benchmark: true,
-    security: '', session: '', interval: null, tradeWindow: {mode:'all'}, fillId: '', eventId: '', kind: 'fills', filter: 'all', status: '', tag: ''};
+    legendVisible: {account:true,comparison:true,benchmark:true}, topicOpen: new Map(), security: '', session: '', interval: null,
+    tradeWindow: {mode:'all'}, fillId: '', eventId: '', kind: 'fills', status: '', tag: ''};
   let chartUI;
   const $ = id => document.getElementById(id);
   const current = () => {
@@ -32,7 +33,12 @@
   const stockAccount = v => v.run.contract_version === 'backtest_run_v3';
   const quantityUnit = v => stockAccount(v) ? '股' : '份';
   const priceUnit = v => stockAccount(v) ? '元/股' : '元/份';
-  const runCaption = v => (stockAccount(v)?(v.approximate?'股票日线近似':'股票严格对照'):v.approximate?'ETF 日线近似':'保存运行')+' · '+saved(v.configuration.start_session || v.run.nav?.[0]?.session)+' — '+saved(v.configuration.end_session || v.run.nav?.at(-1)?.session);
+  const slipCaption = v => {
+    const raw=v.configuration?.profile?.slippage_bps;
+    if(!present(raw) || String(raw).trim()==='' || !Number.isFinite(Number(raw)))return '';
+    return Number(raw)===0?'零滑点（'+saved(raw)+' bp）':'非零滑点（'+saved(raw)+' bp）';
+  };
+  const runCaption = v => (stockAccount(v)?(v.approximate?'股票日线近似':'股票严格对照'):v.approximate?'ETF 日线近似':'保存运行')+' · '+saved(v.configuration.start_session || v.run.nav?.[0]?.session)+' — '+saved(v.configuration.end_session || v.run.nav?.at(-1)?.session)+(slipCaption(v)?' · '+slipCaption(v):'');
   const short = id => id ? id.replace(/^(sha256:|synthetic:)/, '').slice(0, 10) : '未提供';
   const securityName = id => chartUI ? chartUI.securityLabel(current(),id) : saved(id);
   const json = v => JSON.stringify(v, null, 2);
@@ -59,6 +65,7 @@
     return (/[1-9]/.test(parts[1].slice(2))?'≈':'')+parts[0]+'.'+parts[1].slice(0,2);
   }
   const percent = v => present(v) ? compact(decimal(v, 2)) + '%' : '未提供';
+  const ratio = v => present(v) && Number.isFinite(Number(v)) ? Number(v).toFixed(5) : saved(v);
   const cagr = leg => !leg ? '未提供' : leg.cagr_status === 'AVAILABLE' ? percent(leg.cagr) : leg.cagr_status === 'INSUFFICIENT_SPAN' ? '样本不足一年' : '起止值缺失';
   const cagrRaw = leg => leg ? json({cagr:leg.cagr,status:leg.cagr_status,reason:leg.cagr_reason}) : '未提供';
   const periodRange = period => period ? saved(period.window.anchor_session)+' — '+saved(period.window.end_session) : '年化区间未提供';
@@ -81,6 +88,8 @@
   const statusOf = v => v.research?.no_version ? '未登记版本' : v.research?.not_run ? '未运行' : v.research?.status || (v.blocked ? '阻断' : v.run.status);
   function selectRun(id) {
     state.runId = id; state.registration = '';state.episodePage=0;state.chainSecurity='';$('chain-search').value='';$('chain-status').value='';state.security = ''; state.session = ''; state.interval = null;state.tradeWindow={mode:'all'}; state.fillId = ''; state.eventId = '';
+    const selected=byId.get(id),topic=selected.research?.question_id || selected.research?.experiment_ref || 'unlinked';
+    state.topicOpen.set(topic,true);state.legendVisible={account:true,comparison:true,benchmark:true};
     $('episode-scope').value='window';$('episode-security').value='';$('episode-status').value='';
     if (state.compare === id || !byId.get(id).run.run_id) state.compare = '';
     render();
@@ -94,8 +103,7 @@
   function renderTree() {
     const tree = clear('run-tree');
     let filtered = views.filter(v => (!state.status || statusOf(v) === state.status) &&
-      (!state.tag || (v.research?.tags || []).includes(state.tag)) &&
-      (state.filter === 'all' || (state.filter === 'favorite' ? v.research?.favorite === true : v.research?.shelved === true)));
+      (!state.tag || (v.research?.tags || []).includes(state.tag)));
     filtered = filtered.map((v,i) => ({v,i})).sort(recent).map(x => x.v);
     const groups = new Map();
     for (const v of filtered) {
@@ -103,29 +111,31 @@
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(v);
     }
-    for (const group of groups.values()) {
-      const wrap = node('div', null, 'question-group');
-      wrap.append(node('div', group[0].research?.title || '研究问题未提供', 'question-title'));
+    for (const [topic,group] of groups) {
+      const wrap = node('details', null, 'question-group'),summary=node('summary',group[0].research?.title || '研究问题未提供','question-title'),body=node('div',null,'topic-runs');
+      wrap.dataset.questionId=topic;
+      wrap.open=state.topicOpen.has(topic)?state.topicOpen.get(topic):group.some(v=>v.view_id===state.runId);
+      wrap.addEventListener('toggle',()=>state.topicOpen.set(topic,wrap.open));
       const counts=group[0].research;
-      if(present(counts?.saved_backtest_count)&&present(counts?.registration_count))wrap.append(node('div',counts.saved_backtest_count+' 份账户回测 · '+counts.registration_count+' 条登记','small'));
+      if(present(counts?.saved_backtest_count)&&present(counts?.registration_count))summary.append(node('span',counts.saved_backtest_count+' 份账户回测 · '+counts.registration_count+' 条登记','small'));
+      wrap.append(summary,body);
       const versions=new Map();
       for(const v of group){const key=v.research?.version_id || v.research?.experiment_ref || 'unlinked';if(!versions.has(key))versions.set(key,[]);versions.get(key).push(v);}
       for (const members of versions.values()) {
         const first=members[0];
-        wrap.append(node('div', first.research?.version_label || (first.research?.experiment_ref ? '冻结实验 ' + short(first.research.experiment_ref) : '版本说明未提供'), 'version-title'));
+        body.append(node('div', first.research?.version_label || (first.research?.experiment_ref ? '冻结实验 ' + short(first.research.experiment_ref) : '版本说明未提供'), 'version-title'));
         for(const v of members){
         const button = node('button', v.research?.no_version ? '尚未登记版本' : v.research?.not_run ? '尚未运行' : runCaption(v), 'run-item' + (v.view_id === state.runId ? ' selected' : ''));
         button.dataset.runId = v.view_id; button.title = v.run.run_id || v.research?.run_record_ref || v.research?.version_id;
         button.append(node('span', statusLabel(statusOf(v)) + (v.evaluation ? ' · 评价已载入' : '') + (v.research?.favorite ? ' · 收藏' : '') + (v.research?.shelved ? ' · 搁置' : '')));
-        button.addEventListener('click', () => selectRun(v.view_id)); wrap.append(button);
+        button.addEventListener('click', () => selectRun(v.view_id)); body.append(button);
         }
       }
       tree.append(wrap);
     }
-    if (!filtered.length) tree.append(node('p', '没有匹配的已保存记录。未提供的标记不会当作已收藏或已搁置。', 'small'));
-    $('navigation-note').textContent = views.some(v => !v.research?.created_at) ? '部分记录未保存运行时间，保留载入顺序；不以文件时间推断近期。' : '按 Research 保存时间排序。';
-    if(views.some(v=>v.public_display_projection))$('navigation-note').textContent+=' 本页仅列授权精选运行；总数来自 Research 原组，非当前载入数。';
-    document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('active', b.dataset.filter === state.filter));
+    if (!filtered.length) tree.append(node('p', '没有匹配的已保存记录。', 'small'));
+    $('navigation-note').textContent = views.some(v => !v.research?.created_at) ? '部分记录未保存时间，按载入顺序显示。' : '按 Research 保存时间排序。';
+    if(views.some(v=>v.public_display_projection))$('navigation-note').textContent+=' 本页展示精选运行。';
   }
   function renderHeader(v) {
     const r = v.run, research = v.research,stock=v.stock_ml,withoutAccount=!r.run_id;
@@ -151,11 +161,10 @@
     if(history.length){for(const item of history){const ref=item.record.evaluation_ref,version=v.research_versions?.[item.record.version_ref];option(historySelect,item.record.run_record_ref,(version?.label || '版本说明未提供')+' · '+saved(item.record.created_at)+(ref?' / eval '+short(ref.evaluation_ref):' / 未登记评价')+(ref&&!item.evaluation?' · 评价未载入':''));}historySelect.value=state.registration || research?.run_record_ref;}
     $('notice').textContent = v.evidence_kind === 'research_record_only' ? (research?.no_version ? '此问题尚未登记版本。' : research?.not_run ? '本版本尚未登记运行。' : '实验状态：' + statusLabel(statusOf(v)) + '；原因：' + saved(research?.reason)) + ' 未载入的账户结果不可用。' : v.evidence_kind === 'synthetic_ui_fixture' ? '合成展示样例，交互验收不代表真实回测或策略有效。' :
       v.evidence_kind === 'synthetic_owner_output' ? '合成模拟回测，仅验证保存与展示，不代表真实数据收益。' :
-      v.blocked ? '市场状态缺证，执行已阻断。零成交、仅现金不构成策略收益验收；已完成仅表示处理完成。' :
-      v.approximate ? 'ETF 日线近似：市场状态仍为未知，按日线价格、量和限价模拟；不保证开盘流动性或实盘成交。' : '已保存模拟回测；处理完成不代表策略有效。';
-    if(stockAccount(v))$('notice').textContent=r.stopped?'股票账户已停止；有效评价以 owner 保存状态和停止原因为准。':v.approximate?'显式股票日线事后近似：保留 UNKNOWN；当日开盘价与全天量为事后执行代理，不证明 09:30 可见、开盘流动性或实盘成交。费用、容量和 T+1 为研究假设；未模拟个人持有期红利税。':'股票严格状态对照：保留 UNKNOWN 拒单。'+(String(r.metrics?.fill_count)==='0'?'零成交、仅现金不构成策略收益验收。':'处理完成不代表策略有效。');
+      v.blocked ? '市场状态缺证，执行已阻断；没有可评价的策略成交。' :
+      v.approximate ? 'ETF 日线近似模拟；实际开盘成交与流动性未获验证。' : '已保存模拟回测。';
+    if(stockAccount(v))$('notice').textContent=r.stopped?'股票账户已停止，原因见来源详情。':v.approximate?'股票日线事后近似模拟；实际开盘成交与流动性未获验证。':'股票严格状态对照；未知状态按保存规则拒单。';
     if(stockAccount(v)&&['synthetic_ui_fixture','synthetic_owner_output'].includes(v.evidence_kind))$('notice').textContent='合成验收样例，不代表真实数据或策略收益。'+$('notice').textContent;
-    if(research?.outcome)$('notice').textContent+=' 保存说明：'+research.outcome;
     const metrics = r.metrics || {}, cards = clear('metrics');
     cards.hidden=withoutAccount;
     document.querySelector('.tabs').hidden=withoutAccount;
@@ -179,8 +188,19 @@
       if(comparison){const old=node('span','对照 '+cagr(oldPeriod?.account),'comparison-value');old.title='对照 Owner 原值：'+cagrRaw(oldPeriod?.account);card.append(old);}
       cards.append(card);
     }
+    for(const [key,label] of [['sharpe','Sharpe'],['calmar','Calmar']]){
+      const value=v.evaluation?.risk_metrics?.[key],oldValue=comparison?.evaluation?.risk_metrics?.[key];
+      if(value?.status!=='AVAILABLE'||!present(value.value))continue;
+      const card=node('div',null,'metric'),display=node('strong',ratio(value.value));
+      display.title='Owner 原值：'+saved(value.value);
+      card.append(node('span',label),display,node('small','原回测范围 · 保存值'));
+      if(comparison&&oldValue?.status==='AVAILABLE'&&present(oldValue.value)){
+        const old=node('span','对照 '+ratio(oldValue.value),'comparison-value');old.title='对照 Owner 原值：'+saved(oldValue.value);card.append(old);
+      }
+      cards.append(card);
+    }
     $('period-note').hidden=!(period || oldPeriod);
-    $('period-note').textContent=period || oldPeriod ? '年化区间：'+periodRange(period)+(comparison?' / 对照：'+periodRange(oldPeriod):'')+'；初始财富归属时钟，非新增 NAV 观测。模拟年化不代表预测收益。' : '';
+    $('period-note').textContent=period || oldPeriod ? '年化按保存报告区间：'+periodRange(period)+(comparison?' / 对照：'+periodRange(oldPeriod):'')+'；缩放不重算。' : '';
     $('period-note').title=json({current:period?.window,comparison:oldPeriod?.window});
     $('selection-context').textContent = state.interval ? '选中期间 ' + state.interval.start + ' — ' + state.interval.end + (state.session ? ' / ' + state.session : '') + '；指标仍为整段回测。' : '指标范围：整段回测' + (state.session ? ' / 选中 ' + state.session : '');
   }
@@ -240,7 +260,7 @@
     const panel=$('stock-account-context');panel.hidden=!stockAccount(v);
     if(panel.hidden){$('stock-account-scope').textContent='';$('stock-account-refs').textContent='';return;}
     const context=v.stock_context,profile=v.configuration.profile;
-    $('stock-account-scope').textContent='数量：股；价格：元/股；保存范围 '+saved(v.configuration.start_session)+' — '+saved(v.configuration.end_session)+'。原预测 union '+saved(context.prediction_universe?.length)+'；执行资格 union '+saved(context.execution_universe?.length)+'（深圳 000/002/003 ∩ 当时 CSI300，非全 CSI300）。100 股 / T+1、佣金/最低费、卖方印花税、双边过户费及全天量容量均为冻结研究参数；成交可能偏离目标权重。';
+    $('stock-account-scope').textContent='数量：股；价格：元/股；100 股委托、T+1。范围、税费与容量见展开详情。';
     $('stock-account-refs').textContent=json({run_id:v.run.run_id,content_digest:v.run.content_digest,committed_sequence:v.run.committed_sequence,status:v.run.status,stopped:v.run.stopped,quantity_unit:v.run.quantity_unit,price_unit:v.run.price_unit,admission_ref:v.run.admission_ref,supported_universe_ref:v.run.supported_universe_ref,context,profile,native_source_evidence:v.market.source_evidence,projection_note:'仅显示投影；完整 native DataBatch 身份为 source reference，coverage 与压缩 payload 留在 owner 保存文件，不将此投影重新认定为完整批次。'});
   }
   const NS = 'http://www.w3.org/2000/svg';
@@ -288,12 +308,12 @@
     const r = v.run, nav = r.nav || [], comparison = byId.get(state.compare);
     const select = $('compare-run'); select.replaceChildren(); option(select,'','添加运行对照');
     select.disabled=!r.run_id;
-    for (const view of views) if(view.view_id !== v.view_id && view.run.run_id) option(select,view.view_id,(stockAccount(view)?runCaption(view):view.research?.version_label || short(view.run.run_id)) + ' · ' + statusOf(view));
+    for (const view of views) if(view.view_id !== v.view_id && view.run.run_id) option(select,view.view_id,(view.research?.version_label || short(view.run.run_id))+' · '+runCaption(view)+' · '+statusOf(view));
     select.value = state.compare; $('benchmark-toggle').checked = state.benchmark;
     const differences=[],unverified=[],oldConditions=new Map((comparison?.comparison_conditions || []).map(f=>[f.key,f]));
     if(comparison)for(const fact of v.comparison_conditions || []){const old=oldConditions.get(fact.key);if(!fact.provided||!old?.provided)unverified.push(fact.label);else if(json(canonical(fact.value))!==json(canonical(old.value)))differences.push(fact.label);}
     if(comparison&&!(v.comparison_conditions || []).length)unverified.push('比较条件');
-    $('comparison-notice').textContent = !comparison ? '可添加其他运行，比较保存结果。' : (differences.length?'比较条件不一致：'+differences.join('、')+'。':'已保存比较条件未发现差异。')+(unverified.length?'未提供，无法核实：'+unverified.join('、')+'。':'')+'曲线保留各自完整范围。';
+    $('comparison-notice').textContent = !comparison ? '可添加其他运行，比较保存结果。' : (differences.length?'条件差异：'+differences.join('、')+'。':'已保存条件未发现差异。')+(unverified.length?' 部分条件缺少保存证据，详见配置。':'');
     const changes=[];if(comparison&&r.signal_ref!==comparison.run.signal_ref)changes.push('信号版本');if(comparison&&v.research?.version_id!==comparison.research?.version_id)changes.push('研究版本');
     $('comparison-changes').textContent=comparison?'研究变动：'+(changes.join('、') || '见保存说明')+'；具体参数与声明见展开详情。':'';
     $('configuration-differences').textContent = '本次改了什么：'+(changes.join('、') || '以保存说明为准')+'；声明变动：'+saved(v.research?.changes && json(v.research.changes));
@@ -304,7 +324,7 @@
     $('benchmark-toggle').checked=state.benchmark && !$('benchmark-toggle').disabled;
     const missingReasons=[...new Set((benchmark?.series || []).map(p=>p.missing_reason).filter(present))];
     const period=v.evaluation?.period_metrics,benchMetrics=period?.benchmark || benchmark;
-    $('benchmark-note').textContent = benchmark ? '沪深300价格指数（不含分红） · '+statusLabel(benchmark.status)+' · 累计收益 '+percent(benchMetrics.total_return)+' / 最大回撤 '+percent(benchMetrics.max_drawdown)+(period?' / CAGR '+cagr(period.benchmark)+' · '+periodRange(period):'')+'。账户收益包含保存的分红入账，两者收益口径不同。'+(missingReasons.length?'存在缺值，详情见数据与运行信息。':'') : '沪深300评价暂未提供。';
+    $('benchmark-note').textContent = benchmark ? '沪深300价格指数，不含分红；账户收益含已入账分红。累计收益 '+percent(benchMetrics.total_return)+'，最大回撤 '+percent(benchMetrics.max_drawdown)+(period?'，CAGR '+cagr(period.benchmark):'')+'。' : '';
     $('benchmark-note').title=period?cagrRaw(period.benchmark):'';
     chartUI.summaries(v,comparison,differences,unverified);
     chartUI.performance(v);
@@ -454,6 +474,7 @@
   function selectEpisode(episode){const fillId=episode.fill_refs?.at(-1)?.fill_id || '',linkedFill=(current().run.fills || []).find(f=>f.fill_id===fillId);state.security=episode.security_id;state.chainSecurity=episode.security_id;$('chain-search').value='';$('chain-status').value='';state.interval={start:episode.entry_session || current().run.nav?.[0]?.session,end:episode.exit_session || current().run.nav?.at(-1)?.session};state.tradeWindow={mode:'custom',...state.interval};state.session=episode.exit_session || linkedFill?.session || episode.entry_session || state.interval.end;state.pane='trade';state.kind='fills';state.fillId=fillId;state.eventId=fillId;render();requestAnimationFrame(()=>$('trade-chart').scrollIntoView({block:'center'}));}
   function renderSources(v) {
     const panel=clear('source-details'),all=[...(v.run.limitations || []),...(v.evaluation?.limitations || [])];
+    if(v.research?.outcome)panel.append(node('p','Research 保存说明：'+v.research.outcome,'small'));
     for(const text of all.slice(0,3))panel.append(node('p',String(text),'small'));
     if(all.length>3)panel.append(node('p','另有 '+(all.length-3)+' 条保存限制，可在原始记录中查看。','small'));
     const refs=clear('source-refs');
@@ -466,9 +487,8 @@
     document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('active',p.id===state.pane));document.querySelectorAll('[data-pane]').forEach(b=>b.classList.toggle('active',b.dataset.pane===state.pane));
   }
   document.querySelectorAll('[data-pane]').forEach(b=>b.addEventListener('click',()=>{state.pane=b.dataset.pane;render();}));
-  document.querySelectorAll('[data-filter]').forEach(b=>b.addEventListener('click',()=>{state.filter=b.dataset.filter;renderTree();}));
   $('status-filter').addEventListener('change',e=>{state.status=e.target.value;renderTree();});$('tag-filter').addEventListener('change',e=>{state.tag=e.target.value;renderTree();});
-  $('compare-run').addEventListener('change',e=>{state.compare=e.target.value;renderHeader(current());renderPerformance(current());});$('benchmark-toggle').addEventListener('change',e=>{state.benchmark=e.target.checked;renderPerformance(current());});
+  $('compare-run').addEventListener('change',e=>{state.compare=e.target.value;state.legendVisible.comparison=true;renderHeader(current());renderPerformance(current());});$('benchmark-toggle').addEventListener('change',e=>{state.benchmark=e.target.checked;if(state.benchmark)state.legendVisible.benchmark=true;renderPerformance(current());});
   $('registration-select').addEventListener('change',e=>{state.registration=e.target.value;state.session='';state.interval=null;state.tradeWindow={mode:'all'};state.fillId='';state.eventId='';render();});
   for(const id of ['episode-scope','episode-security','episode-status'])$(id).addEventListener('change',()=>{state.episodePage=0;renderEpisodeList(current());});
   $('security-select').addEventListener('change',e=>{state.security=e.target.value;state.chainSecurity=e.target.value;state.session='';state.fillId='';state.eventId='';renderTrade(current());renderHeader(current());});

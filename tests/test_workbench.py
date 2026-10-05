@@ -512,7 +512,7 @@ class WorkbenchTests(unittest.TestCase):
             self.assertEqual(view["market"]["rows"][0]["close"],native["records"][0]["close"])
             self.assertEqual(view["market"]["rows"][0]["volume_shares"],str(native["records"][0]["volume_shares"]))
             self.assertEqual(view["run"]["nav"][-1]["nav_minor"],str(run["nav"][-1]["nav_minor"]))
-            self.assertIn("K线暂未提供，当前仅显示保存的收盘价与全天量。",html)
+            self.assertIn("当前只有保存的收盘价与全天量。",html)
             self.assertNotIn("high",view["market"]["rows"][0])
             self.assertNotIn("low",view["market"]["rows"][0])
             self.assertEqual(run,before)
