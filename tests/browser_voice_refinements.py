@@ -197,14 +197,21 @@ def review(output):
             (output / "browser-voice-refinements.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
             return report
         finally:
-            if ws:
-                ws.close()
-            chrome.terminate()
             try:
-                chrome.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                chrome.kill()
-            server.shutdown()
+                if ws:
+                    ws.close()
+            finally:
+                try:
+                    if chrome.poll() is None:
+                        chrome.terminate()
+                        try:
+                            chrome.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            chrome.kill()
+                            chrome.wait(timeout=5)
+                finally:
+                    server.shutdown()
+                    server.server_close()
 
 
 if __name__ == "__main__":
