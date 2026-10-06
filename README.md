@@ -249,6 +249,16 @@ The saved v2 financial contract is
 Saved account event consumption follows
 [Trade §9.2](https://github.com/sinnergarden/axiom-docs/blob/a5a954902e1349199070077984d2473125222a9c/docs/design/04_axiom_trade.md#etf-unit-split-application-proposal).
 
+### ETF v5 public selection status
+
+The private workbench reads saved `backtest_run_v5` results, but `project_view`
+still rejects v5 public export. The proposed narrow selection and path
+allowlist belongs in the canonical
+[UI read contract](https://github.com/sinnergarden/axiom-docs/blob/main/docs/ui-workbench-read-contract.md).
+Implement it only after review; the existing explicit `run_ids` selection and
+v4 public projection remain the software entry point. A private workbench page
+does not authorize publishing its raw `plan`, source evidence or DataBatch.
+
 ## Publish the selected saved results
 
 The deployment target is [sinnergarden.github.io/axiom-ui](https://sinnergarden.github.io/axiom-ui/).
