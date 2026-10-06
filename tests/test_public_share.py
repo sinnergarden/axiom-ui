@@ -38,11 +38,81 @@ def saved_view():
 
 
 class PublicProjectionTests(unittest.TestCase):
-    def test_etf_v5_requires_separate_public_selection_review(self):
+    def test_etf_v5_selected_policy_split_and_grid_are_narrow(self):
         value = saved_view()
-        value['run']['contract_version'] = 'backtest_run_v5'
-        with self.assertRaisesRegex(ValueError, 'reviewed narrow export contract'):
-            project_view(value)
+        ref = 'sha256:' + 'a'*64
+        run = value['run']
+        run.update(contract_version='backtest_run_v5', quantity_unit='fund units',
+                   price_unit='CNY/fund unit', signal_ref=ref, portfolio_policy_ref=ref,
+                   unit_split_applications=[{'event_id':'split:A','security_id':'A',
+                       'session':'2024-01-02','status':'APPLIED','sequence':7,
+                       'rounding_extra_fraction':{'numerator':'0','denominator':'1'},
+                       'original_quote':{'session':'2024-01-02','price':'10.05',
+                                         'source_refs':[ref]},
+                       'normalized_quote':{'session':'2024-01-02','price':'2.01',
+                                           'source_refs':[ref]}, 'source_refs':[ref]}])
+        run['positions'][0]['mark_basis_event_id'] = 'split:A'
+        run['fills'][0].update(raw_slipped_price='10.0501', price_tick='0.001',
+                               price_grid_ref=ref, price_rounding='HALF_UP',
+                               rounding_delta='-0.0001', effective_slippage_bps='5',
+                               source_refs=[ref])
+        run['orders'] = [{'security_id':'A','session':'2024-01-02',
+                          'announced_suspension_event_ids':['split:A'],
+                          'raw_slipped_price':'10.0501','price_grid_ref':ref}]
+        value['configuration']['portfolio_policy'] = {
+            'contract_version':'etf_rotation_policy_v1','schedule':'weekly_first_trading_session'}
+        value['configuration']['profile'].update(price_grid_ref=ref,
+            price_grid_policy='etf_price_grid_v1', price_limit_policy='require_both', tax_rate='0',
+            price_grid={'sources':[{'url':'https://private.example/grid'}]})
+        value['comparison_conditions'].append({'key':'profile.extra','provided':True,
+            'value':{'price_grid':value['configuration']['profile']['price_grid'],
+                     'price_grid_ref':ref}})
+        value['market']['unit_splits'] = [
+            {'event':{'event_id':'split:A','security_id':'A','event_type':'split',
+                      'document_refs':[{'url':'https://private.example/source'}]},
+             'source_refs':[ref]},
+            {'event':{'event_id':'unrelated','security_id':'UNRELATED'},'source_refs':[ref]}]
+        value['market']['source_refs'] = [ref]
+        original = deepcopy(value)
+        result = project_view(value)
+        self.assertEqual(value, original)
+        self.assertEqual(result['run']['unit_split_applications'][0]['rounding_extra_fraction'],
+                         {'numerator':'0','denominator':'1'})
+        self.assertEqual(result['run']['fills'][0]['raw_slipped_price'],'10.0501')
+        self.assertEqual(result['market']['unit_splits'][0]['event']['event_id'],'split:A')
+        self.assertEqual(len(result['market']['unit_splits']), 1)
+        self.assertNotIn('price_grid', result['configuration']['profile'])
+        self.assertNotIn('price_grid', result['comparison_conditions'][-1]['value'])
+        self.assertNotIn('private.example',json.dumps(result))
+
+        held = deepcopy(value)
+        held['run']['signal_ref'] = None
+        held['configuration']['portfolio_policy'] = {
+            'contract_version':'etf_buy_and_hold_policy_v1','security_id':'A',
+            'entry_session':'2024-01-02','budget':'1','schedule':'entry_session_once',
+            'partial_fill_policy':'expire_no_retry','cash_dividend_policy':'retain_cash',
+            'terminal_policy':'mark_open_position'}
+        self.assertIsNone(project_view(held)['run']['signal_ref'])
+
+        for mutation in (
+            lambda v: v['run']['metrics'].update(private_marker='secret'),
+            lambda v: v['run']['unit_split_applications'][0]['original_quote'].update(path='/Users/secret'),
+            lambda v: v['run']['unit_split_applications'][0].update(source_refs=['https://private.example']),
+            lambda v: v['configuration']['portfolio_policy'].update(private_marker='secret'),
+            lambda v: v['configuration']['profile'].update(private_marker='secret'),
+            lambda v: v['run']['fills'][0].update(price_grid_ref={'uri':'file:///Users/secret'}),
+            lambda v: v['run']['positions'][0].update(mark_basis_event_id={'event_id':'split:A'}),
+            lambda v: v['run']['orders'][0].update(announced_suspension_event_ids=[{'event_id':'split:A'}]),
+            lambda v: v['market'].update(source_refs=['https://private.example/source']),
+            lambda v: v['market']['unit_splits'][0].update(source_refs=[{'content_digest':ref}]),
+            lambda v: v['configuration'].update(unit_split_policy={'private':'value'}),
+            lambda v: v['run']['limitations'].append('See https://private.example/source'),
+            lambda v: v['comparison_conditions'][-1]['value'].update(price_grid_ref='sha256:wrong'),
+        ):
+            malformed = deepcopy(value)
+            mutation(malformed)
+            with self.assertRaises(ValueError):
+                project_view(malformed)
 
     def test_v4_stock_schedule_public_allowlist_and_units(self):
         value = self.chart_view()

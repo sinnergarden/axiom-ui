@@ -72,6 +72,22 @@ ROW = ('security_id', 'session', 'close', 'volume', 'volume_units', 'volume_shar
 EVENT = ('event_id', 'security_id', 'event_type', 'record_date', 'effective_date', 'effective_phase',
          'ratio_numerator', 'ratio_denominator', 'quantity_rounding', 'quantity_rounding_scope',
          'new_price_basis_session', 'suspension_start', 'suspension_end', 'suspension_scope', 'resume_session')
+V5_PROFILE = (*V4_PROFILE, 'tax_rate', 'price_limit_policy', 'price_grid_policy', 'price_grid_ref')
+V5_POSITION = (*V4_POSITION, 'mark_basis_event_id')
+V5_PRICE = ('raw_slipped_price', 'price_tick', 'price_grid_ref', 'price_rounding',
+            'rounding_delta', 'effective_slippage_bps')
+V5_ORDER = (*V4_ORDER, 'announced_suspension_event_ids', *V5_PRICE)
+V5_FILL = (*V4_FILL, *V5_PRICE)
+V5_APPLICATION = ('event_id', 'security_id', 'session', 'phase', 'status', 'sequence',
+                  'record_sequence', 'record_quantity', 'before_quantity', 'after_quantity',
+                  'before_sellable_quantity', 'after_sellable_quantity', 'cost_minor',
+                  'rounding_extra_fraction', 'original_quote', 'normalized_quote',
+                  'before_market_value_minor', 'after_market_value_minor', 'rounding_value_minor',
+                  'source_refs')
+V5_QUOTE = ('session', 'price', 'available_at', 'source_refs')
+V5_ROTATION_POLICY = ('contract_version', 'schedule')
+V5_BUY_HOLD_POLICY = ('contract_version', 'security_id', 'entry_session', 'budget',
+                      'schedule', 'partial_fill_policy', 'cash_dividend_policy', 'terminal_policy')
 REVIEW_EVENT = (*EVENT, 'announcement_date', 'implementation_announcement_date', 'cash_dividend_per_unit',
                 'ex_date', 'pay_date', 'process_status', 'source_code', 'new_price_basis_basis', 'announcement_precision')
 # Names from the frozen v4 stock display and evaluation v2/v3 public contract.
@@ -208,6 +224,17 @@ def _schema_field_names(schema):
 
 
 V4_PUBLIC_KEYS = V4_PUBLIC_KEYS | _schema_field_names(_V4_PUBLIC_EVALUATION)
+_V5_SSE_COMPARISON = {**_COMPARISON, **dict.fromkeys((
+    'observation_cutoff', 'observation_pit_policy', 'observation_purpose',
+    'observation_snapshot_id'))}
+_V5_PUBLIC_EVALUATION = {**_V4_PUBLIC_EVALUATION,
+    'spec': {**_SPEC, 'benchmark_projection_version': None},
+    'benchmark_comparisons': {**_V4_PUBLIC_EVALUATION['benchmark_comparisons'],
+                              'SSE_COMPOSITE': _V5_SSE_COMPARISON}}
+V5_PUBLIC_KEYS = (V4_PUBLIC_KEYS | frozenset((*V5_PROFILE, *V5_POSITION, *V5_ORDER,
+    *V5_FILL, *V5_APPLICATION, *V5_QUOTE, *V5_BUY_HOLD_POLICY, 'portfolio_policy_ref',
+    'phase', 'numerator', 'denominator', 'unit_split_policy', 'unit_splits')) |
+    _schema_field_names(_V5_PUBLIC_EVALUATION))
 
 
 def reject_public_shape(value, schema, label):
@@ -261,27 +288,30 @@ def reject_extra(value, keys, label):
         raise ValueError('unexpected private or unknown v4 ' + label)
 
 
-def reject_unknown_public_v4(value):
+def reject_unknown_public_v4(value, *, v5=False, security_keys=frozenset()):
+    allowed = V5_PUBLIC_KEYS if v5 else V4_PUBLIC_KEYS
     if isinstance(value, dict):
         for key, child in value.items():
-            if not isinstance(key, str) or (key not in V4_PUBLIC_KEYS and
+            if not isinstance(key, str) or (key not in allowed and key not in security_keys and
                 not re.fullmatch(r'cnstock\.(?:000|002|003)\d{3}\.SZ\.\d{8}', key)):
-                raise ValueError('unexpected private or unknown v4 public field')
-            reject_unknown_public_v4(child)
+                raise ValueError('unexpected private or unknown v4 public field: ' + str(key))
+            reject_unknown_public_v4(child, v5=v5, security_keys=security_keys)
     elif isinstance(value, list):
         for child in value:
-            reject_unknown_public_v4(child)
+            reject_unknown_public_v4(child, v5=v5, security_keys=security_keys)
 
 
-def validate_v4_public_account(run, securities):
+def validate_v4_public_account(run, securities, *, v5=False):
     """Account scalar fields cannot carry arbitrary objects under legal key names."""
     containers = {'metrics', 'nav', 'positions', 'orders', 'fills', 'limitations', 'final_account'}
-    reject_public_shape({k: v for k, v in run.items() if k not in containers | {'decisions'}},
-                        dict.fromkeys(set(RUN) - containers - {'unit_split_applications'}), 'run')
+    reject_public_shape({k: v for k, v in run.items() if k not in containers | {'decisions', 'unit_split_applications'}},
+                        dict.fromkeys((set(RUN) - containers - {'unit_split_applications'}) |
+                                      ({'portfolio_policy_ref'} if v5 else set())), 'run')
     reject_public_shape(run.get('metrics'), _public_object(' '.join(V4_METRICS)), 'metrics')
     for name, fields, sequences in (
-        ('nav', V4_NAV, ()), ('positions', V4_POSITION, ('mark_source_refs',)),
-        ('orders', V4_ORDER, ()), ('fills', V4_FILL, ('source_refs',))):
+        ('nav', V4_NAV, ()), ('positions', V5_POSITION if v5 else V4_POSITION, ('mark_source_refs',)),
+        ('orders', V5_ORDER if v5 else V4_ORDER, ('announced_suspension_event_ids',) if v5 else ()),
+        ('fills', V5_FILL if v5 else V4_FILL, ('source_refs',))):
         clock = {'field_available_at'} if name in {'orders', 'fills'} else set()
         schema = _public_object(' '.join(k for k in fields if k not in set(sequences) | clock),
             **{k: (None,) for k in sequences},
@@ -289,6 +319,14 @@ def validate_v4_public_account(run, securities):
                 'close limit_down limit_up market_state open volume_shares')} if clock else {}))
         reject_public_shape(run.get(name), (schema,), name)
     reject_public_shape(run.get('limitations'), (None,), 'limitations')
+    if v5:
+        quote = _public_object('session price available_at', source_refs=(None,))
+        application = _public_object(' '.join(k for k in V5_APPLICATION
+            if k not in {'original_quote', 'normalized_quote', 'source_refs',
+                         'rounding_extra_fraction'}),
+            original_quote=quote, normalized_quote=quote, source_refs=(None,),
+            rounding_extra_fraction=_public_object('numerator denominator'))
+        reject_public_shape(run.get('unit_split_applications'), (application,), 'unit split applications')
     for decision in run.get('decisions') or []:
         nested = {'selected_security_ids', 'targets', 'trace', 'intents'}
         reject_public_shape({k: v for k, v in decision.items() if k not in nested},
@@ -315,6 +353,195 @@ def validate_v4_public_account(run, securities):
                 raise ValueError('unexpected private or unknown v4 final security')
             reject_public_shape(position, _public_object('quantity sellable_quantity cost_minor'),
                                 'final account position')
+
+
+def _digest_refs(refs, label):
+    if not isinstance(refs, list) or any(not isinstance(ref, str) or
+            not re.fullmatch(r'sha256:[0-9a-f]{64}', ref) for ref in refs):
+        raise ValueError('unexpected private or unknown v5 ' + label)
+
+
+def _digest_ref(ref, label):
+    if not isinstance(ref, str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', ref):
+        raise ValueError('unexpected private or unknown v5 ' + label)
+
+
+def _v5_applications(rows):
+    if not isinstance(rows, list):
+        raise ValueError('unexpected private or unknown v5 unit split applications')
+    result = []
+    for row in rows:
+        reject_extra(row, V5_APPLICATION, 'v5 unit split application')
+        projected = pick(row, V5_APPLICATION)
+        if row.get('rounding_extra_fraction') is not None:
+            reject_public_shape(row['rounding_extra_fraction'],
+                _public_object('numerator denominator'), 'v5 split fraction')
+        for key in ('original_quote', 'normalized_quote'):
+            if row.get(key) is not None:
+                reject_extra(row[key], V5_QUOTE, 'v5 unit split quote')
+                projected[key] = pick(row[key], V5_QUOTE)
+                _digest_refs(projected[key].get('source_refs'), 'quote source refs')
+        _digest_refs(projected.get('source_refs'), 'application source refs')
+        result.append(projected)
+    return result
+
+
+def validate_v5_public_input(view, run):
+    """Accept only the selected ETF owner paths; never export a native plan/grid."""
+    reject_extra(run, (*RUN, 'portfolio_policy_ref', 'decisions'), 'v5 run field')
+    configuration = view.get('configuration') or {}
+    reject_extra(configuration, ('start_session', 'end_session', 'initial_account',
+                                 'profile', 'price_basis', 'unit_split_policy',
+                                 'portfolio_policy'), 'v5 configuration field')
+    for name in ('start_session', 'end_session', 'price_basis', 'unit_split_policy'):
+        reject_public_shape(configuration.get(name), None, 'v5 configuration.' + name)
+    profile = configuration.get('profile') or {}
+    reject_extra(profile, (*V5_PROFILE, 'price_grid'), 'v5 profile field')
+    if any(isinstance(value, (dict, list)) for key, value in profile.items() if key != 'price_grid'):
+        raise ValueError('unexpected private or unknown v5 nested profile field')
+    _digest_ref(profile.get('price_grid_ref'), 'price grid identity')
+    _digest_ref(run.get('portfolio_policy_ref'), 'portfolio policy identity')
+    initial = configuration.get('initial_account') or {}
+    reject_public_shape(initial, _public_object('cash_minor', positions=_public_object('')),
+                        'v5 initial account')
+    policy = configuration.get('portfolio_policy') or {}
+    if not isinstance(policy, dict):
+        raise ValueError('unexpected private or unknown v5 portfolio policy')
+    kind = policy.get('contract_version')
+    if kind == 'etf_rotation_policy_v1':
+        reject_extra(policy, V5_ROTATION_POLICY, 'v5 rotation policy')
+        if run.get('signal_ref') is None:
+            raise ValueError('missing v5 rotation signal')
+    elif kind == 'etf_buy_and_hold_policy_v1':
+        reject_extra(policy, V5_BUY_HOLD_POLICY, 'v5 buy and hold policy')
+        if run.get('signal_ref') is not None:
+            raise ValueError('unexpected v5 buy and hold signal')
+    else:
+        raise ValueError('unexpected private or unknown v5 portfolio policy')
+    reject_public_shape(policy, _public_object(' '.join(policy)), 'v5 portfolio policy')
+    for name, allowed in (('metrics', V4_METRICS), ('nav', V4_NAV), ('positions', V5_POSITION),
+                          ('orders', V5_ORDER), ('fills', V5_FILL),
+                          ('decisions', (*V4_DECISION, 'reference_session', 'portfolio_policy_ref'))):
+        rows = run.get(name) or ([] if name != 'metrics' else {})
+        for row in rows if name != 'metrics' else [rows]:
+            reject_extra(row, allowed, 'v5 ' + name)
+    for row in run.get('positions') or []:
+        reject_public_shape(row.get('mark_basis_event_id'), None, 'v5 mark basis event')
+        if row.get('mark_source_refs') is not None:
+            _digest_refs(row['mark_source_refs'], 'position mark source refs')
+    for row in run.get('orders') or []:
+        reject_public_shape(row.get('announced_suspension_event_ids'), (None,),
+                            'v5 announced suspension events')
+        if row.get('price_grid_ref') is not None:
+            _digest_ref(row['price_grid_ref'], 'order price grid identity')
+    for row in run.get('fills') or []:
+        if row.get('source_refs') is not None:
+            _digest_refs(row['source_refs'], 'fill source refs')
+        if row.get('price_grid_ref') is not None:
+            _digest_ref(row['price_grid_ref'], 'fill price grid identity')
+    for condition in view.get('comparison_conditions') or []:
+        reject_extra(condition, ('key', 'label', 'provided', 'value'), 'v5 condition')
+        key = condition.get('key')
+        if key == 'profile.extra':
+            extra = condition.get('value') or {}
+            reject_extra(extra, (*V5_PROFILE, 'price_grid'), 'v5 profile extra')
+            if any(profile.get(name) != value for name, value in extra.items()):
+                raise ValueError('v5 profile condition mismatch')
+        elif isinstance(key, str) and key.startswith('profile.'):
+            name = key[8:]
+            if name not in V5_PROFILE or condition.get('value') != profile.get(name):
+                raise ValueError('unexpected private or unknown v5 profile condition')
+        elif key in SAFE_CONDITIONS and condition.get('value') != configuration.get(key):
+            raise ValueError('v5 condition mismatch')
+    for row in run.get('decisions') or []:
+        for intent in row.get('intents') or []:
+            reject_extra(intent, (*V4_INTENT, 'quantity_unit', 'reason', 'session'), 'v5 intent')
+        for trace in row.get('trace') or []:
+            reject_extra(trace, (*TRACE, 'count', 'top_k', 'detail', 'reference_nav_minor'), 'v5 trace')
+    if run.get('final_account') is not None:
+        final = run['final_account']
+        reject_extra(final, ('cash_minor', 'receivable_minor', 'positions', 'committed_sequence'),
+                     'v5 final account')
+        if not isinstance(final.get('positions'), dict):
+            raise ValueError('unexpected private or unknown v5 final positions')
+        for position in final['positions'].values():
+            reject_extra(position, ('quantity', 'sellable_quantity', 'cost_minor'),
+                         'v5 final position')
+
+
+def validate_v5_public_market(market, securities):
+    """Validate each exported market path after selecting rows and dropping native proofs."""
+    reject_extra(market, ('rows', 'price_basis', 'source_refs', 'data_batch', 'native_chart',
+                          'review_display', 'security_labels', 'security_name_scope',
+                          'security_label_source', 'review_events', 'fill_display', 'unit_splits'),
+                 'v5 market')
+    reject_public_shape(market.get('price_basis'), None, 'v5 price basis')
+    if market.get('data_batch') is not None:
+        raise ValueError('native DataBatch cannot enter public v5 market')
+    _digest_refs(market.get('source_refs'), 'market source refs')
+    reject_public_shape(market.get('rows'),
+        (_public_object(' '.join(k for k in ROW if k not in {'source_refs', 'volume_shares'}),
+                        source_refs=(None,)),), 'v5 market rows')
+    for row in market.get('rows') or []:
+        if row.get('source_refs') is not None:
+            _digest_refs(row['source_refs'], 'market row source refs')
+    labels = market.get('security_labels') or {}
+    if not isinstance(labels, dict) or set(labels) - securities:
+        raise ValueError('unexpected private or unknown v5 security label')
+    reject_public_shape(labels, dict.fromkeys(labels), 'v5 security labels')
+    reject_public_shape(market.get('security_name_scope'), None, 'v5 security name scope')
+    reject_public_shape(market.get('security_label_source'), _public_object(
+        'manifest_sha256 source_snapshot_id label_cutoff original_display_manifest_sha256'),
+        'v5 security label source')
+    display = market.get('review_display')
+    if display is not None:
+        fields = ('security_id', 'session', 'open', 'high', 'low', 'close', 'native_open',
+                  'native_high', 'native_low', 'native_close', 'native_pre_close',
+                  'volume_units', 'amount_cny', 'display_scale',
+                  'display_missing_reason')
+        reject_public_shape(display, _public_object(
+            'contract_version manifest_sha256 display_projection names_status events_status '
+            'public_selected_chart',
+            context=_public_object('usage snapshot_id anchor_session knowledge_cutoff pit_policy '
+                                   'default_price_basis native_price_basis', limitations=(None,)),
+            field_units=_public_object(' '.join(fields[2:])),
+            records=(_public_object(' '.join(fields)),)), 'v5 review display')
+    reject_public_shape(market.get('review_events'),
+        (_public_object('domain', event=_public_object(' '.join(REVIEW_EVENT))),),
+        'v5 review events')
+    reject_public_shape(market.get('fill_display'), _public_object(
+        'contract_version content_digest display_result_ref display_ref status display_projection',
+        coordinates=(_public_object('fill_id security_id session status reason display_price '
+                                    'source_unit target_unit'),)), 'v5 fill display')
+    native = market.get('native_chart')
+    if native is not None:
+        volume = 'volume_units'
+        fields = ('open', 'high', 'low', 'close', volume)
+        reject_public_shape(native, _public_object('display_projection public_selected_chart source_ref',
+            context=_public_object('snapshot_id domain reader_version contract_id source_profile_id '
+                'price_basis adjustment_anchor selected_start_session selected_end_session '
+                'original_saved_batch_file_ref identity_note',
+                original_saved_replay_source_refs=(None,)),
+            records=(_public_object('security_id session ' + ' '.join(fields)),),
+            field_meta={name: _public_object('unit dtype', by_key=(None,)) for name in fields},
+            omitted=(None,)), 'v5 native chart')
+        _digest_ref(native.get('source_ref'), 'selected chart source identity')
+    reject_public_shape(market.get('unit_splits'),
+        (_public_object('', event=_public_object(' '.join(EVENT)), source_refs=(None,)),),
+        'v5 unit splits')
+
+
+def reject_v5_source_urls(value):
+    if isinstance(value, str) and re.search(r'\b(?:https?|file)://', value, re.I):
+        raise ValueError('source URL is forbidden in public v5 projection')
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if key in {'source_refs', 'original_saved_replay_source_refs'} and child is not None:
+                _digest_refs(child, key)
+            reject_v5_source_urls(child)
+    elif isinstance(value, list):
+        for child in value:
+            reject_v5_source_urls(child)
 
 
 def validate_v4_public_input(view, run):
@@ -422,8 +649,9 @@ def project_view(view):
     run = view.get('run') or {}
     if not run.get('run_id'):
         raise ValueError('public results require an explicit saved account')
-    if run.get('contract_version') == 'backtest_run_v5':
-        raise ValueError('ETF v5 public projection requires a reviewed narrow export contract')
+    v5 = run.get('contract_version') == 'backtest_run_v5'
+    if v5:
+        validate_v5_public_input(view, run)
     v4 = run.get('contract_version') == 'backtest_run_v4'
     if v4:
         validate_v4_public_input(view, run)
@@ -431,13 +659,24 @@ def project_view(view):
             raise ValueError('unexpected private or unknown v4 single-signal model')
     result = {'view_id': view['view_id'], 'run': pick(run, RUN),
               'configuration': pick(view['configuration'], ('start_session', 'end_session', 'initial_account',
-                                                           'profile', 'price_basis', 'unit_split_policy')),
+                                                           'profile', 'price_basis', 'unit_split_policy',
+                                                           'portfolio_policy')),
               'evidence_kind': view['evidence_kind'], 'approximate': view['approximate'], 'blocked': view['blocked'],
-              'research': pick(view['research'], RESEARCH) if view.get('research') else None,
+              'research': pick(view['research'], RESEARCH) if view.get('research') and not v5 else None,
               'evaluation': pick(view['evaluation'], EVALUATION) if view.get('evaluation') else None,
               'comparison_conditions': [clean(c) for c in view.get('comparison_conditions', [])
                                         if c['key'] in SAFE_CONDITIONS or c['key'].startswith('profile.')],
               'registration_history': []}
+    if v5:
+        result['run']['portfolio_policy_ref'] = clean(run['portfolio_policy_ref'])
+        result['run']['unit_split_applications'] = _v5_applications(run.get('unit_split_applications') or [])
+        result['configuration']['profile'] = pick(view['configuration']['profile'], V5_PROFILE)
+        conditions = []
+        for condition in result['comparison_conditions']:
+            if condition['key'] == 'profile.extra':
+                condition['value'] = pick(condition['value'], V5_PROFILE)
+            conditions.append(condition)
+        result['comparison_conditions'] = conditions
     result['run']['decisions'] = [pick(d, ('contract_version', 'feature_session', 'trade_session', 'status',
                                          'selected_security_id', 'selected_security_ids', 'signal_ref',
                                          'expected_account_version', 'intents', 'reason', 'top_k')) for d in run.get('decisions') or []]
@@ -461,7 +700,8 @@ def project_view(view):
                 for r in run.get(name) or [] if r.get('security_id') and r.get('session')}
     market = view['market']
     start, end = view['configuration']['start_session'], view['configuration']['end_session']
-    rows = [pick(r, ROW) for r in market.get('rows') or []
+    row_fields = tuple(k for k in ROW if k != 'volume_shares') if v5 else ROW
+    rows = [pick(r, row_fields) for r in market.get('rows') or []
             if r.get('security_id') in securities and start <= r.get('session', '') <= end]
     present = {(r['security_id'], r['session']) for r in rows}
     if required - present:
@@ -474,7 +714,9 @@ def project_view(view):
         fields = ('security_id', 'session', 'open', 'high', 'low', 'close', 'native_open', 'native_high',
                   'native_low', 'native_close', 'native_pre_close', 'volume_shares', 'volume_units',
                   'amount_cny', 'display_scale', 'display_missing_reason')
-        if v4:
+        if v5:
+            fields = tuple(k for k in fields if k != 'volume_shares')
+        if v4 or v5:
             units = display.get('field_units') or {}
             reject_extra(units, fields[2:], 'display unit field')
             if any(value is not None and not isinstance(value, str) for value in units.values()):
@@ -513,6 +755,11 @@ def project_view(view):
         result['market']['unit_splits'] = [{'event': pick(item['event'], EVENT),
                                           'source_refs': clean(item.get('source_refs'))}
                                          for item in market['unit_splits'] if item['event'].get('event_id') in referenced_events]
+        if v5:
+            for item in result['market']['unit_splits']:
+                reject_public_shape(item, _public_object('',
+                    event=_public_object(' '.join(EVENT)), source_refs=(None,)), 'v5 unit split event')
+                _digest_refs(item['source_refs'], 'event source refs')
     if run.get('contract_version') in ('backtest_run_v3', 'backtest_run_v4'):
         context = view.get('stock_context') or {}
         result['stock_context'] = scalars(context, ('stock_action_policy', 'model_snapshot', 'execution_snapshot', 'admission_status'))
@@ -551,13 +798,21 @@ def project_view(view):
                                                              ('feature_ref', 'model_ref', 'score_semantics', 'score_unit'))
     result['run']['limitations'] = list(result['run'].get('limitations') or []) + [NOTE]
     result['public_display_projection'] = True
-    if v4:
-        validate_v4_public_account(result['run'], securities)
+    if v4 or v5:
+        validate_v4_public_account(result['run'], securities, v5=v5)
         reject_public_shape(result['market'].get('rows'),
             (_public_object(' '.join(k for k in ROW if k != 'source_refs'), source_refs=(None,)),),
             'market rows')
-        reject_public_shape(result['evaluation'], _V4_PUBLIC_EVALUATION, 'evaluation')
-        reject_unknown_public_v4(result)
+        reject_public_shape(result['evaluation'],
+                            _V5_PUBLIC_EVALUATION if v5 else _V4_PUBLIC_EVALUATION, 'evaluation')
+        if v5:
+            if result['run'].get('quantity_unit') != 'fund units' or result['run'].get('price_unit') != 'CNY/fund unit':
+                raise ValueError('unexpected v5 ETF saved units')
+            if result['run'].get('portfolio_policy_ref') is None:
+                raise ValueError('missing saved v5 policy identity')
+            validate_v5_public_market(result['market'], securities)
+            reject_v5_source_urls(result)
+        reject_unknown_public_v4(result, v5=v5, security_keys=securities if v5 else frozenset())
     return result
 
 
