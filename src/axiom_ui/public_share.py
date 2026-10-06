@@ -23,6 +23,35 @@ RUN = ('contract_version', 'run_id', 'account_id', 'status', 'content_digest', '
        'signal_ref', 'market_ref', 'profile_ref', 'core_version', 'runtime_version', 'implementation_ref',
        'metrics', 'nav', 'positions', 'orders', 'fills', 'limitations', 'final_account', 'initial_nav_minor',
        'quantity_unit', 'price_unit', 'admission_ref', 'supported_universe_ref', 'stopped', 'unit_split_applications')
+V4_PROFILE = ('contract_version', 'lot_size', 'settlement_sessions', 'commission_rate',
+              'minimum_commission_minor', 'sell_stamp_tax_rate', 'transfer_fee_rate',
+              'slippage_bps', 'participation_rate', 'decision_time_utc', 'execution',
+              'approximation', 'unknown_status_policy', 'maximum_order_quantity',
+              'price_tick', 'limitation')
+V4_METRICS = ('fill_count', 'max_drawdown', 'total_fees_minor', 'total_return',
+              'turnover_minor', 'unfilled_order_count')
+V4_NAV = ('session', 'cash_minor', 'market_value_minor', 'receivable_minor',
+          'nav_minor', 'nav_index', 'committed_sequence')
+V4_POSITION = ('session', 'security_id', 'quantity', 'sellable_quantity', 'mark_price',
+               'mark_session', 'is_stale', 'market_value_minor', 'committed_sequence',
+               'cost_minor', 'mark_source_refs', 'stale_sessions')
+V4_ORDER = ('order_id', 'intent_id', 'session', 'security_id', 'side', 'quantity',
+            'filled_quantity', 'unfilled_quantity', 'status', 'reason', 'execution',
+            'execution_admission', 'execution_evidence_cutoff', 'expected_account_version',
+            'field_available_at', 'market_state', 'state_reason', 'committed_sequence',
+            'valid_until')
+V4_FILL = ('fill_id', 'order_id', 'session', 'security_id', 'side', 'quantity',
+           'quantity_unit', 'price', 'gross_minor', 'fee_minor', 'cash_delta_minor',
+           'sequence', 'commission_minor', 'stamp_tax_minor', 'transfer_fee_minor',
+           'slippage_minor', 'tax_minor', 'realized_pnl_minor', 'reference_open',
+           'execution_admission', 'execution_evidence_cutoff', 'field_available_at',
+           'market_state', 'state_reason', 'source_refs')
+V4_DECISION = ('contract_version', 'expected_account_version', 'feature_session',
+               'trade_session', 'status', 'selected_security_id', 'selected_security_ids', 'signal_ref',
+               'supported_universe_ref', 'targets', 'top_k', 'trace', 'intents',
+               'prediction_clock', 'reference_prices')
+V4_INTENT = ('intent_id', 'security_id', 'side', 'quantity', 'valid_until',
+             'expected_account_version')
 EVALUATION = ('benchmark', 'benchmark_ref', 'content_digest', 'contract_version', 'dividend_scope_ref',
               'episode_metrics', 'episodes', 'evaluation_ref', 'evaluation_version', 'implementation_ref',
               'input_run_ref', 'limitations', 'market_ref', 'monthly_returns', 'period_metrics',
@@ -45,6 +74,158 @@ EVENT = ('event_id', 'security_id', 'event_type', 'record_date', 'effective_date
          'new_price_basis_session', 'suspension_start', 'suspension_end', 'suspension_scope', 'resume_session')
 REVIEW_EVENT = (*EVENT, 'announcement_date', 'implementation_announcement_date', 'cash_dividend_per_unit',
                 'ex_date', 'pay_date', 'process_status', 'source_code', 'new_price_basis_basis', 'announcement_precision')
+# Names from the frozen v4 stock display and evaluation v2/v3 public contract.
+# Unknown nested names fail closed even when an outer object is allowlisted.
+V4_PUBLIC_EXTRA = frozenset((
+    'CSI300 NASDAQ100 SSE_COMPOSITE account account_cumulative_return account_relative_wealth '
+    'account_session adjustment_anchor admission_status anchor anchor_close anchor_session '
+    'annual_effective_rate annualization annualization_factor approximate available_at benchmark_alignment '
+    'benchmark_cumulative_return benchmark_keys benchmark_security_id benchmark_series_kind bins blocked '
+    'boundary_session buy_cost_minor by_key cagr cagr_reason cagr_status calmar clock_scope closed_count '
+    'comparison_conditions configuration context cross_currency_relative_policy cross_market_clock currency '
+    'daily_return data_batch day_count days decisions display_projection dividend_income_minor '
+    'dividend_recognition dividend_scope_status dividends domain drawdown drawdown_peak edges edges_minor '
+    'elapsed_calendar_days eligibility_id eligible_closed_count end_anchor end_close end_nav_minor '
+    'end_session entry_sequence entry_session episode_definition episode_id evaluation evidence_kind '
+    'exclusion_reasons execution_snapshot execution_universe exit_sequence exit_session external_cash_flows '
+    'feature_ref fee_ratio fees_minor field_meta fill_refs final_nav_minor final_quantity first_session '
+    'fit_session fold_ref fold_spec_ref folds frequency gross_traded_minor high holding_calendar_days '
+    'identity_note included_episode_count income_pending_count income_status initial_account '
+    'initial_quantity input_ref interval key label last_session left_censored left_censored_count limit_down '
+    'limit_up loss_count low marked_pnl_minor market maximum_single_security_weight mean_episode_return '
+    'mean_nav_minor mean_net_pnl_minor method metric minimum_episodes minimum_year_fraction missing_policy '
+    'missing_reason model_ref model_snapshot month monthly_partial_policy native_calendar native_chart '
+    'native_series native_session net_pnl_minor net_return normalized_index observations observed_return '
+    'omitted oos_trade_sessions open open_count original_saved_batch_file_ref '
+    'original_saved_replay_source_refs payment_unknown_count peak_is_initial_anchor peak_nav_minor '
+    'peak_session pending_dividend_minor portfolio_policy prediction_universe price_basis profile provided '
+    'public_display_projection public_selected_chart reader_version rebalance records recovery_session '
+    'recovery_status registration_history relative_status research return return_basis return_denominator '
+    'return_denominator_minor risk_free rolling_return_20 rolling_status rolling_volatility_20 '
+    'rolling_window_sessions rows run schedule_ref selected_end_session selected_start_session '
+    'sell_proceeds_minor series_kind sharpe signal_run_ref snapshot_id source source_ref start_anchor '
+    'start_nav_minor start_session statistics_eligible stock_action_policy stock_context tie_count timezone '
+    'trough_nav_minor trough_session turnover_status two_sided_turnover unavailable_reason unit valid value '
+    'view_id weighting win_count win_rate window year year_days year_fraction year_segments '
+).split())
+V4_PUBLIC_KEYS = frozenset().union(RUN, EVALUATION, RESEARCH, TRACE, ROW, EVENT, REVIEW_EVENT,
+                                   V4_PROFILE, V4_METRICS, V4_NAV, V4_POSITION, V4_ORDER,
+                                   V4_FILL, V4_DECISION, V4_INTENT, V4_PUBLIC_EXTRA,
+                                   ('native_open', 'native_high', 'native_low', 'native_close',
+                                    'native_pre_close', 'amount_cny', 'display_scale',
+                                    'display_missing_reason', 'security_labels', 'security_name_scope',
+                                    'security_label_source', 'review_display', 'review_events',
+                                    'fill_display', 'coordinates', 'source_snapshot_id',
+                                    'label_cutoff', 'original_display_manifest_sha256',
+                                    'manifest_sha256', 'knowledge_cutoff', 'default_price_basis',
+                                    'native_price_basis', 'usage', 'dtype', 'description',
+                                    'contract_id', 'source_profile_id', 'field_units',
+                                    'names_status', 'events_status', 'event', 'display_ref',
+                                    'display_result_ref', 'display_price', 'source_unit',
+                                    'target_unit', 'pit_policy'))
+
+
+def _public_object(fields, **nested):
+    return {**dict.fromkeys(fields.split()), **nested}
+
+
+_EVAL_POINT = _public_object('session close daily_return drawdown missing_reason nav_index valid',
+                            source_refs=(None,))
+_BENCHMARK = _public_object('anchor_close anchor_session max_drawdown security_id series_kind status total_return unit',
+                            series=(_EVAL_POINT,))
+_COMPARISON_POINT = _public_object('account_session native_session close available_at normalized_index '
+    'benchmark_cumulative_return account_relative_wealth relative_status benchmark_drawdown', source_refs=(None,))
+_NATIVE_POINT = _public_object('native_session close available_at normalized_index '
+    'benchmark_cumulative_return benchmark_drawdown', source_refs=(None,))
+_COMPARISON = _public_object('anchor_close anchor_session clock_scope currency input_ref return_basis '
+    'security_id status timezone unavailable_reason projection_version max_drawdown',
+    native_calendar=(None,), native_series=(_NATIVE_POINT,), series=(_COMPARISON_POINT,))
+_DIVIDEND = _public_object('event_id record_session ex_session pay_session entitlement_quantity '
+    'recognition_sequence payment_sequence recognized_minor pending_minor receivable_minor payment_status '
+    'tax_convention', source_refs=(None,))
+_EPISODE = _public_object('buy_cost_minor dividend_income_minor entry_sequence entry_session episode_id '
+    'exit_sequence exit_session fees_minor final_quantity income_status initial_quantity left_censored '
+    'marked_pnl_minor net_pnl_minor net_return pending_dividend_minor receivable_minor '
+    'return_denominator_minor security_id sell_proceeds_minor statistics_eligible status',
+    dividends=(_DIVIDEND,), exclusion_reasons=(None,),
+    fill_refs=(_public_object('fill_id sequence'),))
+_SPEC = _public_object('anchor benchmark_alignment benchmark_security_id benchmark_series_kind description '
+    'contract_version cross_currency_relative_policy cross_market_clock dividend_recognition '
+    'drawdown_peak episode_definition external_cash_flows frequency missing_policy '
+    'monthly_partial_policy return_denominator rolling_window_sessions weighting',
+    benchmark_keys=(None,),
+    annualization=_public_object('day_count end_anchor interval method minimum_year_fraction start_anchor'),
+    pnl_distribution=_public_object('interval metric minimum_episodes unit', edges_minor=(None,)),
+    return_distribution=_public_object('interval metric minimum_episodes unit', edges=(None,)),
+    risk_free=_public_object('annual_effective_rate currency source'))
+_V4_PUBLIC_EVALUATION = _public_object('benchmark_ref content_digest contract_version dividend_scope_ref '
+    'evaluation_ref evaluation_version implementation_ref market_ref profile_ref signal_ref spec_ref status '
+    'base_evaluation_ref base_evaluation_content_digest',
+    input_run_ref=_public_object('run_id content_digest committed_sequence'),
+    limitations=(None,), benchmark=_BENCHMARK,
+    series=(_public_object('session nav_minor nav_index peak_nav_minor drawdown committed_sequence'),),
+    monthly_returns=(_public_object('month status first_session last_session boundary_session start_nav_minor '
+                                    'end_nav_minor return observed_return reason committed_sequence'),),
+    episodes=(_EPISODE,),
+    episode_metrics=_public_object('closed_count eligible_closed_count open_count left_censored_count '
+        'income_pending_count payment_unknown_count win_count loss_count tie_count win_rate '
+        'mean_net_pnl_minor mean_episode_return dividend_scope_status return_denominator weighting'),
+    pnl_distribution=_public_object('status metric unit included_episode_count minimum_episodes',
+        bins=(_public_object('lower_minor upper_minor count'),)),
+    period_metrics=_public_object('',
+        account=_public_object('cagr cagr_reason cagr_status final_nav_minor initial_nav_minor '
+                              'max_drawdown total_return'),
+        benchmark=_public_object('anchor_close cagr cagr_reason cagr_status end_close max_drawdown total_return'),
+        window=_public_object('anchor_session day_count elapsed_calendar_days end_session year_fraction',
+                              year_segments=(_public_object('days year year_days'),))),
+    benchmark_refs=_public_object('CSI300 NASDAQ100 SSE_COMPOSITE'),
+    benchmark_comparisons={'CSI300': _COMPARISON, 'NASDAQ100': _COMPARISON,
+                           'SSE_COMPOSITE': _COMPARISON},
+    risk_metrics={'sharpe': _public_object('annualization_factor observations status value year_fraction',
+                                         risk_free=_public_object('annual_effective_rate currency source')),
+                  'calmar': _public_object('status value')},
+    drawdown_interval=_public_object('drawdown elapsed_calendar_days peak_is_initial_anchor peak_nav_minor '
+        'peak_session recovery_session recovery_status status trough_nav_minor trough_session'),
+    return_distribution=_public_object('included_episode_count interval metric minimum_episodes status unit',
+        edges=(None,), bins=(_public_object('lower upper count'),)),
+    analysis_series=(_public_object('account_cumulative_return committed_sequence rolling_return_20 '
+                                    'rolling_status rolling_volatility_20 session'),),
+    execution_summary=_public_object('fee_ratio fees_minor gross_traded_minor initial_nav_minor '
+                                      'mean_nav_minor turnover_status two_sided_turnover'),
+    concentration_series=(_public_object('committed_sequence maximum_single_security_weight security_id '
+                                          'session status'),),
+    episode_points=(_public_object('entry_session episode_id exit_session holding_calendar_days net_return'),),
+    spec=_SPEC)
+
+
+def _schema_field_names(schema):
+    """Keep the global v4 output-name gate aligned with its stricter evaluation paths."""
+    if isinstance(schema, tuple):
+        return _schema_field_names(schema[0])
+    if not isinstance(schema, dict):
+        return frozenset()
+    return frozenset(schema).union(*(_schema_field_names(child) for child in schema.values()))
+
+
+V4_PUBLIC_KEYS = V4_PUBLIC_KEYS | _schema_field_names(_V4_PUBLIC_EVALUATION)
+
+
+def reject_public_shape(value, schema, label):
+    if value is None:
+        return
+    if schema is None:
+        if isinstance(value, (dict, list)):
+            raise ValueError('unexpected private or unknown v4 ' + label)
+    elif isinstance(schema, tuple):
+        if not isinstance(value, list):
+            raise ValueError('unexpected private or unknown v4 ' + label)
+        for row in value:
+            reject_public_shape(row, schema[0], label + ' item')
+    else:
+        if not isinstance(value, dict) or set(value) - set(schema):
+            raise ValueError('unexpected private or unknown v4 ' + label)
+        for key, child in value.items():
+            reject_public_shape(child, schema[key], label + '.' + key)
 SAFE_CONDITIONS = {'start_session', 'end_session', 'initial_account', 'price_basis', 'unit_split_policy',
                    'stock_action_policy'}
 NOTE = ('公开分享投影：保留授权账户窗口及相关证券的已保存 OHLCV，供连续 K线与成交复盘；缺值不填补。'
@@ -75,6 +256,126 @@ def scalars(value, keys):
     return selected
 
 
+def reject_extra(value, keys, label):
+    if not isinstance(value, dict) or set(value) - set(keys):
+        raise ValueError('unexpected private or unknown v4 ' + label)
+
+
+def reject_unknown_public_v4(value):
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if not isinstance(key, str) or (key not in V4_PUBLIC_KEYS and
+                not re.fullmatch(r'cnstock\.(?:000|002|003)\d{3}\.SZ\.\d{8}', key)):
+                raise ValueError('unexpected private or unknown v4 public field')
+            reject_unknown_public_v4(child)
+    elif isinstance(value, list):
+        for child in value:
+            reject_unknown_public_v4(child)
+
+
+def validate_v4_public_account(run, securities):
+    """Account scalar fields cannot carry arbitrary objects under legal key names."""
+    containers = {'metrics', 'nav', 'positions', 'orders', 'fills', 'limitations', 'final_account'}
+    reject_public_shape({k: v for k, v in run.items() if k not in containers | {'decisions'}},
+                        dict.fromkeys(set(RUN) - containers - {'unit_split_applications'}), 'run')
+    reject_public_shape(run.get('metrics'), _public_object(' '.join(V4_METRICS)), 'metrics')
+    for name, fields, sequences in (
+        ('nav', V4_NAV, ()), ('positions', V4_POSITION, ('mark_source_refs',)),
+        ('orders', V4_ORDER, ()), ('fills', V4_FILL, ('source_refs',))):
+        clock = {'field_available_at'} if name in {'orders', 'fills'} else set()
+        schema = _public_object(' '.join(k for k in fields if k not in set(sequences) | clock),
+            **{k: (None,) for k in sequences},
+            **({'field_available_at': _public_object(
+                'close limit_down limit_up market_state open volume_shares')} if clock else {}))
+        reject_public_shape(run.get(name), (schema,), name)
+    reject_public_shape(run.get('limitations'), (None,), 'limitations')
+    for decision in run.get('decisions') or []:
+        nested = {'selected_security_ids', 'targets', 'trace', 'intents'}
+        reject_public_shape({k: v for k, v in decision.items() if k not in nested},
+                            _public_object(' '.join(k for k in V4_DECISION if k not in nested)), 'decision')
+        reject_public_shape(decision.get('selected_security_ids'), (None,), 'selected securities')
+        reject_public_shape(decision.get('trace'), (_public_object(' '.join(TRACE)),), 'decision trace')
+        reject_public_shape(decision.get('intents'), (_public_object(' '.join((*V4_INTENT,
+            'quantity_unit', 'reason', 'session'))),), 'decision intents')
+        targets = decision.get('targets')
+        if targets is not None:
+            if not isinstance(targets, dict) or set(targets) - securities:
+                raise ValueError('unexpected private or unknown v4 decision targets')
+            reject_public_shape(targets, dict.fromkeys(targets), 'decision targets')
+    final = run.get('final_account')
+    if final is not None:
+        reject_extra(final, ('cash_minor', 'receivable_minor', 'positions', 'committed_sequence'), 'final account')
+        reject_public_shape({k: v for k, v in final.items() if k != 'positions'},
+                            _public_object('cash_minor receivable_minor committed_sequence'), 'final account')
+        positions = final.get('positions') or {}
+        if not isinstance(positions, dict):
+            raise ValueError('unexpected private or unknown v4 final positions')
+        for security_id, position in positions.items():
+            if security_id not in securities:
+                raise ValueError('unexpected private or unknown v4 final security')
+            reject_public_shape(position, _public_object('quantity sellable_quantity cost_minor'),
+                                'final account position')
+
+
+def validate_v4_public_input(view, run):
+    """Fail closed on native v4 account/config fields exported as whole objects."""
+    reject_extra(run, (*[key for key in RUN if key != 'unit_split_applications'], 'decisions'), 'run field')
+    configuration = view.get('configuration') or {}
+    reject_extra(configuration, ('start_session', 'end_session', 'initial_account',
+                                 'profile', 'price_basis'), 'configuration field')
+    profile = configuration.get('profile') or {}
+    reject_extra(profile, V4_PROFILE, 'profile field')
+    if any(isinstance(value, (dict, list)) for value in profile.values()):
+        raise ValueError('unexpected private or unknown v4 nested profile field')
+    initial = configuration.get('initial_account') or {}
+    reject_extra(initial, ('cash_minor', 'positions'), 'initial account field')
+    if initial.get('positions') not in ({}, None):
+        raise ValueError('unexpected private or unknown v4 initial positions')
+    reject_public_shape(initial, _public_object('cash_minor', positions=_public_object('')),
+                        'initial account')
+    for condition in view.get('comparison_conditions') or []:
+        reject_extra(condition, ('key', 'label', 'provided', 'value'), 'condition field')
+        key = condition.get('key')
+        if key in SAFE_CONDITIONS:
+            expected = (configuration if key != 'stock_action_policy' else
+                        view.get('stock_context') or {}).get(key)
+            if condition.get('value') != expected:
+                raise ValueError('unexpected private or unknown v4 condition value')
+        if key == 'profile.extra':
+            extra = condition.get('value') or {}
+            reject_extra(extra, V4_PROFILE, 'profile condition')
+            if any(profile.get(name) != value for name, value in extra.items()):
+                raise ValueError('unexpected private or unknown v4 profile condition')
+        if isinstance(key, str) and key.startswith('profile.') and key != 'profile.extra':
+            name = key[8:]
+            if name not in V4_PROFILE and not (name == 'tax_rate' and condition.get('value') is None and
+                                               condition.get('provided') is False):
+                raise ValueError('unexpected private or unknown v4 profile condition')
+            if name in V4_PROFILE and condition.get('value') != profile.get(name):
+                raise ValueError('unexpected private or unknown v4 profile condition')
+    if run.get('metrics') is not None:
+        reject_extra(run['metrics'], V4_METRICS, 'metrics field')
+    for name, allowed in (('nav', V4_NAV), ('positions', V4_POSITION),
+                          ('orders', V4_ORDER), ('fills', V4_FILL), ('decisions', V4_DECISION)):
+        for row in run.get(name) or []:
+            reject_extra(row, allowed, name + ' field')
+    for decision in run.get('decisions') or []:
+        for intent in decision.get('intents') or []:
+            reject_extra(intent, V4_INTENT, 'intent field')
+        for trace in decision.get('trace') or []:
+            reject_extra(trace, (*TRACE, 'count', 'top_k'), 'trace field')
+    if run.get('final_account') is not None:
+        reject_extra(run['final_account'], ('cash_minor', 'receivable_minor',
+                                            'positions', 'committed_sequence'), 'final account field')
+        positions = run['final_account'].get('positions') or {}
+        if not isinstance(positions, dict):
+            raise ValueError('unexpected private or unknown v4 final positions')
+        for security_id, position in positions.items():
+            if not isinstance(security_id, str) or not re.fullmatch(r'cnstock\.(?:000|002|003)\d{3}\.SZ\.\d{8}', security_id):
+                raise ValueError('unexpected private or unknown v4 final security')
+            reject_extra(position, ('quantity', 'sellable_quantity', 'cost_minor'), 'final position field')
+
+
 def related_securities(run):
     ids = {r.get('security_id') for name in ('positions', 'fills', 'orders', 'unit_split_applications')
            for r in run.get(name) or []}
@@ -90,7 +391,7 @@ def chart_projection(view, securities, start, end):
     source = market.get('native_chart') or market.get('data_batch')
     if not source:
         return None
-    stock = view['run'].get('contract_version') == 'backtest_run_v3'
+    stock = view['run'].get('contract_version') in ('backtest_run_v3', 'backtest_run_v4')
     volume = 'volume_shares' if stock else 'volume_units'
     fields = ('open', 'high', 'low', 'close', volume)
     metadata = source.get('field_meta') or {}
@@ -121,6 +422,13 @@ def project_view(view):
     run = view.get('run') or {}
     if not run.get('run_id'):
         raise ValueError('public results require an explicit saved account')
+    if run.get('contract_version') == 'backtest_run_v5':
+        raise ValueError('ETF v5 public projection requires a reviewed narrow export contract')
+    v4 = run.get('contract_version') == 'backtest_run_v4'
+    if v4:
+        validate_v4_public_input(view, run)
+        if view.get('stock_ml') is not None:
+            raise ValueError('unexpected private or unknown v4 single-signal model')
     result = {'view_id': view['view_id'], 'run': pick(run, RUN),
               'configuration': pick(view['configuration'], ('start_session', 'end_session', 'initial_account',
                                                            'profile', 'price_basis', 'unit_split_policy')),
@@ -166,6 +474,11 @@ def project_view(view):
         fields = ('security_id', 'session', 'open', 'high', 'low', 'close', 'native_open', 'native_high',
                   'native_low', 'native_close', 'native_pre_close', 'volume_shares', 'volume_units',
                   'amount_cny', 'display_scale', 'display_missing_reason')
+        if v4:
+            units = display.get('field_units') or {}
+            reject_extra(units, fields[2:], 'display unit field')
+            if any(value is not None and not isinstance(value, str) for value in units.values()):
+                raise ValueError('unexpected private or unknown v4 display unit')
         result['market']['review_display'] = {
             **scalars(display, ('contract_version', 'manifest_sha256', 'display_projection', 'names_status', 'events_status')),
             'public_selected_chart': True,
@@ -200,7 +513,7 @@ def project_view(view):
         result['market']['unit_splits'] = [{'event': pick(item['event'], EVENT),
                                           'source_refs': clean(item.get('source_refs'))}
                                          for item in market['unit_splits'] if item['event'].get('event_id') in referenced_events]
-    if run.get('contract_version') == 'backtest_run_v3':
+    if run.get('contract_version') in ('backtest_run_v3', 'backtest_run_v4'):
         context = view.get('stock_context') or {}
         result['stock_context'] = scalars(context, ('stock_action_policy', 'model_snapshot', 'execution_snapshot', 'admission_status'))
         for key in ('prediction_universe', 'execution_universe'):
@@ -210,10 +523,41 @@ def project_view(view):
             result['stock_context'][key] = clean(rows)
         result['stock_context']['portfolio_policy'] = scalars(context.get('portfolio_policy') or {},
                                                              ('budget_basis', 'eligibility_id', 'rebalance', 'top_k'))
-        result['stock_context']['signal_inputs'] = scalars(context.get('signal_inputs') or {},
-                                                         ('feature_ref', 'model_ref', 'score_semantics', 'score_unit'))
+        if v4:
+            reject_extra(context, ('stock_action_policy', 'model_snapshot', 'execution_snapshot',
+                                   'admission_status', 'prediction_universe', 'execution_universe',
+                                   'portfolio_policy', 'schedule_ref', 'folds'), 'schedule field')
+            reject_extra(context.get('portfolio_policy') or {},
+                         ('budget_basis', 'eligibility_id', 'rebalance', 'top_k'), 'portfolio policy')
+            if context.get('schedule_ref') != run.get('signal_ref'):
+                raise ValueError('saved run/schedule identity mismatch')
+            result['stock_context']['schedule_ref'] = scalars(context, ('schedule_ref',))['schedule_ref']
+            folds = context.get('folds')
+            if not isinstance(folds, list) or not folds:
+                raise ValueError('missing saved fold summary')
+            result['stock_context']['folds'] = []
+            for fold in folds:
+                reject_extra(fold, ('fold_ref', 'fold_spec_ref', 'signal_run_ref', 'model_ref',
+                                    'feature_ref', 'fit_session', 'oos_trade_sessions'), 'fold field')
+                selected = scalars(fold, ('fold_ref', 'fold_spec_ref', 'signal_run_ref', 'model_ref',
+                                          'feature_ref', 'fit_session'))
+                days = fold.get('oos_trade_sessions')
+                if not isinstance(days, list) or not days or not all(isinstance(day, str) for day in days):
+                    raise ValueError('malformed saved fold sessions')
+                selected['oos_trade_sessions'] = clean(days)
+                result['stock_context']['folds'].append(selected)
+        else:
+            result['stock_context']['signal_inputs'] = scalars(context.get('signal_inputs') or {},
+                                                             ('feature_ref', 'model_ref', 'score_semantics', 'score_unit'))
     result['run']['limitations'] = list(result['run'].get('limitations') or []) + [NOTE]
     result['public_display_projection'] = True
+    if v4:
+        validate_v4_public_account(result['run'], securities)
+        reject_public_shape(result['market'].get('rows'),
+            (_public_object(' '.join(k for k in ROW if k != 'source_refs'), source_refs=(None,)),),
+            'market rows')
+        reject_public_shape(result['evaluation'], _V4_PUBLIC_EVALUATION, 'evaluation')
+        reject_unknown_public_v4(result)
     return result
 
 

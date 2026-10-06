@@ -3,12 +3,12 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-{{SCRIPT_HASH}}'; style-src 'unsafe-inline'; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Axiom · 研究工作台</title><style>{{CSS}}</style></head>
 <body><div class="shell"><aside class="sidebar"><div class="brand">AXIOM<span>研究工作台 · 只读</span></div>
-<div id="experiment-navigation"><h2 class="navigation-heading">研究主题 · 已保存运行</h2>
-<label class="small" for="status-filter">状态 / 标签</label><div class="filter-selects"><select id="status-filter" aria-label="状态筛选"><option value="">全部状态</option></select><select id="tag-filter" aria-label="标签筛选"><option value="">全部标签</option></select></div>
-<div id="run-tree"></div><p id="navigation-note" class="small"></p></div><div class="sidebar-foot small">说明与标记来自 Research。<br>这里选择和比较已保存结果。</div></aside>
+<details id="experiment-navigation"><summary class="navigation-heading">研究主题 · 已保存运行</summary>
+<label class="small" for="status-filter">状态 / 标签 / 运行整理</label><div class="filter-selects"><select id="status-filter" aria-label="状态筛选"><option value="">全部状态</option></select><select id="tag-filter" aria-label="标签筛选"><option value="">全部标签</option></select><select id="run-organization-filter" aria-label="运行整理筛选"><option value="">全部运行</option><option value="favorite">运行收藏</option><option value="shelved">运行搁置</option></select></div>
+<div id="run-tree"></div><p id="navigation-note" class="small"></p></details><div class="sidebar-foot small">说明与标记来自 Research。<br>这里选择和比较已保存结果。</div></aside>
 <main><div class="topline"><span id="context-line"></span><span id="evidence-badge" class="badge"></span></div>
 <div class="hero"><div><h1 id="run-title"></h1><p id="hypothesis" class="small"></p></div><button id="copy-context" class="btn">复制讨论摘要</button></div>
-<div class="subline"><span id="date-range"></span><span id="run-status" class="pill"></span><span id="policy-badge" class="pill"></span></div>
+<div class="subline"><span id="date-range"></span><span id="initial-capital"></span><span id="run-status" class="pill"></span><span id="policy-badge" class="pill"></span></div>
 <div id="registration-context" class="small" hidden><label for="registration-select">登记历史</label> <select id="registration-select" aria-label="登记历史选择"></select> <span>更换评价或登记不增加回测次数</span></div>
 <div id="notice" class="notice" role="status"></div><div id="metrics" class="metrics"></div><p id="period-note" class="small" hidden></p>
 <section id="stock-account-context" class="panel" hidden><h2>股票账户 · 保存执行范围</h2><p id="stock-account-scope" class="small"></p><details class="settings"><summary>股票范围、时钟、税费与来源原值</summary><pre id="stock-account-refs"></pre></details></section>

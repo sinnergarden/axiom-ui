@@ -26,8 +26,9 @@ window.createAxiomInteractions = function(env) {
     const key=state.benchmarkKey || 'CSI300',comparison=v.evaluation?.benchmark_comparisons?.[key];
     if(!comparison)return {key,name:benchmarkNames[key],...(key==='CSI300'?v.evaluation?.benchmark || {}:{status:'SOURCE_UNAVAILABLE',series:[]})};
     const old=new Map((key==='CSI300'?v.evaluation?.benchmark?.series || []:[]).map(p=>[p.session,p]));
-    // The current public comparison wire has no SSE pointwise drawdown contract.
-    return {...comparison,key,name:benchmarkNames[key],series:comparison.series.map(p=>({...p,session:p.account_session,nav_index:p.normalized_index,drawdown:key==='CSI300'?old.get(p.account_session)?.drawdown:null,valid:present(p.normalized_index)}))};
+    return {...comparison,key,name:benchmarkNames[key],series:comparison.series.map(p=>({...p,session:p.account_session,nav_index:p.normalized_index,
+      drawdown:comparison.projection_version==='benchmark_comparison_v2'?p.benchmark_drawdown:key==='CSI300'?old.get(p.account_session)?.drawdown:null,
+      valid:present(p.normalized_index)}))};
   }
   function indexed(v){
     if(cache.has(v))return cache.get(v);
@@ -220,6 +221,10 @@ window.createAxiomInteractions = function(env) {
     else $('nav-point').textContent='在图内任意位置移动查看同日原值；点击锁定。拖动平移，Ctrl+滚轮缩放，也可拖动下方时间概览。';
     controls(v);selection(v);analysis(v);
   }
+  function hasCandle(points, market, fromDisplay){
+    return fromDisplay ? points.some(point=>['open','high','low','close'].every(key=>number(point[key])!==null)) :
+      !!(market.data_batch || market.native_chart);
+  }
   function trade(v){
     const index=indexed(v),ids=[...new Set([...index.securities.keys(),...index.displaySecurities.keys()])].sort(),select=$('security-select');
     if(!ids.includes(state.security))state.security=ids[0] || '';
@@ -231,7 +236,7 @@ window.createAxiomInteractions = function(env) {
     const coordinates=new Map((v.market.fill_display?.coordinates || []).map(point=>[point.fill_id,point]));
     choice.closest('label').hidden=!display;choice.options[1].disabled=!display;choice.options[1].hidden=!display;choice.options[1].textContent='共同最终锚点调整价';choice.value=adjusted?'adjusted':'unadjusted';
     const displayPoints=index.displaySecurities.get(state.security),points=displayPoints?(adjusted?displayPoints:displayPoints.map(p=>({...p,open:p.native_open,high:p.native_high,low:p.native_low,close:p.native_close}))):index.securities.get(state.security) || [],ss=points.map(p=>p.session),window=windowFor(ss),pointByDay=new Map(points.map(p=>[p.session,p]));
-    const candle=!!(v.market.data_batch || v.market.native_chart),volume=env.stockAccount(v)?'volume_shares':'volume_units';
+    const candle=hasCandle(points,v.market,!!displayPoints),volume=env.stockAccount(v)?'volume_shares':'volume_units';
     $('candle-note').textContent=(candle?'':'当前只有保存的收盘价与全天量。')+(display?(adjusted?'调整后价格':'未复权原价')+' · 原量；'+(adjusted&&!coordinates.size?'B/S 坐标未提供，成交见交易链。':'B/S 标记为模拟成交。'):'未复权价格与原量；B/S 标记为模拟成交。');
     const fills=(v.run.fills || []).filter(f=>f.security_id===state.security),fillByDay=new Map();
     for(const fill of fills){if(!fillByDay.has(fill.session))fillByDay.set(fill.session,[]);fillByDay.get(fill.session).push(fill);}
@@ -344,10 +349,12 @@ window.createAxiomInteractions = function(env) {
       ['成交假设',profile.execution==='open'?'开盘价 · 日线近似':profile.execution]];
     for(const [label,value] of summary){if(!present(value))continue;const item=node('div',null,'config-item');item.append(node('span',label),node('strong',value));settings.append(item);}
     const panel=$('configuration-differences');panel.replaceChildren();
-    panel.append(node('p',v.research?.version_explanation || '本版本说明未提供。'));
-    const changes=v.research?.changes || [];if(changes.length){const ul=node('ul');for(const change of changes)ul.append(node('li',typeof change==='string'?change:Object.entries(change).filter(([,value])=>!value || typeof value!=='object').map(([key,value])=>key+'：'+saved(value)).join(' · ') || '声明详见原始记录'));panel.append(ul);}else panel.append(node('p','未保存显式变动清单；不从收益推测改动。','small'));
+    if(v.research?.version_explanation)panel.append(node('p',v.research.version_explanation));
+    const changes=v.research?.changes || [];if(changes.length){const ul=node('ul');for(const change of changes)ul.append(node('li',typeof change==='string'?change:Object.entries(change).filter(([,value])=>!value || typeof value!=='object').map(([key,value])=>key+'：'+saved(value)).join(' · ') || '声明详见原始记录'));panel.append(ul);}else if(v.research)panel.append(node('p','未保存显式变动清单；不从收益推测改动。','small'));
     const values=$('configuration-values');values.replaceChildren();
     for(const [label,value] of [['回测范围',saved(v.configuration.start_session)+' — '+saved(v.configuration.end_session)],['初始账户',typeof v.configuration.initial_account==='object'?'见保存初始账户详情':saved(v.configuration.initial_account)],['价格口径',v.configuration.price_basis || v.market.price_basis],['执行假设',env.stockAccount(v)?'股票日线事后近似 / strict 按所选运行':v.approximate?'ETF 日线近似':'保存策略执行条件']])detailRow(values,label,value);
+    if(!v.research?.title)detailRow(values,'Research 标题','本页未载入');
+    if(!v.research?.hypothesis)detailRow(values,'实验说明','本页未载入');
     if(comparison)values.append(node('p','条件差异：'+(differences.join('、') || '未发现保存差异')+(unverified.length?'；未核实 '+unverified.join('、'):''),'small'));
     const raw=node('button','查看输入与版本差异原始记录','text-button');raw.addEventListener('click',()=>openRaw('保存输入与版本差异',{configuration:v.configuration,comparison:comparison?.configuration || null,declared_changes:v.research?.changes,version_comparison:v.research?.version_comparison}));values.append(raw);
   }
@@ -373,7 +380,7 @@ window.createAxiomInteractions = function(env) {
     const evaluation=v.evaluation,comparisons=evaluation?.benchmark_comparisons,b=benchmark(v);
     $('benchmark-source-details').hidden=!b.series?.length;
     if(b.series?.length){
-      $('benchmark-note').textContent=b.name+' · 价格指数不含分红；账户收益含已入账分红。'+(b.currency&&b.currency!=='CNY'?' 币种不同，人民币财富对比不可用。':'');
+      $('benchmark-note').textContent=b.name+' · 价格指数不含分红；账户收益含已入账分红。最大回撤 '+percent(b.max_drawdown)+'。'+(b.currency&&b.currency!=='CNY'?' 币种不同，人民币财富对比不可用。':'');
       $('benchmark-source-note').textContent='保存状态：'+statusLabel(b.status)+'。'+(b.series.some(p=>present(p.drawdown))?'':'逐点回撤尚无正式可读序列。')+'按原市场日历和时区显示，不补缺失交易日；完整来源与限制见原始记录。';
     }
     const panel=$('risk-analysis');panel.replaceChildren();
@@ -411,5 +418,5 @@ window.createAxiomInteractions = function(env) {
     window.addEventListener('resize',resize);new ResizeObserver(resize).observe(document.querySelector('main'));
   }
   function resize(){for(const item of instances.values())if(item.getDom().offsetWidth)item.resize();}
-  return {performance,trade,summaries,bind,resize,setWindow,renderChain,securityLabel,openRaw,selection,returnPoints,analysis};
+  return {performance,trade,summaries,bind,resize,setWindow,renderChain,securityLabel,openRaw,selection,returnPoints,analysis,benchmark,hasCandle};
 };

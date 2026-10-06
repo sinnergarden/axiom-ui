@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from axiom_ui import ProjectionError, render_sample_workbench, render_saved_workbench, enrich_saved_projection, render_enriched_workbench
 from axiom_ui.projection import _digest
+from axiom_ui.public_share import project_view
 
 SAMPLE = Path(__file__).resolve().parents[1] / "examples" / "synthetic_workbench.json"
 GENERATED = "2026-10-04T12:00:00Z"
@@ -146,6 +147,36 @@ def saved_stock_case(sample):
     evaluation["dividend_scope"] = {"actions":[],"source_refs":[source["reference"]],"source_evidence":[source],
                                     "coverage":{"table":"SYNTHETIC_HEAVY_COVERAGE"},
                                     "coverage_bundle":[{"payload":"SYNTHETIC_COMPRESSED_PAYLOAD"}]}
+    return run, evaluation, native
+
+
+def saved_stock_v4_display_case(sample):
+    """Handwritten UI compatibility input, never an Engine saved artifact."""
+    run, evaluation, native = saved_stock_case(sample)
+    run.update(contract_version="backtest_run_v4", runtime_version="axiom.backtest/4",
+               core_version="axiom.stock_portfolio/2", signal_ref="synthetic:schedule")
+    plan = run["plan"]
+    plan["contract_version"] = "backtest_request_v4"
+    plan.pop("signal_frame")
+    plan["prediction_schedule"] = {
+        "contract_version": "stock_prediction_schedule_v1", "schedule_ref": "synthetic:schedule",
+        "folds": [{"fold_ref": "synthetic:fold-1",
+                   "fold_spec": {"fit_session": "2024-01-01", "oos_trade_sessions": ["2024-01-02"]},
+                   "prediction_frame": {"fold_spec_ref": "synthetic:spec-1",
+                                        "signal_run_ref": "synthetic:signal-1", "model_ref": "synthetic:model-1",
+                                        "feature_ref": "synthetic:feature-1", "rows": ["private prediction"]},
+                   "model": {"parameters": {"private": True}}},
+                  {"fold_ref": "synthetic:fold-2",
+                   "fold_spec": {"fit_session": "2024-01-02", "oos_trade_sessions": ["2024-01-03"]},
+                   "prediction_frame": {"fold_spec_ref": "synthetic:spec-2",
+                                        "signal_run_ref": "synthetic:signal-2", "model_ref": "synthetic:model-2",
+                                        "feature_ref": "synthetic:feature-2", "rows": ["private prediction"]},
+                   "model": {"parameters": {"private": True}}}],
+        "trade_schedule": [{"trade_session": "2024-01-02", "feature_session": "2024-01-01",
+                            "signal_run_ref": "synthetic:signal-1", "fold_spec_ref": "synthetic:spec-1"},
+                           {"trade_session": "2024-01-03", "feature_session": "2024-01-02",
+                            "signal_run_ref": "synthetic:signal-2", "fold_spec_ref": "synthetic:spec-2"}]}
+    evaluation["signal_ref"] = run["signal_ref"]
     return run, evaluation, native
 
 
@@ -488,6 +519,127 @@ class WorkbenchTests(unittest.TestCase):
             native["field_meta"]["volume_shares"]["unit"]="fund units"
             with self.assertRaisesRegex(ProjectionError,"stock OHLCV unit"):
                 render_saved_workbench(["stock.json"])
+
+    def test_stock_v3_topk_core2_display_and_invalid_version_tuples(self):
+        """UI tuple gate only; Owner loader acceptance uses its saved fixture separately."""
+        run, _, _ = saved_stock_case(self.sample)
+        runtime = ModuleType("axiom_engine.runtime")
+        runtime.load_backtest_run = lambda _path: deepcopy(run)
+        with patch.dict(sys.modules, {"axiom_engine.runtime": runtime}):
+            for k in (3, 5):
+                run["core_version"] = "axiom.stock_portfolio/2"
+                run["plan"]["portfolio_policy"]["top_k"] = k
+                for decision in run["decisions"]:
+                    decision.update(contract_version="axiom.stock_portfolio/2", top_k=k)
+                view = payload(render_saved_workbench(["synthetic-v3-topk.json"]))["views"][0]
+                public = project_view(view)
+                self.assertEqual((public["run"]["contract_version"], public["run"]["core_version"],
+                                  public["stock_context"]["portfolio_policy"]["top_k"]),
+                                 ("backtest_run_v3", "axiom.stock_portfolio/2", str(k)))
+                self.assertEqual((public["run"]["quantity_unit"], public["run"]["price_unit"]),
+                                 ("shares", "CNY/share"))
+            for field, invalid in (("runtime_version", "axiom.backtest/4"),
+                                   ("core_version", "axiom.stock_portfolio/3"),
+                                   ("quantity_unit", "fund units"),
+                                   ("price_unit", "CNY/fund unit")):
+                before = run[field]
+                run[field] = invalid
+                with self.subTest(field=field), self.assertRaisesRegex(ProjectionError, "stock version or units"):
+                    render_saved_workbench(["synthetic-v3-topk.json"])
+                run[field] = before
+            run["plan"]["contract_version"] = "backtest_request_v4"
+            with self.assertRaisesRegex(ProjectionError, "stock request/profile"):
+                render_saved_workbench(["synthetic-v3-topk.json"])
+            run["contract_version"] = "backtest_run_v4"
+            run["runtime_version"] = "axiom.backtest/4"
+            run["core_version"] = "axiom.stock_portfolio/1"
+            with self.assertRaisesRegex(ProjectionError, "stock version or units"):
+                render_saved_workbench(["synthetic-v3-topk.json"])
+
+    def test_stock_v4_narrow_saved_schedule_and_existing_evaluation_reader(self):
+        run, evaluation, native = saved_stock_v4_display_case(self.sample)
+        original = deepcopy((run, evaluation, native))
+        calls = []
+        runtime = ModuleType("axiom_engine.runtime")
+        runtime.load_backtest_run = lambda path: calls.append(("run", str(path))) or deepcopy(run)
+        runtime.load_backtest_evaluation = lambda path: calls.append(("evaluation", str(path))) or deepcopy(evaluation)
+        with patch.dict(sys.modules, {"axiom_engine.runtime": runtime, "axiom_data": None}):
+            view = payload(render_saved_workbench(["synthetic-v4.json"],
+                         evaluation_paths=["synthetic-evaluation.json"],
+                         data_batches={run["run_id"]: native}))["views"][0]
+            self.assertEqual(calls, [("run", "synthetic-v4.json"),
+                                     ("evaluation", "synthetic-evaluation.json")])
+            self.assertEqual((view["run"]["quantity_unit"], view["run"]["price_unit"]),
+                             ("shares", "CNY/share"))
+            self.assertEqual(view["stock_context"]["schedule_ref"], run["signal_ref"])
+            self.assertEqual([fold["signal_run_ref"] for fold in view["stock_context"]["folds"]],
+                             ["synthetic:signal-1", "synthetic:signal-2"])
+            self.assertEqual(view["evaluation"]["content_digest"], evaluation["content_digest"])
+            self.assertTrue(view["market"]["native_chart"]["explicit_saved_batch_matched"])
+            self.assertNotIn("private prediction", str(view))
+            public = project_view(view)
+            self.assertEqual(public["stock_context"]["folds"][1]["signal_run_ref"], "synthetic:signal-2")
+            self.assertNotIn("private prediction", str(public))
+            self.assertEqual((run, evaluation, native), original)
+            run["signal_ref"] = "synthetic:wrong-schedule"
+            with self.assertRaisesRegex(ProjectionError, "run/prediction schedule"):
+                render_saved_workbench(["synthetic-v4.json"])
+
+    def test_etf_v5_saved_policy_units_and_v3_evaluation_are_read_only(self):
+        """Handwritten UI wire; no Engine account, Data query, or evaluator runs."""
+        entry = deepcopy(self.sample["runs"][0])
+        run = saved_unit_run(entry)
+        native = entry["data_batch"]
+        market = run["plan"]["market_replay"]
+        source = {"reference": _digest(native), "batch": native}
+        market["source_refs"].append(source["reference"])
+        market["source_evidence"] = [s for s in market["source_evidence"]
+                                     if s.get("context", {}).get("domain") != "market_daily"] + [source]
+        run.update(contract_version="backtest_run_v5", runtime_version="axiom.backtest/5",
+                   core_version="axiom.rotation/1", quantity_unit="fund units",
+                   price_unit="CNY/fund unit", portfolio_policy_ref="synthetic:policy")
+        run["plan"].update(contract_version="backtest_request_v5", price_unit="CNY/fund unit",
+                           portfolio_policy={"contract_version": "etf_rotation_policy_v1",
+                                             "schedule": "weekly_first_trading_session"})
+        run["plan"]["profile"].update(contract_version="daily_open_profile_v2",
+                                       price_limit_policy="require_both", price_grid_policy="etf_price_grid_v1")
+        evaluation = saved_v3(entry)
+        evaluation["benchmark_comparisons"]["SSE_COMPOSITE"].update(
+            projection_version="benchmark_comparison_v2", max_drawdown="-0.25")
+        before = deepcopy((run, evaluation, native))
+        calls = []
+        runtime = ModuleType("axiom_engine.runtime")
+        runtime.load_backtest_run = lambda path: calls.append(("run", str(path))) or deepcopy(run)
+        runtime.load_backtest_evaluation = lambda path: calls.append(("evaluation", str(path))) or deepcopy(evaluation)
+        with patch.dict(sys.modules, {"axiom_engine.runtime": runtime, "axiom_data": None}):
+            view = payload(render_saved_workbench(["synthetic-etf-v5.json"],
+                evaluation_paths=["synthetic-etf-evaluation.json"]))["views"][0]
+        self.assertEqual(calls, [("run", "synthetic-etf-v5.json"),
+                                 ("evaluation", "synthetic-etf-evaluation.json")])
+        self.assertEqual((view["run"]["quantity_unit"], view["run"]["price_unit"]),
+                         ("fund units", "CNY/fund unit"))
+        self.assertEqual(view["run"]["portfolio_policy_ref"], "synthetic:policy")
+        self.assertEqual(view["configuration"]["portfolio_policy"], run["plan"]["portfolio_policy"])
+        self.assertEqual(view["market"]["native_chart"]["source_ref"], source["reference"])
+        self.assertEqual(view["evaluation"]["benchmark_comparisons"]["SSE_COMPOSITE"]["max_drawdown"], "-0.25")
+        self.assertEqual(view["run"]["unit_split_applications"][0]["event_id"],
+                         run["unit_split_applications"][0]["event_id"])
+        self.assertEqual((run, evaluation, native), before)
+        market["source_evidence"][-1] = {"reference": source["reference"],
+                                          "context": native["context"]}
+        with patch.dict(sys.modules, {"axiom_engine.runtime": runtime, "axiom_data": None}):
+            replay_only = payload(render_saved_workbench(["synthetic-etf-v5.json"]))["views"][0]
+        self.assertIsNone(replay_only["market"]["native_chart"])
+        self.assertEqual(replay_only["market"]["source_evidence"][-1]["reference"], source["reference"])
+        run["signal_ref"] = None
+        run["core_version"] = "axiom.etf_buy_and_hold/1"
+        run["plan"]["portfolio_policy"] = {"contract_version": "etf_buy_and_hold_policy_v1",
+                                            "security_id": "synthetic:etf", "entry_session": "2026-03-30"}
+        with patch.dict(sys.modules, {"axiom_engine.runtime": runtime, "axiom_data": None}):
+            held = payload(render_saved_workbench(["synthetic-etf-v5.json"]))["views"][0]
+        self.assertIsNone(held["run"]["signal_ref"])
+        self.assertEqual(held["configuration"]["portfolio_policy"]["contract_version"],
+                         "etf_buy_and_hold_policy_v1")
 
     def test_stock_v3_without_high_low_keeps_saved_close_volume_fallback(self):
         run, _, native = saved_stock_case(self.sample)
