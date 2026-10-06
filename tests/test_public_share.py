@@ -37,6 +37,12 @@ def saved_view():
 
 
 class PublicProjectionTests(unittest.TestCase):
+    def test_etf_v5_requires_separate_public_selection_review(self):
+        value = saved_view()
+        value['run']['contract_version'] = 'backtest_run_v5'
+        with self.assertRaisesRegex(ValueError, 'reviewed narrow export contract'):
+            project_view(value)
+
     def test_v4_stock_schedule_public_allowlist_and_units(self):
         value = self.chart_view()
         value['run']['contract_version'] = 'backtest_run_v4'
@@ -61,6 +67,10 @@ class PublicProjectionTests(unittest.TestCase):
         value['stock_context']['schedule_ref'] = 'sha256:schedule'
         for container, key, private in ((value['run'], 'prediction_schedule', {'rows':['PRIVATE']}),
                                         (value['run'], 'unit_split_applications', [{'event_id':'ETF-only'}]),
+                                        (value['run']['metrics'], 'private_marker', 'SYNTHETIC_SECRET_SENTINEL'),
+                                        (value['run']['fills'][0], 'private_marker', 'SYNTHETIC_SECRET_SENTINEL'),
+                                        (value['configuration']['profile'], 'private_marker', 'SYNTHETIC_SECRET_SENTINEL'),
+                                        (value['configuration']['profile'], 'limitation', {'run_id':'SYNTHETIC_SECRET_SENTINEL'}),
                                         (value['stock_context'], 'private_prediction', ['PRIVATE']),
                                         (value['stock_context']['folds'][0], 'model', {'parameters':{'private':True}}),
                                         (value['stock_context']['portfolio_policy'], 'private_strategy', 'PRIVATE')):
@@ -68,6 +78,18 @@ class PublicProjectionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'private or unknown v4'):
                 project_view(value)
             del container[key]
+        value['comparison_conditions'].append({'key':'profile.private_marker','label':'private',
+                                               'provided':True,'value':'SYNTHETIC_SECRET_SENTINEL'})
+        with self.assertRaisesRegex(ValueError, 'private or unknown v4'):
+            project_view(value)
+        value['comparison_conditions'].pop()
+        value['evaluation']['benchmark'] = {'private_marker':'SYNTHETIC_SECRET_SENTINEL'}
+        with self.assertRaisesRegex(ValueError, 'private or unknown v4'):
+            project_view(value)
+        value['evaluation']['benchmark'] = {'source':'SYNTHETIC_SECRET_SENTINEL'}
+        with self.assertRaisesRegex(ValueError, 'private or unknown v4'):
+            project_view(value)
+        del value['evaluation']['benchmark']
         value['stock_ml'] = {'model': {'parameters': {'private': True}}}
         with self.assertRaisesRegex(ValueError, 'single-signal model'):
             project_view(value)

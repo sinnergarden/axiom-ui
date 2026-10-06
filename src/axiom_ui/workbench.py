@@ -66,7 +66,8 @@ def _source_summaries(sources: list[dict]) -> list[dict]:
             for source in sources]
 
 
-def _stock_native_chart(market: dict) -> dict | None:
+def _stock_native_chart(market: dict, *, price_unit: str = "CNY/share",
+                        volume_field: str = "volume_shares", volume_unit: str = "shares") -> dict | None:
     sources = [s for s in market.get("source_evidence") or []
                if _source_context(s).get("domain") == "market_daily"]
     if not sources:
@@ -74,12 +75,18 @@ def _stock_native_chart(market: dict) -> dict | None:
     _require(len(sources) == 1, "ambiguous saved stock OHLCV source")
     source = sources[0]
     _require(source.get("reference") in (market.get("source_refs") or []), "unbound saved stock OHLCV source")
+    # ETF v5's validated replay keeps the original DataBatch reference and
+    # context, but does not embed its native price batch. The saved replay rows
+    # remain available as a labeled close/volume view until Data display is bound.
+    if source.get("batch") is None and volume_field == "volume_units":
+        return None
     batch = source.get("batch") or {}
-    fields = ("open", "high", "low", "close", "volume_shares")
+    fields = ("open", "high", "low", "close", volume_field)
     meta = batch.get("field_meta") or {}
-    _require(all(meta.get(k, {}).get("unit") == "CNY/share" for k in ("open", "close")) and
-             all(k not in meta or meta[k].get("unit") == "CNY/share" for k in ("high", "low")) and
-             meta.get("volume_shares", {}).get("unit") == "shares", "unexpected stock OHLCV unit")
+    _require(all(meta.get(k, {}).get("unit") == price_unit for k in ("open", "close")) and
+             all(k not in meta or meta[k].get("unit") == price_unit for k in ("high", "low")) and
+             meta.get(volume_field, {}).get("unit") == volume_unit,
+             "unexpected " + ("stock" if volume_field == "volume_shares" else "ETF") + " OHLCV unit")
     for field in (k for k in fields if k in meta):
         _rows(meta[field].get("by_key"), "saved stock OHLCV provenance")
     rows = _rows(batch.get("records"), "saved stock OHLCV")
@@ -161,6 +168,9 @@ def _comparison_conditions(plan: dict) -> list[dict]:
     fact("cash_dividends", "保存分红事实", replay.get("cash_dividends"), "cash_dividends" in replay)
     fact("unit_split_policy", "份额拆分应用政策", plan.get("unit_split_policy"),
          "unit_split_policy" in plan and plan["unit_split_policy"] is not None)
+    if plan.get("contract_version") == "backtest_request_v5":
+        fact("portfolio_policy", "保存的 ETF 组合政策", plan.get("portfolio_policy"),
+             plan.get("portfolio_policy") is not None)
     if plan.get("contract_version") in {"backtest_request_v3", "backtest_request_v4"}:
         for key, label in (("prediction_universe", "原预测范围"), ("execution_universe", "执行资格子集"),
                            ("portfolio_policy", "股票组合政策"), ("stock_action_policy", "股票现金行动政策")):
@@ -194,15 +204,26 @@ def _saved_fold_summary(plan: dict) -> dict:
 
 def _run(run: Any, evidence: str) -> dict:
     wire = _wire(run)
-    _require(wire.get("contract_version") in {"backtest_run_v1", "backtest_run_v2", "backtest_run_v3", "backtest_run_v4"}, "unsupported run contract")
+    _require(wire.get("contract_version") in {"backtest_run_v1", "backtest_run_v2", "backtest_run_v3", "backtest_run_v4", "backtest_run_v5"}, "unsupported run contract")
     stock = wire["contract_version"] in {"backtest_run_v3", "backtest_run_v4"}
     v4 = wire["contract_version"] == "backtest_run_v4"
+    etf_v5 = wire["contract_version"] == "backtest_run_v5"
     if stock:
         _require(wire.get("runtime_version") == ("axiom.backtest/4" if v4 else "axiom.backtest/3") and
                  wire.get("core_version") in ({"axiom.stock_portfolio/2"} if v4 else
                                                {"axiom.stock_portfolio/1", "axiom.stock_portfolio/2"}) and
                  (wire.get("quantity_unit"), wire.get("price_unit")) == ("shares", "CNY/share"),
                  "unsupported stock version or units")
+    if etf_v5:
+        policy = (wire.get("plan") or {}).get("portfolio_policy") or {}
+        hold = policy.get("contract_version") == "etf_buy_and_hold_policy_v1"
+        _require(wire.get("runtime_version") == "axiom.backtest/5" and
+                 wire.get("core_version") == ("axiom.etf_buy_and_hold/1" if hold else "axiom.rotation/1") and
+                 policy.get("contract_version") in {"etf_buy_and_hold_policy_v1", "etf_rotation_policy_v1"} and
+                 (wire.get("quantity_unit"), wire.get("price_unit")) == ("fund units", "CNY/fund unit") and
+                 (wire.get("signal_ref") is None if hold else type(wire.get("signal_ref")) is str) and
+                 type(wire.get("portfolio_policy_ref")) is str and wire["portfolio_policy_ref"],
+                 "unsupported ETF v5 policy, version or units")
     _require(all(type(wire.get(k)) is str and wire[k]
                  for k in ("run_id", "account_id", "status")), "missing run identity")
     _watermarks(wire)
@@ -240,7 +261,8 @@ def _run(run: Any, evidence: str) -> dict:
             "contract_version", "run_id", "account_id", "status", "content_digest",
             "committed_sequence", "signal_ref", "market_ref", "profile_ref",
             "core_version", "runtime_version", "implementation_ref", "metrics", "nav",
-            "positions", "decisions", "orders", "fills", "limitations", "final_account", "initial_nav_minor")},
+            "positions", "decisions", "orders", "fills", "limitations", "final_account", "initial_nav_minor",
+            "quantity_unit", "price_unit")},
         "configuration": {"start_session": (wire.get("plan") or {}).get("start_session"),
                           "end_session": (wire.get("plan") or {}).get("end_session"),
                           "initial_account": deepcopy((wire.get("plan") or {}).get("initial_account")),
@@ -251,7 +273,10 @@ def _run(run: Any, evidence: str) -> dict:
         "evidence_kind": evidence, "approximate": approximate, "blocked": blocked,
         "research": None, "evaluation": None,
     }
-    if wire["contract_version"] == "backtest_run_v2":
+    if etf_v5:
+        view["run"]["portfolio_policy_ref"] = wire["portfolio_policy_ref"]
+        view["configuration"]["portfolio_policy"] = deepcopy(wire["plan"]["portfolio_policy"])
+    if wire["contract_version"] in {"backtest_run_v2", "backtest_run_v5"}:
         applications = _rows(wire.get("unit_split_applications"), "saved unit split applications")
         events = _rows(market.get("unit_splits"), "saved unit split events")
         _require(all(type(item.get("event")) is dict for item in events), "malformed saved unit event")
@@ -303,6 +328,10 @@ def _run(run: Any, evidence: str) -> dict:
         view["market"]["cash_dividends"] = deepcopy(market.get("cash_dividends"))
         view["market"]["action_diagnostics"] = deepcopy(market.get("action_diagnostics"))
         view["market"]["action_blocks"] = deepcopy(market.get("action_blocks"))
+    if etf_v5:
+        view["market"]["source_evidence"] = _source_summaries(market.get("source_evidence") or [])
+        view["market"]["native_chart"] = _stock_native_chart(market, price_unit="CNY/fund unit",
+            volume_field="volume_units", volume_unit="fund units")
     return view
 
 
@@ -795,7 +824,7 @@ The workbench does not discover data roots or implicitly issue a Query.
             views.append(_run(original, "synthetic_owner_output" if original["run_id"] in synthetic_run_ids else "saved_backtest_output"))
             # Public validation has finished. Retain only the display projection
             # for stock inputs before loading another large native document.
-            originals.append(original if original["contract_version"] not in {"backtest_run_v3", "backtest_run_v4"} else
+            originals.append(original if original["contract_version"] not in {"backtest_run_v3", "backtest_run_v4", "backtest_run_v5"} else
                              {"run_id": original["run_id"], "contract_version": original["contract_version"]})
             del original
     by_id = {v["run"]["run_id"]: v for v in views}
@@ -849,7 +878,7 @@ The workbench does not discover data roots or implicitly issue a Query.
     for run_id, batch in batches.items():
         _require(run_id in by_id, "CONTEXT_MISMATCH: Data without loaded run")
         original = next(r for r in originals if r["run_id"] == run_id)
-        if original["contract_version"] in {"backtest_run_v3", "backtest_run_v4"}:
+        if original["contract_version"] in {"backtest_run_v3", "backtest_run_v4", "backtest_run_v5"}:
             market = by_id[run_id]["market"]
             source_refs = [s["reference"] for s in market.get("source_evidence") or []
                            if s["context"].get("domain") == "market_daily"]

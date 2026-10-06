@@ -1,0 +1,21 @@
+{
+  "status": "SYNTHETIC_INTERFACE_ONLY",
+  "owner_handoff_sha256": "a729c41e21919dd28222ca6a22600a788a188f842d3fb1bb7b36ef7663e5e546",
+  "owner_engine_main": "efd36664ed9530b0eb9c46cd5ee154301a15c4c1",
+  "data40_merged_at_handoff": false,
+  "checks": {
+    "focused_python_unittest": "49 PASS on Python 3.12",
+    "javascript_syntax": "PASS for workbench.js and workbench-interactions.js",
+    "saved_sse_drawdown_projection": "PASS; node test checks benchmark_comparison_v2 benchmark_drawdown and v1 null",
+    "display_candles": "PASS; node test checks adjusted missing/native present basis switch",
+    "display_native_binding": "PASS; mismatched saved native close is rejected",
+    "v4_public_privacy": "PASS; wrong-path nested benchmark source is rejected",
+    "independent_source_review": "PASS after repairs; no remaining P0/P1 in light diff",
+    "synthetic_v4_public_owner_read": "PASS; original bytes and mtime unchanged",
+    "synthetic_v5_projection": "PASS; handwritten UI wire, mocked public loaders, no account or evaluation execution",
+    "public_v5_export": "FAIL_CLOSED_PENDING_NARROW_SELECTION_REVIEW",
+    "private_real_500k_read": "DEFERRED_TO_COORDINATED_RESOURCE_WINDOW",
+    "browser_review": "DEFERRED_TO_COORDINATED_RESOURCE_WINDOW"
+  },
+  "scope": "UI only reads saved Owner documents and projects display fields. No Data query, training, account replay, evaluation, merge, deployment or private artifact publication."
+}

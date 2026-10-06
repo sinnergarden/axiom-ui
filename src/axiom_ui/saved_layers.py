@@ -3,6 +3,7 @@
 No factor adjustment, event inference, current discovery or account execution.
 """
 from copy import deepcopy
+from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 import json
 from pathlib import Path
@@ -35,6 +36,14 @@ def attach_review_display(view, saved, *, manifest_sha256, snapshot_id, anchor_s
              context.get("knowledge_cutoff") == knowledge_cutoff,
              "CONTEXT_MISMATCH: saved display Snapshot/anchor/cutoff")
     source = view["market"].get("native_chart") or view["market"].get("data_batch") or {}
+    replay_only_v5 = view["run"].get("contract_version") == "backtest_run_v5" and not source
+    if replay_only_v5:
+        candidates = [item for item in view["market"].get("source_evidence") or []
+                      if (item.get("context") or {}).get("domain") == "market_daily"]
+        _require(len(candidates) == 1 and candidates[0].get("reference") in
+                 (view["market"].get("source_refs") or []),
+                 "CONTEXT_MISMATCH: saved ETF price source identity")
+        source = {"context": candidates[0]["context"], "records": view["market"].get("rows")}
     _require((source.get("context") or {}).get("snapshot_id") == snapshot_id,
              "CONTEXT_MISMATCH: display/run market Snapshot")
     stock = view["run"].get("contract_version") in {"backtest_run_v3", "backtest_run_v4"}
@@ -56,14 +65,32 @@ def attach_review_display(view, saved, *, manifest_sha256, snapshot_id, anchor_s
                    if isinstance(r.get("session"), str) and start <= r["session"] <= end}
     _require(native_keys and set(keys) == native_keys,
              "CONTEXT_MISMATCH: display/native scope keys; missing or extra rows are refused")
+    if replay_only_v5:
+        originals = {(row["security_id"], row["session"]): row for row in original_rows}
+        for row in rows:
+            original = originals[row["security_id"], row["session"]]
+            for display_field, replay_field in (("native_open", "open"),
+                                                 ("native_close", "close"),
+                                                 ("volume_units", "volume_units")):
+                shown, native_saved = row.get(display_field), original.get(replay_field)
+                if shown is None or native_saved is None:
+                    continue
+                try:
+                    equal = Decimal(str(shown)) == Decimal(str(native_saved))
+                except InvalidOperation:
+                    equal = False
+                _require(equal, "CONTEXT_MISMATCH: display/native ETF price or volume")
     query = (source.get("context") or {}).get("query") or {}
     _require(not query.get("symbols") or {k[0] for k in native_keys}.issubset(query["symbols"]),
              "CONTEXT_MISMATCH: native security query scope")
     _require(not query.get("sessions") or {k[1] for k in native_keys}.issubset(query["sessions"]),
              "CONTEXT_MISMATCH: native session query scope")
     source_meta = source.get("field_meta") or {}
-    _require(source_meta.get("close", {}).get("unit") == price_unit and
-             source_meta.get(volume, {}).get("unit") == ("shares" if stock else "fund units"),
+    _require((replay_only_v5 and
+              (view["run"].get("price_unit"), view["run"].get("quantity_unit")) ==
+              (price_unit, "fund units")) or
+             (source_meta.get("close", {}).get("unit") == price_unit and
+              source_meta.get(volume, {}).get("unit") == ("shares" if stock else "fund units")),
              "CONTEXT_MISMATCH: original native price/quantity unit")
     reasons = {(r["security_id"], r["session"]): r.get("missing_reason")
                for r in metadata.get("display_scale", {}).get("by_key") or []}

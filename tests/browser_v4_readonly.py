@@ -103,14 +103,23 @@ def check():
             return {"status": "PASS", "stock_units": True, "schedule_and_original_folds": True,
                     "synthetic_notice": True}
         finally:
-            if ws is not None:
-                ws.close()
-            chrome.terminate()
             try:
-                chrome.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                chrome.kill()
-            server.shutdown()
+                if ws is not None:
+                    ws.close()
+            finally:
+                try:
+                    if chrome.poll() is None:
+                        chrome.terminate()
+                        try:
+                            chrome.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            chrome.kill()
+                            chrome.wait(timeout=5)
+                finally:
+                    try:
+                        server.shutdown()
+                    finally:
+                        server.server_close()
 
 
 if __name__ == "__main__":

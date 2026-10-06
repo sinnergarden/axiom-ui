@@ -585,6 +585,62 @@ class WorkbenchTests(unittest.TestCase):
             with self.assertRaisesRegex(ProjectionError, "run/prediction schedule"):
                 render_saved_workbench(["synthetic-v4.json"])
 
+    def test_etf_v5_saved_policy_units_and_v3_evaluation_are_read_only(self):
+        """Handwritten UI wire; no Engine account, Data query, or evaluator runs."""
+        entry = deepcopy(self.sample["runs"][0])
+        run = saved_unit_run(entry)
+        native = entry["data_batch"]
+        market = run["plan"]["market_replay"]
+        source = {"reference": _digest(native), "batch": native}
+        market["source_refs"].append(source["reference"])
+        market["source_evidence"] = [s for s in market["source_evidence"]
+                                     if s.get("context", {}).get("domain") != "market_daily"] + [source]
+        run.update(contract_version="backtest_run_v5", runtime_version="axiom.backtest/5",
+                   core_version="axiom.rotation/1", quantity_unit="fund units",
+                   price_unit="CNY/fund unit", portfolio_policy_ref="synthetic:policy")
+        run["plan"].update(contract_version="backtest_request_v5", price_unit="CNY/fund unit",
+                           portfolio_policy={"contract_version": "etf_rotation_policy_v1",
+                                             "schedule": "weekly_first_trading_session"})
+        run["plan"]["profile"].update(contract_version="daily_open_profile_v2",
+                                       price_limit_policy="require_both", price_grid_policy="etf_price_grid_v1")
+        evaluation = saved_v3(entry)
+        evaluation["benchmark_comparisons"]["SSE_COMPOSITE"].update(
+            projection_version="benchmark_comparison_v2", max_drawdown="-0.25")
+        before = deepcopy((run, evaluation, native))
+        calls = []
+        runtime = ModuleType("axiom_engine.runtime")
+        runtime.load_backtest_run = lambda path: calls.append(("run", str(path))) or deepcopy(run)
+        runtime.load_backtest_evaluation = lambda path: calls.append(("evaluation", str(path))) or deepcopy(evaluation)
+        with patch.dict(sys.modules, {"axiom_engine.runtime": runtime, "axiom_data": None}):
+            view = payload(render_saved_workbench(["synthetic-etf-v5.json"],
+                evaluation_paths=["synthetic-etf-evaluation.json"]))["views"][0]
+        self.assertEqual(calls, [("run", "synthetic-etf-v5.json"),
+                                 ("evaluation", "synthetic-etf-evaluation.json")])
+        self.assertEqual((view["run"]["quantity_unit"], view["run"]["price_unit"]),
+                         ("fund units", "CNY/fund unit"))
+        self.assertEqual(view["run"]["portfolio_policy_ref"], "synthetic:policy")
+        self.assertEqual(view["configuration"]["portfolio_policy"], run["plan"]["portfolio_policy"])
+        self.assertEqual(view["market"]["native_chart"]["source_ref"], source["reference"])
+        self.assertEqual(view["evaluation"]["benchmark_comparisons"]["SSE_COMPOSITE"]["max_drawdown"], "-0.25")
+        self.assertEqual(view["run"]["unit_split_applications"][0]["event_id"],
+                         run["unit_split_applications"][0]["event_id"])
+        self.assertEqual((run, evaluation, native), before)
+        market["source_evidence"][-1] = {"reference": source["reference"],
+                                          "context": native["context"]}
+        with patch.dict(sys.modules, {"axiom_engine.runtime": runtime, "axiom_data": None}):
+            replay_only = payload(render_saved_workbench(["synthetic-etf-v5.json"]))["views"][0]
+        self.assertIsNone(replay_only["market"]["native_chart"])
+        self.assertEqual(replay_only["market"]["source_evidence"][-1]["reference"], source["reference"])
+        run["signal_ref"] = None
+        run["core_version"] = "axiom.etf_buy_and_hold/1"
+        run["plan"]["portfolio_policy"] = {"contract_version": "etf_buy_and_hold_policy_v1",
+                                            "security_id": "synthetic:etf", "entry_session": "2026-03-30"}
+        with patch.dict(sys.modules, {"axiom_engine.runtime": runtime, "axiom_data": None}):
+            held = payload(render_saved_workbench(["synthetic-etf-v5.json"]))["views"][0]
+        self.assertIsNone(held["run"]["signal_ref"])
+        self.assertEqual(held["configuration"]["portfolio_policy"]["contract_version"],
+                         "etf_buy_and_hold_policy_v1")
+
     def test_stock_v3_without_high_low_keeps_saved_close_volume_fallback(self):
         run, _, native = saved_stock_case(self.sample)
         for field in ("high", "low"):

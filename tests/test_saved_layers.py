@@ -45,6 +45,36 @@ def fixture():
 
 
 class SavedLayersTests(TestCase):
+    def test_etf_v5_replay_only_display_binding_uses_saved_price_scope(self):
+        view, saved, binding = fixture()
+        view["run"].update(contract_version="backtest_run_v5",
+                           price_unit="CNY/fund unit", quantity_unit="fund units")
+        source = view["market"].pop("native_chart")
+        view["market"].update(rows=source["records"], source_refs=["synthetic:price"],
+            source_evidence=[{"reference":"synthetic:price", "context":{
+                **source["context"], "domain":"market_daily"}}])
+        for key in ("open", "high", "low", "close", "native_open", "native_high",
+                    "native_low", "native_close"):
+            saved["ohlcv"]["field_meta"][key]["unit"] = "CNY/fund unit"
+        saved["ohlcv"]["field_meta"]["volume_units"] = saved["ohlcv"]["field_meta"].pop("volume_shares")
+        saved["ohlcv"]["field_meta"]["volume_units"]["unit"] = "fund units"
+        saved["ohlcv"]["records"][0]["volume_units"] = saved["ohlcv"]["records"][0].pop("volume_shares")
+        etf_saved = deepcopy(saved)
+        attach_review_display(view, saved, **binding)
+        self.assertEqual(view["market"]["review_display"]["records"][0]["volume_units"], 1000)
+        saved["ohlcv"]["records"][0]["native_close"] = 99
+        with self.assertRaisesRegex(ProjectionError, "display/native ETF price or volume"):
+            attach_review_display(view, saved, **binding)
+        view, _, binding = fixture()
+        saved = etf_saved
+        view["run"].update(contract_version="backtest_run_v5", price_unit="CNY/fund unit",
+                           quantity_unit="fund units")
+        view["market"] = {"rows": [{"security_id":"synthetic:wrong", "session":"2024-01-02"}],
+            "source_refs": ["synthetic:price"], "source_evidence": [{"reference":"synthetic:price",
+            "context":{"domain":"market_daily", "snapshot_id":"synthetic:snapshot"}}]}
+        with self.assertRaisesRegex(ProjectionError, "scope keys"):
+            attach_review_display(view, saved, **binding)
+
     def test_native_nulls_names_events_and_fixed_clock_without_adjustment(self):
         view, saved, binding = fixture()
         binding["run_ref"]["run_id"] = "another:account"
