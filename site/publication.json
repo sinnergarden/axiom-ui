@@ -193,5 +193,17 @@
   },
   "owner_digest_note": "Saved owner content_digest identifies the original complete owner result, not public HTML.",
   "future_results_auto_published": false,
-  "Data_roots_current_discovery": false
+  "Data_roots_current_discovery": false,
+  "tutorial": {
+    "file": "ml-engineering.html",
+    "diagram_embedded": true,
+    "source_repo": "sinnergarden/axiom-docs",
+    "source_commit": "643745ec32b99fa8c1386ef269931ad6755fa6da",
+    "source_path": "notebooks/ml_engineering_tutorial.html",
+    "source_html_sha256": "sha256:da2c6df79977f8916f682566c233b7b0c35dc961e97cd0ceb97846dad296ca13",
+    "published_html_sha256": "sha256:43007d7d39a1618bc38bd3d85b80aec066f93a109788eb9d11baeedfcae5eebd",
+    "diagram_sha256": "sha256:d36ba47c032cc117f0638920f2879f5ea7ea4e84f73553248e7f56b87c459e9e",
+    "status": "public_readonly_teaching",
+    "business_execution": false
+  }
 }

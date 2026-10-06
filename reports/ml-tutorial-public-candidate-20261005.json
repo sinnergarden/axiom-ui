@@ -1,0 +1,43 @@
+{
+  "status": "CANDIDATE_PASS_PARENT_REVIEW_PENDING",
+  "source_repo": "sinnergarden/axiom-docs",
+  "source_commit": "643745ec32b99fa8c1386ef269931ad6755fa6da",
+  "source_html_sha256": "sha256:da2c6df79977f8916f682566c233b7b0c35dc961e97cd0ceb97846dad296ca13",
+  "source_notebook": "notebooks/ml_engineering_tutorial.ipynb",
+  "published_html_sha256": "sha256:43007d7d39a1618bc38bd3d85b80aec066f93a109788eb9d11baeedfcae5eebd",
+  "published_html_bytes": 57516,
+  "embedded_diagram_sha256": "sha256:d36ba47c032cc117f0638920f2879f5ea7ea4e84f73553248e7f56b87c459e9e",
+  "published_files_added": [
+    "site/ml-engineering.html"
+  ],
+  "published_files_changed": [
+    "site/index.html",
+    "site/publication.json"
+  ],
+  "existing_selected_result_files_byte_identical": {
+    "etf.html": "76878402d4b87926a036b560b0ed3e12fa208e852b19886a5614796e3be74734",
+    "stock.html": "275878fe8993606d401a83979b48c30d5bb43ee928c9e70a0565af1ebb9e026d",
+    "process.html": "f06e197afdb6aa496c5241cc7a6d9e5c24c4952cb978eb1b19635c2b65979afb",
+    "performance.html": "9cb1f72b3a56bc5dc163b8ee639b2617e6253ce3b3b982b2f4f2bf4aceb2a259",
+    "echarts.LICENSE.txt": "634293835b43a6dd2094fa39182a3d9a6b9ca43b7fdb9ac354e8037af2a3093a",
+    "echarts.NOTICE.txt": "d491d358344f842685c1b1585970999db65fe30ecf7ef3867af8814f4016c016",
+    "echarts.vendor.json": "2f11f91cce4d25104c76415ddb5a8fecc83ed99aa4f58b1c3805f988eb641b0c"
+  },
+  "local_chapter_links": 13,
+  "fixed_external_link_count": 11,
+  "public_site_file_count": 11,
+  "site_checker": "PASS_11_ALLOWLISTED_FILES",
+  "browser": {
+    "status": "PASS_PUBLIC_ML_TUTORIAL_LOCAL_BROWSER",
+    "checks": {
+      "source_diagram_and_13_sections": true,
+      "physical_nav_and_feature_registry": true,
+      "saved_fold_public_code_example": true,
+      "bounded_warm_estimate": true,
+      "mobile_no_document_overflow": true
+    },
+    "runtime_exceptions": 0,
+    "external_requests": 0
+  },
+  "content_boundary": "Public Docs HTML only; no private receipt outputs, local paths, raw data/model/account files, owner execution or notebook cell execution."
+}
