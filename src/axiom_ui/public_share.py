@@ -223,18 +223,19 @@ def _schema_field_names(schema):
     return frozenset(schema).union(*(_schema_field_names(child) for child in schema.values()))
 
 
-V4_PUBLIC_KEYS = V4_PUBLIC_KEYS | _schema_field_names(_V4_PUBLIC_EVALUATION)
-_V5_SSE_COMPARISON = {**_COMPARISON, **dict.fromkeys((
+# Engine evaluation v3 is independent of the account contract version.
+# Keep one strict evaluation path schema for both stock v4 and ETF v5.
+_SSE_COMPARISON = {**_COMPARISON, **dict.fromkeys((
     'observation_cutoff', 'observation_pit_policy', 'observation_purpose',
     'observation_snapshot_id'))}
-_V5_PUBLIC_EVALUATION = {**_V4_PUBLIC_EVALUATION,
+_V4_PUBLIC_EVALUATION = {**_V4_PUBLIC_EVALUATION,
     'spec': {**_SPEC, 'benchmark_projection_version': None},
     'benchmark_comparisons': {**_V4_PUBLIC_EVALUATION['benchmark_comparisons'],
-                              'SSE_COMPOSITE': _V5_SSE_COMPARISON}}
+                              'SSE_COMPOSITE': _SSE_COMPARISON}}
+V4_PUBLIC_KEYS = V4_PUBLIC_KEYS | _schema_field_names(_V4_PUBLIC_EVALUATION)
 V5_PUBLIC_KEYS = (V4_PUBLIC_KEYS | frozenset((*V5_PROFILE, *V5_POSITION, *V5_ORDER,
     *V5_FILL, *V5_APPLICATION, *V5_QUOTE, *V5_BUY_HOLD_POLICY, 'portfolio_policy_ref',
-    'phase', 'numerator', 'denominator', 'unit_split_policy', 'unit_splits')) |
-    _schema_field_names(_V5_PUBLIC_EVALUATION))
+    'phase', 'numerator', 'denominator', 'unit_split_policy', 'unit_splits')))
 
 
 def reject_public_shape(value, schema, label):
@@ -286,6 +287,56 @@ def scalars(value, keys):
 def reject_extra(value, keys, label):
     if not isinstance(value, dict) or set(value) - set(keys):
         raise ValueError('unexpected private or unknown v4 ' + label)
+
+
+def validated_public_outer(view, run):
+    """Validate envelope scalars before copying them into an HTML data script."""
+    outer = {}
+    for name in ('view_id', 'evidence_kind'):
+        value = view.get(name)
+        if not isinstance(value, str) or not value:
+            raise ValueError('invalid public ' + name)
+        cleaned = clean(value)
+        if cleaned != value:
+            raise ValueError('local path in public ' + name)
+        outer[name] = cleaned
+    for name in ('approximate', 'blocked'):
+        value = view.get(name)
+        if type(value) is not bool:
+            raise ValueError('invalid public ' + name)
+        outer[name] = value
+    limitations = run.get('limitations', [])
+    if not isinstance(limitations, list) or any(not isinstance(item, str) for item in limitations):
+        raise ValueError('saved run limitations must be a list of strings')
+    conditions = view.get('comparison_conditions', [])
+    if not isinstance(conditions, list):
+        raise ValueError('comparison conditions must be a list')
+    for condition in conditions:
+        reject_extra(condition, ('key', 'label', 'provided', 'value'), 'comparison condition')
+        key = condition.get('key')
+        if not isinstance(key, str) or not key or clean(key) != key:
+            raise ValueError('invalid public comparison key')
+        if 'label' in condition and not isinstance(condition['label'], str):
+            raise ValueError('invalid public comparison label')
+        if 'provided' in condition and type(condition['provided']) is not bool:
+            raise ValueError('invalid public comparison provided flag')
+    return outer
+
+
+def validate_public_condition_values(conditions):
+    """Selected conditions have a fixed scalar value or one known narrow object."""
+    for condition in conditions:
+        key = condition['key']
+        value = condition.get('value')
+        if key == 'initial_account':
+            reject_public_shape(value, _public_object('cash_minor', positions=_public_object('')),
+                                'public initial account condition')
+        elif key == 'profile.extra':
+            if not isinstance(value, dict):
+                raise ValueError('unexpected nested public profile condition')
+            reject_public_shape(value, dict.fromkeys(value), 'public profile condition')
+        else:
+            reject_public_shape(value, None, 'public comparison condition')
 
 
 def reject_unknown_public_v4(value, *, v5=False, security_keys=frozenset()):
@@ -646,9 +697,14 @@ def chart_projection(view, securities, start, end):
 
 
 def project_view(view):
+    if not isinstance(view, dict):
+        raise ValueError('public view must be an object')
     run = view.get('run') or {}
+    if not isinstance(run, dict):
+        raise ValueError('public run must be an object')
     if not run.get('run_id'):
         raise ValueError('public results require an explicit saved account')
+    outer = validated_public_outer(view, run)
     v5 = run.get('contract_version') == 'backtest_run_v5'
     if v5:
         validate_v5_public_input(view, run)
@@ -657,11 +713,10 @@ def project_view(view):
         validate_v4_public_input(view, run)
         if view.get('stock_ml') is not None:
             raise ValueError('unexpected private or unknown v4 single-signal model')
-    result = {'view_id': view['view_id'], 'run': pick(run, RUN),
+    result = {**outer, 'run': pick(run, RUN),
               'configuration': pick(view['configuration'], ('start_session', 'end_session', 'initial_account',
                                                            'profile', 'price_basis', 'unit_split_policy',
                                                            'portfolio_policy')),
-              'evidence_kind': view['evidence_kind'], 'approximate': view['approximate'], 'blocked': view['blocked'],
               'research': pick(view['research'], RESEARCH) if view.get('research') and not v5 else None,
               'evaluation': pick(view['evaluation'], EVALUATION) if view.get('evaluation') else None,
               'comparison_conditions': [clean(c) for c in view.get('comparison_conditions', [])
@@ -677,6 +732,7 @@ def project_view(view):
                 condition['value'] = pick(condition['value'], V5_PROFILE)
             conditions.append(condition)
         result['comparison_conditions'] = conditions
+    validate_public_condition_values(result['comparison_conditions'])
     result['run']['decisions'] = [pick(d, ('contract_version', 'feature_session', 'trade_session', 'status',
                                          'selected_security_id', 'selected_security_ids', 'signal_ref',
                                          'expected_account_version', 'intents', 'reason', 'top_k')) for d in run.get('decisions') or []]
@@ -803,8 +859,7 @@ def project_view(view):
         reject_public_shape(result['market'].get('rows'),
             (_public_object(' '.join(k for k in ROW if k != 'source_refs'), source_refs=(None,)),),
             'market rows')
-        reject_public_shape(result['evaluation'],
-                            _V5_PUBLIC_EVALUATION if v5 else _V4_PUBLIC_EVALUATION, 'evaluation')
+        reject_public_shape(result['evaluation'], _V4_PUBLIC_EVALUATION, 'evaluation')
         if v5:
             if result['run'].get('quantity_unit') != 'fund units' or result['run'].get('price_unit') != 'CNY/fund unit':
                 raise ValueError('unexpected v5 ETF saved units')

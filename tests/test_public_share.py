@@ -107,6 +107,9 @@ class PublicProjectionTests(unittest.TestCase):
             lambda v: v['market']['unit_splits'][0].update(source_refs=[{'content_digest':ref}]),
             lambda v: v['configuration'].update(unit_split_policy={'private':'value'}),
             lambda v: v['run']['limitations'].append('See https://private.example/source'),
+            lambda v: v['run'].update(limitations={'source':'PRIVATE_SENTINEL'}),
+            lambda v: v['comparison_conditions'][-1].update(label={'source':'PRIVATE_SENTINEL'}),
+            lambda v: v['comparison_conditions'][-1].update(provided={'source':'PRIVATE_SENTINEL'}),
             lambda v: v['comparison_conditions'][-1]['value'].update(price_grid_ref='sha256:wrong'),
         ):
             malformed = deepcopy(value)
@@ -212,7 +215,12 @@ class PublicProjectionTests(unittest.TestCase):
                            {'account_session':'2024-01-03','benchmark_drawdown':None,
                             'relative_status':'MISSING'}]},
             'SSE_COMPOSITE': {'projection_version':'benchmark_comparison_v2',
-                              'max_drawdown':None, 'series':[]}}
+                              'max_drawdown':None, 'series':[],
+                              'observation_cutoff':'2024-01-03T00:00:00Z',
+                              'observation_pit_policy':'operational_pit_v1',
+                              'observation_purpose':'historical_exploration',
+                              'observation_snapshot_id':'synthetic:snapshot'}}
+        value['evaluation']['spec'] = {'benchmark_projection_version':'benchmark_comparison_v2'}
         value['evaluation']['episodes'] = [{'episode_id':'synthetic:episode',
             'dividends':[{'event_id':'synthetic:dividend','record_session':'2024-01-02',
                 'ex_session':'2024-01-03','pay_session':None,'entitlement_quantity':100,
@@ -226,6 +234,10 @@ class PublicProjectionTests(unittest.TestCase):
         self.assertEqual(public['evaluation']['benchmark_comparisons']['CSI300']['series'][1]
                          ['benchmark_drawdown'], None)
         self.assertEqual(public['evaluation']['benchmark_comparisons']['CSI300']['max_drawdown'], '-0.2')
+        self.assertEqual(public['evaluation']['benchmark_comparisons']['SSE_COMPOSITE']
+                         ['observation_snapshot_id'], 'synthetic:snapshot')
+        self.assertEqual(public['evaluation']['spec']['benchmark_projection_version'],
+                         'benchmark_comparison_v2')
         self.assertEqual(public['evaluation']['episodes'][0]['dividends'][0]['recognized_minor'], 100)
         self.assertEqual(public['evaluation']['pnl_distribution']['bins'][0]['upper_minor'], '0')
         self.assertEqual(public['evaluation']['return_distribution']['bins'][0]['upper'], '0')
@@ -233,6 +245,15 @@ class PublicProjectionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'private or unknown v4'):
             project_view(value)
         del value['evaluation']['benchmark_comparisons']['CSI300']['series'][0]['private_marker']
+        value['evaluation']['benchmark_comparisons']['SSE_COMPOSITE']['observation_cutoff'] = {
+            'source':'PRIVATE_SENTINEL'}
+        with self.assertRaisesRegex(ValueError, 'private or unknown v4'):
+            project_view(value)
+        value['evaluation']['benchmark_comparisons']['SSE_COMPOSITE']['observation_cutoff'] = '2024-01-03T00:00:00Z'
+        value['evaluation']['spec']['benchmark_projection_version'] = {'source':'PRIVATE_SENTINEL'}
+        with self.assertRaisesRegex(ValueError, 'private or unknown v4'):
+            project_view(value)
+        value['evaluation']['spec']['benchmark_projection_version'] = 'benchmark_comparison_v2'
         value['evaluation']['benchmark'] = {'record_session':'2024-01-02'}
         with self.assertRaisesRegex(ValueError, 'private or unknown v4'):
             project_view(value)
@@ -293,6 +314,35 @@ class PublicProjectionTests(unittest.TestCase):
         self.assertNotIn('dividend_scope',result['evaluation'])
         self.assertIn('[本地路径已隐藏]',result['research']['outcome'])
         self.assertEqual([c['key'] for c in result['comparison_conditions']],['profile.lot_size'])
+
+    def test_public_envelope_and_condition_shapes_are_checked_before_copy(self):
+        value = saved_view()
+        value['comparison_conditions'][1].update(label='saved /Users/private/label', provided=True)
+        value['run']['limitations'] = ['saved /Users/private/limitation']
+        result = project_view(value)
+        self.assertNotIn('/Users/', str(result))
+        self.assertIn('[本地路径已隐藏]', result['comparison_conditions'][0]['label'])
+        self.assertIn('[本地路径已隐藏]', result['run']['limitations'][0])
+        mutations = (
+            lambda v: v.update(view_id={'source':'PRIVATE_SENTINEL'}),
+            lambda v: v.update(evidence_kind=['PRIVATE_SENTINEL']),
+            lambda v: v.update(approximate={'source':'PRIVATE_SENTINEL'}),
+            lambda v: v.update(blocked='false'),
+            lambda v: v.update(view_id='/Users/private/identity'),
+            lambda v: v['comparison_conditions'][1].update(key={'source':'PRIVATE_SENTINEL'}),
+            lambda v: v['comparison_conditions'][1].update(label={'source':'PRIVATE_SENTINEL'}),
+            lambda v: v['comparison_conditions'][1].update(provided={'source':'PRIVATE_SENTINEL'}),
+            lambda v: v['comparison_conditions'][1].update(value={'source':'PRIVATE_SENTINEL'}),
+            lambda v: v['comparison_conditions'][1].update(label='ghp_'+'a'*30),
+            lambda v: v['run'].update(limitations={'source':'PRIVATE_SENTINEL'}),
+            lambda v: v['run'].update(limitations='PRIVATE_SENTINEL'),
+            lambda v: v['run'].update(limitations=[{'source':'PRIVATE_SENTINEL'}]),
+        )
+        for mutation in mutations:
+            malformed = deepcopy(value)
+            mutation(malformed)
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                project_view(malformed)
 
     def test_public_replay_keeps_narrow_saved_target_reason_and_causal_ids(self):
         value=saved_view()
