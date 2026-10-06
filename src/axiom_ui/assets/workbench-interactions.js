@@ -294,7 +294,9 @@ window.createAxiomInteractions = function(env) {
       const runtime=node('div',null,'chain-stage');runtime.append(node('h3','2 · 委托 / 执行依据'));
       if(!item.orders.length)runtime.append(node('p','委托关联未提供。','small'));
       for(const order of item.orders){const box=node('div',null,'order-row');
-        detailRow(box,'委托 / 已成交 / 未成交（'+quantityUnit(v)+'）',saved(order.quantity)+' / '+saved(order.filled_quantity)+' / '+saved(order.unfilled_quantity));
+        if(v.run.contract_version==='backtest_run_v6')for(const [key,label] of [['requested_quantity','请求'],['submitted_quantity','已提交'],['unsubmitted_quantity','未提交'],['filled_quantity','已成交'],['unfilled_quantity','提交后未成交']])detailRow(box,label+'（'+quantityUnit(v)+'）',order[key]);
+        else detailRow(box,'委托 / 已成交 / 未成交（'+quantityUnit(v)+'）',saved(order.quantity)+' / '+saved(order.filled_quantity)+' / '+saved(order.unfilled_quantity));
+        if(v.run.contract_version==='backtest_run_v6')detailRow(box,'未提交原因',order.submission_reason);
         detailRow(box,'状态 / 未成交原因',statusLabel(order.status)+' / '+(order.reason?reasonLabel(order.reason):'未提供'));
         detailRow(box,'原市场状态 / 原因',saved(order.market_state)+' / '+saved(order.state_reason));
         const button=node('button','查看委托原值','text-button');button.addEventListener('click',()=>{selectEvent(v,order,'orders');openRaw('保存委托',order);});box.append(button);runtime.append(box);

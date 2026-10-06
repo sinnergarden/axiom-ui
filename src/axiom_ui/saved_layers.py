@@ -46,7 +46,7 @@ def attach_review_display(view, saved, *, manifest_sha256, snapshot_id, anchor_s
         source = {"context": candidates[0]["context"], "records": view["market"].get("rows")}
     _require((source.get("context") or {}).get("snapshot_id") == snapshot_id,
              "CONTEXT_MISMATCH: display/run market Snapshot")
-    stock = view["run"].get("contract_version") in {"backtest_run_v3", "backtest_run_v4"}
+    stock = view["run"].get("contract_version") in {"backtest_run_v3", "backtest_run_v4", "backtest_run_v6"}
     price_unit, volume = ("CNY/share", "volume_shares") if stock else ("CNY/fund unit", "volume_units")
     metadata, rows = layer.get("field_meta") or {}, layer.get("records")
     _require(isinstance(rows, list) and all(isinstance(r, dict) for r in rows), "malformed saved display rows")

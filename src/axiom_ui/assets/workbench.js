@@ -30,7 +30,7 @@
   };
   const present = v => v !== null && v !== undefined;
   const saved = v => present(v) ? String(v) : '未提供';
-  const stockAccount = v => ['backtest_run_v3','backtest_run_v4'].includes(v.run.contract_version);
+  const stockAccount = v => ['backtest_run_v3','backtest_run_v4','backtest_run_v6'].includes(v.run.contract_version);
   const quantityUnit = v => stockAccount(v) ? '股' : '份';
   const priceUnit = v => stockAccount(v) ? '元/股' : '元/份';
   const slipCaption = v => {
@@ -280,10 +280,11 @@
     const panel=$('stock-account-context');panel.hidden=!stockAccount(v);
     if(panel.hidden){$('stock-account-scope').textContent='';$('stock-account-refs').textContent='';return;}
     const context=v.stock_context,profile=v.configuration.profile;
-    $('stock-account-scope').textContent='数量：股；价格：元/股；100 股委托、T+1。'+
+    $('stock-account-scope').textContent='数量：股；价格：元/股；'+(v.run.contract_version==='backtest_run_v6'?'申报数量按保存的板块及生效日期规则；':'100 股委托；')+'T+1。'+
       (context?.folds?.length?'保存预测 '+context.folds.length+' 折；各折 fit/OOS 日期与原 signal/model/feature 引用见展开详情。':'')+
+      (v.run.contract_version==='backtest_run_v6'?'未提交 '+saved(v.run.metrics?.unsubmitted_order_count)+' 笔 / '+saved(v.run.metrics?.unsubmitted_quantity)+' 股；提交后未成交 '+saved(v.run.metrics?.unfilled_order_count)+' 笔；未完整执行 '+saved(v.run.metrics?.incomplete_order_count)+' 笔。生命周期摘要见展开详情。':'')+
       '范围、税费与容量见展开详情。';
-    $('stock-account-refs').textContent=json({run_id:v.run.run_id,content_digest:v.run.content_digest,committed_sequence:v.run.committed_sequence,status:v.run.status,stopped:v.run.stopped,quantity_unit:v.run.quantity_unit,price_unit:v.run.price_unit,admission_ref:v.run.admission_ref,supported_universe_ref:v.run.supported_universe_ref,context,profile,native_source_evidence:v.market.source_evidence,projection_note:'仅显示投影；完整 native DataBatch 身份为 source reference，coverage 与压缩 payload 留在 owner 保存文件，不将此投影重新认定为完整批次。'});
+    $('stock-account-refs').textContent=json({run_id:v.run.run_id,content_digest:v.run.content_digest,committed_sequence:v.run.committed_sequence,status:v.run.status,stopped:v.run.stopped,quantity_unit:v.run.quantity_unit,price_unit:v.run.price_unit,admission_ref:v.run.admission_ref,supported_universe_ref:v.run.supported_universe_ref,stock_execution_rules_ref:v.run.stock_execution_rules_ref,lifecycle_admission:v.run.lifecycle_admission,context,profile,native_source_evidence:v.market.source_evidence,projection_note:'仅显示投影；完整 native DataBatch 身份为 source reference，coverage 与压缩 payload 留在 owner 保存文件，不将此投影重新认定为完整批次。'});
   }
   const NS = 'http://www.w3.org/2000/svg';
   function svgEl(tag, attrs = {}, text) {
@@ -368,7 +369,9 @@
         const admission=event.execution_admission || order?.execution_admission;
         pointRow(panel,'执行说明',admission==='STOCK_OBSERVED_DAILY_ASSUMPTION'?'股票日线事后近似假设':admission==='ETF_OBSERVED_DAILY_ASSUMPTION'?'ETF 日线近似假设':'保存的模拟成交');
       } else if(kind==='orders') {
-        pointRow(panel,'委托 / 成交数量（'+quantityUnit(v)+'）',saved(event.quantity)+' / '+saved(event.filled_quantity));
+        if(v.run.contract_version==='backtest_run_v6')for(const [key,label] of [['requested_quantity','请求'],['submitted_quantity','已提交'],['unsubmitted_quantity','未提交'],['filled_quantity','已成交'],['unfilled_quantity','提交后未成交']])pointRow(panel,label+'数量（'+quantityUnit(v)+'）',event[key]);
+        else pointRow(panel,'委托 / 成交数量（'+quantityUnit(v)+'）',saved(event.quantity)+' / '+saved(event.filled_quantity));
+        if(v.run.contract_version==='backtest_run_v6')pointRow(panel,'未提交原因',event.submission_reason);
         pointRow(panel,'委托状态',statusLabel(event.status));pointRow(panel,'未成交原因',event.reason==='UNKNOWN_MARKET_STATUS'?'市场状态缺证':statusLabel(event.reason));
       } else {
         pointRow(panel,'信号日',event.feature_session);pointRow(panel,'决策交易日',event.trade_session);

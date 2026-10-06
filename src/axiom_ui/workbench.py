@@ -67,7 +67,8 @@ def _source_summaries(sources: list[dict]) -> list[dict]:
 
 
 def _stock_native_chart(market: dict, *, price_unit: str = "CNY/share",
-                        volume_field: str = "volume_shares", volume_unit: str = "shares") -> dict | None:
+                        volume_field: str = "volume_shares", volume_unit: str = "shares",
+                        compact_provenance: bool = False) -> dict | None:
     sources = [s for s in market.get("source_evidence") or []
                if _source_context(s).get("domain") == "market_daily"]
     if not sources:
@@ -95,7 +96,8 @@ def _stock_native_chart(market: dict, *, price_unit: str = "CNY/share",
     return {"source_ref": source["reference"], "display_projection": True,
             "context": _display_context(batch["context"]), "omitted_context_fields": ["coverage"],
             "records": [{k: deepcopy(row.get(k)) for k in ("security_id", "session", *fields)} for row in rows],
-            "field_meta": {k: deepcopy(meta[k]) for k in fields}}
+        "field_meta": {k: ({n: deepcopy(meta[k].get(n)) for n in ("unit", "dtype")} | {"by_key": []}
+                          if compact_provenance else deepcopy(meta[k])) for k in fields}}
 
 
 def _stock_evaluation_display(wire: dict) -> dict:
@@ -156,7 +158,7 @@ def _comparison_conditions(plan: dict) -> list[dict]:
     for key, label in (("snapshot_id", "数据版本"), ("reader_version", "数据读取版本"),
                        ("contract_id", "数据合同"), ("source_profile_id", "数据来源配置"),
                        ("coverage", "数据覆盖说明")):
-        values = [c.get(key) for c in contexts] if key != "coverage" or plan.get("contract_version") not in {"backtest_request_v3", "backtest_request_v4"} else [s.get("reference") for s in evidence]
+        values = [c.get(key) for c in contexts] if key != "coverage" or plan.get("contract_version") not in {"backtest_request_v3", "backtest_request_v4", "backtest_request_v6"} else [s.get("reference") for s in evidence]
         fact(key, label, values, bool(values) and all(v is not None for v in values))
     for key, label in (("symbols", "证券覆盖"), ("sessions", "交易日覆盖"),
                        ("pit_policy", "信息时间口径"), ("adjustment_anchor", "复权锚点")):
@@ -171,7 +173,7 @@ def _comparison_conditions(plan: dict) -> list[dict]:
     if plan.get("contract_version") == "backtest_request_v5":
         fact("portfolio_policy", "保存的 ETF 组合政策", plan.get("portfolio_policy"),
              plan.get("portfolio_policy") is not None)
-    if plan.get("contract_version") in {"backtest_request_v3", "backtest_request_v4"}:
+    if plan.get("contract_version") in {"backtest_request_v3", "backtest_request_v4", "backtest_request_v6"}:
         for key, label in (("prediction_universe", "原预测范围"), ("execution_universe", "执行资格子集"),
                            ("portfolio_policy", "股票组合政策"), ("stock_action_policy", "股票现金行动政策")):
             fact(key, label, plan.get(key), plan.get(key) is not None)
@@ -204,13 +206,15 @@ def _saved_fold_summary(plan: dict) -> dict:
 
 def _run(run: Any, evidence: str) -> dict:
     wire = _wire(run)
-    _require(wire.get("contract_version") in {"backtest_run_v1", "backtest_run_v2", "backtest_run_v3", "backtest_run_v4", "backtest_run_v5"}, "unsupported run contract")
-    stock = wire["contract_version"] in {"backtest_run_v3", "backtest_run_v4"}
+    _require(wire.get("contract_version") in {"backtest_run_v1", "backtest_run_v2", "backtest_run_v3", "backtest_run_v4", "backtest_run_v5", "backtest_run_v6"}, "unsupported run contract")
+    stock = wire["contract_version"] in {"backtest_run_v3", "backtest_run_v4", "backtest_run_v6"}
     v4 = wire["contract_version"] == "backtest_run_v4"
+    v6 = wire["contract_version"] == "backtest_run_v6"
     etf_v5 = wire["contract_version"] == "backtest_run_v5"
     if stock:
-        _require(wire.get("runtime_version") == ("axiom.backtest/4" if v4 else "axiom.backtest/3") and
-                 wire.get("core_version") in ({"axiom.stock_portfolio/2"} if v4 else
+        _require(wire.get("runtime_version") == ("axiom.backtest/6" if v6 else "axiom.backtest/4" if v4 else "axiom.backtest/3") and
+                 wire.get("core_version") in ({"axiom.stock_portfolio/3"} if v6 else
+                                               {"axiom.stock_portfolio/2"} if v4 else
                                                {"axiom.stock_portfolio/1", "axiom.stock_portfolio/2"}) and
                  (wire.get("quantity_unit"), wire.get("price_unit")) == ("shares", "CNY/share"),
                  "unsupported stock version or units")
@@ -247,9 +251,21 @@ def _run(run: Any, evidence: str) -> dict:
             _decimal(metrics[field], field, nullable=True)
     profile = (wire.get("plan") or {}).get("profile") or {}
     _require(type(profile) is dict, "malformed profile")
+    if v6:
+        _require(profile.get("contract_version") == "stock_daily_open_profile_v2" and
+                 type(wire.get("stock_execution_rules_ref")) is str and
+                 wire["stock_execution_rules_ref"] == (wire.get("plan") or {}).get("stock_execution_rules_ref") ==
+                 profile.get("stock_execution_rules_ref") and
+                 (wire.get("plan") or {}).get("market_replay", {}).get("contract_version") == "market_replay_v4",
+                 "unsupported stock v6 rules/profile/replay")
+        # Owner's public loader has already checked the complete rule and fee
+        # documents. The browser only needs their saved identities and scalars.
+        profile = {k: deepcopy(v) for k, v in profile.items()
+                   if k not in {"stock_execution_rules", "stock_fee_schedule"}}
     market = (wire.get("plan") or {}).get("market_replay") or {}
     _require(type(market) is dict, "malformed frozen market replay")
-    approximate = profile.get("unknown_status_policy") in {"etf_daily_observed", "stock_daily_observed"}
+    approximate = profile.get("unknown_status_policy") in {"etf_daily_observed", "stock_daily_observed"} or (
+        v6 and profile.get("approximation") == "retrospective_daily_volume_proxy")
     blocked = any(row.get("reason") == "UNKNOWN_MARKET_STATUS" for row in wire.get("orders") or [])
     # Retain saved market values only for an explicitly named close/volume view.
     # Missing high/low is never converted into a synthetic candle.
@@ -267,7 +283,7 @@ def _run(run: Any, evidence: str) -> dict:
                           "end_session": (wire.get("plan") or {}).get("end_session"),
                           "initial_account": deepcopy((wire.get("plan") or {}).get("initial_account")),
                           "profile": deepcopy(profile), "price_basis": market.get("price_basis")},
-        "comparison_conditions": _comparison_conditions(wire.get("plan") or {}),
+        "comparison_conditions": _comparison_conditions({**(wire.get("plan") or {}), "profile": profile} if v6 else wire.get("plan") or {}),
         "market": {"rows": market_rows, "price_basis": market.get("price_basis"),
                    "source_refs": deepcopy(market.get("source_refs")), "data_batch": None},
         "evidence_kind": evidence, "approximate": approximate, "blocked": blocked,
@@ -306,17 +322,25 @@ def _run(run: Any, evidence: str) -> dict:
         view["configuration"]["unit_split_policy"] = deepcopy((wire.get("plan") or {}).get("unit_split_policy"))
     if stock:
         plan = wire.get("plan") or {}
-        _require(plan.get("contract_version") == ("backtest_request_v4" if v4 else "backtest_request_v3") and
+        _require(plan.get("contract_version") == ("backtest_request_v6" if v6 else "backtest_request_v4" if v4 else "backtest_request_v3") and
                  profile.get("unknown_status_policy") in {"stock_daily_observed", "block"}, "unsupported stock request/profile")
         view["run"].update({k: deepcopy(wire.get(k)) for k in
                             ("quantity_unit", "price_unit", "admission_ref", "supported_universe_ref", "stopped")})
+        if v6:
+            lifecycle = wire.get("lifecycle_admission")
+            _require(type(lifecycle) is dict and set(lifecycle) ==
+                     {"pre_listing_null", "listed_nonmember_gap", "member_gap", "held_gap"} and
+                     all(type(value) is int and value >= 0 for value in lifecycle.values()),
+                     "malformed saved lifecycle admission")
+            view["run"].update(stock_execution_rules_ref=wire["stock_execution_rules_ref"],
+                               lifecycle_admission=deepcopy(lifecycle))
         admission = plan.get("admission_evidence") or {}
         view["stock_context"] = {k: deepcopy(plan.get(k)) for k in
                                  ("prediction_universe", "execution_universe", "portfolio_policy", "stock_action_policy")}
         view["stock_context"].update(model_snapshot=(admission.get("model") or {}).get("snapshot"),
                                      execution_snapshot=(admission.get("execution") or {}).get("snapshot"),
                                      admission_status=admission.get("status"))
-        if v4:
+        if v4 or v6:
             summary = _saved_fold_summary(plan)
             _require(wire.get("signal_ref") == summary["schedule_ref"], "CONTEXT_MISMATCH: run/prediction schedule")
             view["stock_context"].update(summary)
@@ -324,7 +348,7 @@ def _run(run: Any, evidence: str) -> dict:
             view["stock_context"]["signal_inputs"] = {k: deepcopy((plan.get("signal_frame") or {}).get(k)) for k in
                                                        ("feature_ref", "model_ref", "score_semantics", "score_unit")}
         view["market"]["source_evidence"] = _source_summaries(market.get("source_evidence") or [])
-        view["market"]["native_chart"] = _stock_native_chart(market)
+        view["market"]["native_chart"] = _stock_native_chart(market, compact_provenance=v6)
         view["market"]["cash_dividends"] = deepcopy(market.get("cash_dividends"))
         view["market"]["action_diagnostics"] = deepcopy(market.get("action_diagnostics"))
         view["market"]["action_blocks"] = deepcopy(market.get("action_blocks"))
@@ -453,7 +477,7 @@ def _evaluation(value: Any, run: Mapping[str, Any]) -> dict:
             _analysis_display_binding(wire, run)
     else:
         _require("period_metrics" not in wire, "v1 must not acquire period metrics")
-    return _stock_evaluation_display(wire) if (run.get("contract_version") in {"backtest_run_v3", "backtest_run_v4"} or
+    return _stock_evaluation_display(wire) if (run.get("contract_version") in {"backtest_run_v3", "backtest_run_v4", "backtest_run_v6"} or
                                              wire["contract_version"] == "evaluation_report_v3") else wire
 
 
@@ -824,7 +848,7 @@ The workbench does not discover data roots or implicitly issue a Query.
             views.append(_run(original, "synthetic_owner_output" if original["run_id"] in synthetic_run_ids else "saved_backtest_output"))
             # Public validation has finished. Retain only the display projection
             # for stock inputs before loading another large native document.
-            originals.append(original if original["contract_version"] not in {"backtest_run_v3", "backtest_run_v4", "backtest_run_v5"} else
+            originals.append(original if original["contract_version"] not in {"backtest_run_v3", "backtest_run_v4", "backtest_run_v5", "backtest_run_v6"} else
                              {"run_id": original["run_id"], "contract_version": original["contract_version"]})
             del original
     by_id = {v["run"]["run_id"]: v for v in views}
@@ -878,7 +902,7 @@ The workbench does not discover data roots or implicitly issue a Query.
     for run_id, batch in batches.items():
         _require(run_id in by_id, "CONTEXT_MISMATCH: Data without loaded run")
         original = next(r for r in originals if r["run_id"] == run_id)
-        if original["contract_version"] in {"backtest_run_v3", "backtest_run_v4", "backtest_run_v5"}:
+        if original["contract_version"] in {"backtest_run_v3", "backtest_run_v4", "backtest_run_v5", "backtest_run_v6"}:
             market = by_id[run_id]["market"]
             source_refs = [s["reference"] for s in market.get("source_evidence") or []
                            if s["context"].get("domain") == "market_daily"]
