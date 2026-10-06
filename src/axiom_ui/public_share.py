@@ -88,6 +88,27 @@ V5_QUOTE = ('session', 'price', 'available_at', 'source_refs')
 V5_ROTATION_POLICY = ('contract_version', 'schedule')
 V5_BUY_HOLD_POLICY = ('contract_version', 'security_id', 'entry_session', 'budget',
                       'schedule', 'partial_fill_policy', 'cash_dividend_policy', 'terminal_policy')
+V6_RUN_EXTRA = ('stock_execution_rules_ref', 'lifecycle_admission')
+V6_PROFILE = ('contract_version', 'settlement_sessions', 'commission_rate',
+              'minimum_commission_minor', 'slippage_bps', 'participation_rate',
+              'decision_time_utc', 'execution', 'approximation', 'unknown_status_policy',
+              'maximum_quantity_policy', 'partial_fill_quantity_unit',
+              'stock_execution_rules_ref', 'stock_fee_schedule_ref', 'limitation')
+V6_METRICS = (*V4_METRICS, 'unsubmitted_order_count', 'unsubmitted_quantity',
+              'incomplete_order_count')
+V6_POSITION = (*V4_POSITION, 'stale_reason')
+V6_ORDER = (*V4_ORDER, 'requested_quantity', 'submitted_quantity',
+            'unsubmitted_quantity', 'submission_reason', 'stock_execution_rules_ref',
+            'quantity_rule_effective_from')
+V6_FILL = (*V4_FILL, 'stock_execution_rules_ref', 'stock_fee_schedule_ref',
+           'quantity_rule_effective_from', 'fee_interval_effective_from')
+V6_DECISION = (*V4_DECISION, 'stock_execution_rules_ref')
+V6_POLICY = ('budget_basis', 'eligibility_id', 'rebalance', 'top_k',
+             'candidate_policy', 'stock_execution_rules_ref')
+V6_LIFECYCLE = ('pre_listing_null', 'listed_nonmember_gap', 'member_gap', 'held_gap')
+V6_STOPPED = ('session', 'reason', 'committed_sequence')
+V6_TRACE = (*TRACE, 'candidate_policy', 'excluded_invalid_member_count',
+            'pit_member_count', 'valid_candidate_count', 'top_k')
 REVIEW_EVENT = (*EVENT, 'announcement_date', 'implementation_announcement_date', 'cash_dividend_per_unit',
                 'ex_date', 'pay_date', 'process_status', 'source_code', 'new_price_basis_basis', 'announcement_precision')
 # Names from the frozen v4 stock display and evaluation v2/v3 public contract.
@@ -139,6 +160,9 @@ V4_PUBLIC_KEYS = frozenset().union(RUN, EVALUATION, RESEARCH, TRACE, ROW, EVENT,
                                     'names_status', 'events_status', 'event', 'display_ref',
                                     'display_result_ref', 'display_price', 'source_unit',
                                     'target_unit', 'pit_policy'))
+V6_PUBLIC_KEYS = V4_PUBLIC_KEYS.union(V6_RUN_EXTRA, V6_PROFILE, V6_METRICS,
+    V6_POSITION, V6_ORDER, V6_FILL, V6_DECISION, V6_POLICY, V6_LIFECYCLE,
+    V6_STOPPED, V6_TRACE)
 
 
 def _public_object(fields, **nested):
@@ -339,30 +363,40 @@ def validate_public_condition_values(conditions):
             reject_public_shape(value, None, 'public comparison condition')
 
 
-def reject_unknown_public_v4(value, *, v5=False, security_keys=frozenset()):
-    allowed = V5_PUBLIC_KEYS if v5 else V4_PUBLIC_KEYS
+def reject_unknown_public_v4(value, *, v5=False, v6=False, security_keys=frozenset()):
+    allowed = V5_PUBLIC_KEYS if v5 else V6_PUBLIC_KEYS if v6 else V4_PUBLIC_KEYS
     if isinstance(value, dict):
         for key, child in value.items():
             if not isinstance(key, str) or (key not in allowed and key not in security_keys and
                 not re.fullmatch(r'cnstock\.(?:000|002|003)\d{3}\.SZ\.\d{8}', key)):
                 raise ValueError('unexpected private or unknown v4 public field: ' + str(key))
-            reject_unknown_public_v4(child, v5=v5, security_keys=security_keys)
+            reject_unknown_public_v4(child, v5=v5, v6=v6, security_keys=security_keys)
     elif isinstance(value, list):
         for child in value:
-            reject_unknown_public_v4(child, v5=v5, security_keys=security_keys)
+            reject_unknown_public_v4(child, v5=v5, v6=v6, security_keys=security_keys)
 
 
-def validate_v4_public_account(run, securities, *, v5=False):
+def validate_v4_public_account(run, securities, *, v5=False, v6=False):
     """Account scalar fields cannot carry arbitrary objects under legal key names."""
     containers = {'metrics', 'nav', 'positions', 'orders', 'fills', 'limitations', 'final_account'}
-    reject_public_shape({k: v for k, v in run.items() if k not in containers | {'decisions', 'unit_split_applications'}},
+    reject_public_shape({k: v for k, v in run.items() if k not in containers | {'decisions', 'unit_split_applications', 'lifecycle_admission'} | ({'stopped'} if v6 else set())},
                         dict.fromkeys((set(RUN) - containers - {'unit_split_applications'}) |
-                                      ({'portfolio_policy_ref'} if v5 else set())), 'run')
-    reject_public_shape(run.get('metrics'), _public_object(' '.join(V4_METRICS)), 'metrics')
+                                      ({'portfolio_policy_ref'} if v5 else set()) |
+                                      ({'stock_execution_rules_ref'} if v6 else set())), 'run')
+    if v6:
+        reject_public_shape(run.get('stopped'), _public_object(' '.join(V6_STOPPED)), 'stopped stock account')
+        reject_public_shape(run.get('lifecycle_admission'), _public_object(' '.join(V6_LIFECYCLE)), 'lifecycle admission')
+        if set(run.get('lifecycle_admission') or {}) != set(V6_LIFECYCLE) or any(
+            (type(value) is not int or value < 0) and
+            (type(value) is not str or not re.fullmatch(r'\d+', value))
+            for value in run['lifecycle_admission'].values()):
+            raise ValueError('invalid public v6 lifecycle admission')
+        _digest_ref(run.get('stock_execution_rules_ref'), 'stock rules identity')
+    reject_public_shape(run.get('metrics'), _public_object(' '.join(V6_METRICS if v6 else V4_METRICS)), 'metrics')
     for name, fields, sequences in (
-        ('nav', V4_NAV, ()), ('positions', V5_POSITION if v5 else V4_POSITION, ('mark_source_refs',)),
-        ('orders', V5_ORDER if v5 else V4_ORDER, ('announced_suspension_event_ids',) if v5 else ()),
-        ('fills', V5_FILL if v5 else V4_FILL, ('source_refs',))):
+        ('nav', V4_NAV, ()), ('positions', V5_POSITION if v5 else V6_POSITION if v6 else V4_POSITION, ('mark_source_refs',)),
+        ('orders', V5_ORDER if v5 else V6_ORDER if v6 else V4_ORDER, ('announced_suspension_event_ids',) if v5 else ()),
+        ('fills', V5_FILL if v5 else V6_FILL if v6 else V4_FILL, ('source_refs',))):
         clock = {'field_available_at'} if name in {'orders', 'fills'} else set()
         schema = _public_object(' '.join(k for k in fields if k not in set(sequences) | clock),
             **{k: (None,) for k in sequences},
@@ -381,9 +415,9 @@ def validate_v4_public_account(run, securities, *, v5=False):
     for decision in run.get('decisions') or []:
         nested = {'selected_security_ids', 'targets', 'trace', 'intents'}
         reject_public_shape({k: v for k, v in decision.items() if k not in nested},
-                            _public_object(' '.join(k for k in V4_DECISION if k not in nested)), 'decision')
+                            _public_object(' '.join(k for k in (V6_DECISION if v6 else V4_DECISION) if k not in nested)), 'decision')
         reject_public_shape(decision.get('selected_security_ids'), (None,), 'selected securities')
-        reject_public_shape(decision.get('trace'), (_public_object(' '.join(TRACE)),), 'decision trace')
+        reject_public_shape(decision.get('trace'), (_public_object(' '.join(V6_TRACE if v6 else TRACE)),), 'decision trace')
         reject_public_shape(decision.get('intents'), (_public_object(' '.join((*V4_INTENT,
             'quantity_unit', 'reason', 'session'))),), 'decision intents')
         targets = decision.get('targets')
@@ -595,14 +629,19 @@ def reject_v5_source_urls(value):
             reject_v5_source_urls(child)
 
 
-def validate_v4_public_input(view, run):
+def validate_v4_public_input(view, run, *, v6=False):
     """Fail closed on native v4 account/config fields exported as whole objects."""
-    reject_extra(run, (*[key for key in RUN if key != 'unit_split_applications'], 'decisions'), 'run field')
+    reject_extra(run, (*[key for key in RUN if key != 'unit_split_applications'], 'decisions',
+                       *(V6_RUN_EXTRA if v6 else ())), 'run field')
+    if v6:
+        reject_extra(run.get('lifecycle_admission'), V6_LIFECYCLE, 'lifecycle admission')
+        if run.get('stopped') is not None:
+            reject_extra(run['stopped'], (*V6_STOPPED, 'gaps', 'blocks'), 'stopped account')
     configuration = view.get('configuration') or {}
     reject_extra(configuration, ('start_session', 'end_session', 'initial_account',
                                  'profile', 'price_basis'), 'configuration field')
     profile = configuration.get('profile') or {}
-    reject_extra(profile, V4_PROFILE, 'profile field')
+    reject_extra(profile, V6_PROFILE if v6 else V4_PROFILE, 'profile field')
     if any(isinstance(value, (dict, list)) for value in profile.values()):
         raise ValueError('unexpected private or unknown v4 nested profile field')
     initial = configuration.get('initial_account') or {}
@@ -621,27 +660,29 @@ def validate_v4_public_input(view, run):
                 raise ValueError('unexpected private or unknown v4 condition value')
         if key == 'profile.extra':
             extra = condition.get('value') or {}
-            reject_extra(extra, V4_PROFILE, 'profile condition')
+            reject_extra(extra, V6_PROFILE if v6 else V4_PROFILE, 'profile condition')
             if any(profile.get(name) != value for name, value in extra.items()):
                 raise ValueError('unexpected private or unknown v4 profile condition')
         if isinstance(key, str) and key.startswith('profile.') and key != 'profile.extra':
             name = key[8:]
-            if name not in V4_PROFILE and not (name == 'tax_rate' and condition.get('value') is None and
-                                               condition.get('provided') is False):
+            absent = condition.get('value') is None and condition.get('provided') is False
+            if name not in (V6_PROFILE if v6 else V4_PROFILE) and not (absent and (v6 or name == 'tax_rate')):
                 raise ValueError('unexpected private or unknown v4 profile condition')
-            if name in V4_PROFILE and condition.get('value') != profile.get(name):
+            if name in (V6_PROFILE if v6 else V4_PROFILE) and condition.get('value') != profile.get(name):
                 raise ValueError('unexpected private or unknown v4 profile condition')
     if run.get('metrics') is not None:
-        reject_extra(run['metrics'], V4_METRICS, 'metrics field')
-    for name, allowed in (('nav', V4_NAV), ('positions', V4_POSITION),
-                          ('orders', V4_ORDER), ('fills', V4_FILL), ('decisions', V4_DECISION)):
+        reject_extra(run['metrics'], V6_METRICS if v6 else V4_METRICS, 'metrics field')
+    for name, allowed in (('nav', V4_NAV), ('positions', V6_POSITION if v6 else V4_POSITION),
+                          ('orders', V6_ORDER if v6 else V4_ORDER),
+                          ('fills', V6_FILL if v6 else V4_FILL),
+                          ('decisions', V6_DECISION if v6 else V4_DECISION)):
         for row in run.get(name) or []:
             reject_extra(row, allowed, name + ' field')
     for decision in run.get('decisions') or []:
         for intent in decision.get('intents') or []:
             reject_extra(intent, V4_INTENT, 'intent field')
         for trace in decision.get('trace') or []:
-            reject_extra(trace, (*TRACE, 'count', 'top_k'), 'trace field')
+            reject_extra(trace, (*V6_TRACE, 'excluded_invalid_members') if v6 else (*TRACE, 'count', 'top_k'), 'trace field')
     if run.get('final_account') is not None:
         reject_extra(run['final_account'], ('cash_minor', 'receivable_minor',
                                             'positions', 'committed_sequence'), 'final account field')
@@ -649,7 +690,8 @@ def validate_v4_public_input(view, run):
         if not isinstance(positions, dict):
             raise ValueError('unexpected private or unknown v4 final positions')
         for security_id, position in positions.items():
-            if not isinstance(security_id, str) or not re.fullmatch(r'cnstock\.(?:000|002|003)\d{3}\.SZ\.\d{8}', security_id):
+            pattern = r'cnstock\.\d{6}\.(?:SH|SZ)\.\d{8}' if v6 else r'cnstock\.(?:000|002|003)\d{3}\.SZ\.\d{8}'
+            if not isinstance(security_id, str) or not re.fullmatch(pattern, security_id):
                 raise ValueError('unexpected private or unknown v4 final security')
             reject_extra(position, ('quantity', 'sellable_quantity', 'cost_minor'), 'final position field')
 
@@ -669,7 +711,7 @@ def chart_projection(view, securities, start, end):
     source = market.get('native_chart') or market.get('data_batch')
     if not source:
         return None
-    stock = view['run'].get('contract_version') in ('backtest_run_v3', 'backtest_run_v4')
+    stock = view['run'].get('contract_version') in ('backtest_run_v3', 'backtest_run_v4', 'backtest_run_v6')
     volume = 'volume_shares' if stock else 'volume_units'
     fields = ('open', 'high', 'low', 'close', volume)
     metadata = source.get('field_meta') or {}
@@ -706,11 +748,12 @@ def project_view(view):
         raise ValueError('public results require an explicit saved account')
     outer = validated_public_outer(view, run)
     v5 = run.get('contract_version') == 'backtest_run_v5'
+    v6 = run.get('contract_version') == 'backtest_run_v6'
     if v5:
         validate_v5_public_input(view, run)
     v4 = run.get('contract_version') == 'backtest_run_v4'
-    if v4:
-        validate_v4_public_input(view, run)
+    if v4 or v6:
+        validate_v4_public_input(view, run, v6=v6)
         if view.get('stock_ml') is not None:
             raise ValueError('unexpected private or unknown v4 single-signal model')
     result = {**outer, 'run': pick(run, RUN),
@@ -732,10 +775,29 @@ def project_view(view):
                 condition['value'] = pick(condition['value'], V5_PROFILE)
             conditions.append(condition)
         result['comparison_conditions'] = conditions
+    if v6:
+        _digest_ref(run.get('stock_execution_rules_ref'), 'stock rules identity')
+        result['run']['stock_execution_rules_ref'] = clean(run['stock_execution_rules_ref'])
+        result['run']['lifecycle_admission'] = pick(run['lifecycle_admission'], V6_LIFECYCLE)
+        if run.get('stopped') is not None:
+            result['run']['stopped'] = pick(run['stopped'], V6_STOPPED)
+        result['configuration']['profile'] = pick(view['configuration']['profile'], V6_PROFILE)
+        if result['configuration']['profile'].get('stock_execution_rules_ref') != run['stock_execution_rules_ref']:
+            raise ValueError('public v6 stock rule identity mismatch')
+        for key in ('stock_fee_schedule_ref',):
+            _digest_ref(result['configuration']['profile'].get(key), key)
+        policy = (view.get('stock_context') or {}).get('portfolio_policy') or {}
+        if policy.get('stock_execution_rules_ref') != run['stock_execution_rules_ref']:
+            raise ValueError('public v6 portfolio stock rule identity mismatch')
+        for name in ('decisions', 'orders', 'fills'):
+            if any(row.get('stock_execution_rules_ref') != run['stock_execution_rules_ref']
+                   for row in run.get(name) or []):
+                raise ValueError('public v6 saved stock rule identity mismatch')
     validate_public_condition_values(result['comparison_conditions'])
     result['run']['decisions'] = [pick(d, ('contract_version', 'feature_session', 'trade_session', 'status',
                                          'selected_security_id', 'selected_security_ids', 'signal_ref',
-                                         'expected_account_version', 'intents', 'reason', 'top_k')) for d in run.get('decisions') or []]
+                                         'expected_account_version', 'intents', 'reason', 'top_k',
+                                         *(('stock_execution_rules_ref',) if v6 else ()))) for d in run.get('decisions') or []]
     securities = related_securities(run)
     for d, original in zip(result['run']['decisions'], run.get('decisions') or []):
         # These narrow saved facts are required for public trade replay. Keep
@@ -748,7 +810,7 @@ def project_view(view):
         if original.get('trace') is not None:
             if not isinstance(original['trace'], list) or not all(isinstance(row, dict) for row in original['trace']):
                 raise ValueError('unexpected public decision trace')
-            d['trace'] = [scalars(row, TRACE) for row in original['trace']]
+            d['trace'] = [scalars(row, V6_TRACE if v6 else TRACE) for row in original['trace']]
         if 'intents' in d:
             d['intents'] = [pick(i, ('intent_id', 'security_id', 'side', 'quantity', 'quantity_unit', 'reason',
                                    'session', 'valid_until')) for i in d['intents']]
@@ -772,7 +834,7 @@ def project_view(view):
                   'amount_cny', 'display_scale', 'display_missing_reason')
         if v5:
             fields = tuple(k for k in fields if k != 'volume_shares')
-        if v4 or v5:
+        if v4 or v5 or v6:
             units = display.get('field_units') or {}
             reject_extra(units, fields[2:], 'display unit field')
             if any(value is not None and not isinstance(value, str) for value in units.values()):
@@ -816,7 +878,7 @@ def project_view(view):
                 reject_public_shape(item, _public_object('',
                     event=_public_object(' '.join(EVENT)), source_refs=(None,)), 'v5 unit split event')
                 _digest_refs(item['source_refs'], 'event source refs')
-    if run.get('contract_version') in ('backtest_run_v3', 'backtest_run_v4'):
+    if run.get('contract_version') in ('backtest_run_v3', 'backtest_run_v4', 'backtest_run_v6'):
         context = view.get('stock_context') or {}
         result['stock_context'] = scalars(context, ('stock_action_policy', 'model_snapshot', 'execution_snapshot', 'admission_status'))
         for key in ('prediction_universe', 'execution_universe'):
@@ -825,13 +887,13 @@ def project_view(view):
                 raise ValueError('unexpected nested public universe')
             result['stock_context'][key] = clean(rows)
         result['stock_context']['portfolio_policy'] = scalars(context.get('portfolio_policy') or {},
-                                                             ('budget_basis', 'eligibility_id', 'rebalance', 'top_k'))
-        if v4:
+                                                             V6_POLICY if v6 else ('budget_basis', 'eligibility_id', 'rebalance', 'top_k'))
+        if v4 or v6:
             reject_extra(context, ('stock_action_policy', 'model_snapshot', 'execution_snapshot',
                                    'admission_status', 'prediction_universe', 'execution_universe',
                                    'portfolio_policy', 'schedule_ref', 'folds'), 'schedule field')
             reject_extra(context.get('portfolio_policy') or {},
-                         ('budget_basis', 'eligibility_id', 'rebalance', 'top_k'), 'portfolio policy')
+                         V6_POLICY if v6 else ('budget_basis', 'eligibility_id', 'rebalance', 'top_k'), 'portfolio policy')
             if context.get('schedule_ref') != run.get('signal_ref'):
                 raise ValueError('saved run/schedule identity mismatch')
             result['stock_context']['schedule_ref'] = scalars(context, ('schedule_ref',))['schedule_ref']
@@ -854,8 +916,8 @@ def project_view(view):
                                                              ('feature_ref', 'model_ref', 'score_semantics', 'score_unit'))
     result['run']['limitations'] = list(result['run'].get('limitations') or []) + [NOTE]
     result['public_display_projection'] = True
-    if v4 or v5:
-        validate_v4_public_account(result['run'], securities, v5=v5)
+    if v4 or v5 or v6:
+        validate_v4_public_account(result['run'], securities, v5=v5, v6=v6)
         reject_public_shape(result['market'].get('rows'),
             (_public_object(' '.join(k for k in ROW if k != 'source_refs'), source_refs=(None,)),),
             'market rows')
@@ -867,7 +929,7 @@ def project_view(view):
                 raise ValueError('missing saved v5 policy identity')
             validate_v5_public_market(result['market'], securities)
             reject_v5_source_urls(result)
-        reject_unknown_public_v4(result, v5=v5, security_keys=securities if v5 else frozenset())
+        reject_unknown_public_v4(result, v5=v5, v6=v6, security_keys=securities if v5 or v6 else frozenset())
     return result
 
 
