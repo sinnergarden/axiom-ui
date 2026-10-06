@@ -198,6 +198,18 @@ _V4_PUBLIC_EVALUATION = _public_object('benchmark_ref content_digest contract_ve
     spec=_SPEC)
 
 
+def _schema_field_names(schema):
+    """Keep the global v4 output-name gate aligned with its stricter evaluation paths."""
+    if isinstance(schema, tuple):
+        return _schema_field_names(schema[0])
+    if not isinstance(schema, dict):
+        return frozenset()
+    return frozenset(schema).union(*(_schema_field_names(child) for child in schema.values()))
+
+
+V4_PUBLIC_KEYS = V4_PUBLIC_KEYS | _schema_field_names(_V4_PUBLIC_EVALUATION)
+
+
 def reject_public_shape(value, schema, label):
     if value is None:
         return
@@ -261,6 +273,50 @@ def reject_unknown_public_v4(value):
             reject_unknown_public_v4(child)
 
 
+def validate_v4_public_account(run, securities):
+    """Account scalar fields cannot carry arbitrary objects under legal key names."""
+    containers = {'metrics', 'nav', 'positions', 'orders', 'fills', 'limitations', 'final_account'}
+    reject_public_shape({k: v for k, v in run.items() if k not in containers | {'decisions'}},
+                        dict.fromkeys(set(RUN) - containers - {'unit_split_applications'}), 'run')
+    reject_public_shape(run.get('metrics'), _public_object(' '.join(V4_METRICS)), 'metrics')
+    for name, fields, sequences in (
+        ('nav', V4_NAV, ()), ('positions', V4_POSITION, ('mark_source_refs',)),
+        ('orders', V4_ORDER, ()), ('fills', V4_FILL, ('source_refs',))):
+        clock = {'field_available_at'} if name in {'orders', 'fills'} else set()
+        schema = _public_object(' '.join(k for k in fields if k not in set(sequences) | clock),
+            **{k: (None,) for k in sequences},
+            **({'field_available_at': _public_object(
+                'close limit_down limit_up market_state open volume_shares')} if clock else {}))
+        reject_public_shape(run.get(name), (schema,), name)
+    reject_public_shape(run.get('limitations'), (None,), 'limitations')
+    for decision in run.get('decisions') or []:
+        nested = {'selected_security_ids', 'targets', 'trace', 'intents'}
+        reject_public_shape({k: v for k, v in decision.items() if k not in nested},
+                            _public_object(' '.join(k for k in V4_DECISION if k not in nested)), 'decision')
+        reject_public_shape(decision.get('selected_security_ids'), (None,), 'selected securities')
+        reject_public_shape(decision.get('trace'), (_public_object(' '.join(TRACE)),), 'decision trace')
+        reject_public_shape(decision.get('intents'), (_public_object(' '.join((*V4_INTENT,
+            'quantity_unit', 'reason', 'session'))),), 'decision intents')
+        targets = decision.get('targets')
+        if targets is not None:
+            if not isinstance(targets, dict) or set(targets) - securities:
+                raise ValueError('unexpected private or unknown v4 decision targets')
+            reject_public_shape(targets, dict.fromkeys(targets), 'decision targets')
+    final = run.get('final_account')
+    if final is not None:
+        reject_extra(final, ('cash_minor', 'receivable_minor', 'positions', 'committed_sequence'), 'final account')
+        reject_public_shape({k: v for k, v in final.items() if k != 'positions'},
+                            _public_object('cash_minor receivable_minor committed_sequence'), 'final account')
+        positions = final.get('positions') or {}
+        if not isinstance(positions, dict):
+            raise ValueError('unexpected private or unknown v4 final positions')
+        for security_id, position in positions.items():
+            if security_id not in securities:
+                raise ValueError('unexpected private or unknown v4 final security')
+            reject_public_shape(position, _public_object('quantity sellable_quantity cost_minor'),
+                                'final account position')
+
+
 def validate_v4_public_input(view, run):
     """Fail closed on native v4 account/config fields exported as whole objects."""
     reject_extra(run, (*[key for key in RUN if key != 'unit_split_applications'], 'decisions'), 'run field')
@@ -275,6 +331,8 @@ def validate_v4_public_input(view, run):
     reject_extra(initial, ('cash_minor', 'positions'), 'initial account field')
     if initial.get('positions') not in ({}, None):
         raise ValueError('unexpected private or unknown v4 initial positions')
+    reject_public_shape(initial, _public_object('cash_minor', positions=_public_object('')),
+                        'initial account')
     for condition in view.get('comparison_conditions') or []:
         reject_extra(condition, ('key', 'label', 'provided', 'value'), 'condition field')
         key = condition.get('key')
@@ -494,6 +552,10 @@ def project_view(view):
     result['run']['limitations'] = list(result['run'].get('limitations') or []) + [NOTE]
     result['public_display_projection'] = True
     if v4:
+        validate_v4_public_account(result['run'], securities)
+        reject_public_shape(result['market'].get('rows'),
+            (_public_object(' '.join(k for k in ROW if k != 'source_refs'), source_refs=(None,)),),
+            'market rows')
         reject_public_shape(result['evaluation'], _V4_PUBLIC_EVALUATION, 'evaluation')
         reject_unknown_public_v4(result)
     return result

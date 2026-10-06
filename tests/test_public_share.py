@@ -4,7 +4,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import json
 
-from axiom_ui.public_share import clean, project_view, export_result
+from axiom_ui.public_share import (clean, project_view, export_result,
+    _V4_PUBLIC_EVALUATION, _schema_field_names, V4_PUBLIC_KEYS)
 
 
 def saved_view():
@@ -120,6 +121,85 @@ class PublicProjectionTests(unittest.TestCase):
         value['stock_ml'] = {'model': {'parameters': {'private': True}}}
         with self.assertRaisesRegex(ValueError, 'single-signal model'):
             project_view(value)
+
+    def test_v4_saved_benchmark_comparison_v2_keeps_drawdown_and_null_gap(self):
+        self.assertFalse(_schema_field_names(_V4_PUBLIC_EVALUATION) - V4_PUBLIC_KEYS)
+        value = self.chart_view()
+        value['run']['contract_version'] = 'backtest_run_v4'
+        value['run']['signal_ref'] = 'sha256:schedule'
+        value.pop('stock_ml')
+        value['stock_context']['portfolio_policy'] = {'top_k': 3}
+        value['stock_context'].update(schedule_ref='sha256:schedule', folds=[{
+            'fold_ref':'sha256:fold', 'fold_spec_ref':'sha256:spec',
+            'signal_run_ref':'sha256:signal', 'model_ref':'sha256:model',
+            'feature_ref':'sha256:feature', 'fit_session':'2024-01-01',
+            'oos_trade_sessions':['2024-01-02']}])
+        value['evaluation']['benchmark_comparisons'] = {
+            'CSI300': {'projection_version':'benchmark_comparison_v2',
+                       'max_drawdown':'-0.2', 'series':[
+                           {'account_session':'2024-01-02','benchmark_drawdown':'-0.1',
+                            'relative_status':'VALID'},
+                           {'account_session':'2024-01-03','benchmark_drawdown':None,
+                            'relative_status':'MISSING'}]},
+            'SSE_COMPOSITE': {'projection_version':'benchmark_comparison_v2',
+                              'max_drawdown':None, 'series':[]}}
+        value['evaluation']['episodes'] = [{'episode_id':'synthetic:episode',
+            'dividends':[{'event_id':'synthetic:dividend','record_session':'2024-01-02',
+                'ex_session':'2024-01-03','pay_session':None,'entitlement_quantity':100,
+                'recognition_sequence':4,'payment_sequence':None,'recognized_minor':100,
+                'pending_minor':None,'payment_status':'RECOGNIZED','tax_convention':'gross'}]}]
+        value['evaluation']['pnl_distribution'] = {'bins':[
+            {'lower_minor':'-100','upper_minor':'0','count':1}]}
+        value['evaluation']['return_distribution'] = {'bins':[
+            {'lower':'-0.1','upper':'0','count':1}]}
+        public = project_view(value)
+        self.assertEqual(public['evaluation']['benchmark_comparisons']['CSI300']['series'][1]
+                         ['benchmark_drawdown'], None)
+        self.assertEqual(public['evaluation']['benchmark_comparisons']['CSI300']['max_drawdown'], '-0.2')
+        self.assertEqual(public['evaluation']['episodes'][0]['dividends'][0]['recognized_minor'], 100)
+        self.assertEqual(public['evaluation']['pnl_distribution']['bins'][0]['upper_minor'], '0')
+        self.assertEqual(public['evaluation']['return_distribution']['bins'][0]['upper'], '0')
+        value['evaluation']['benchmark_comparisons']['CSI300']['series'][0]['private_marker'] = 'SECRET'
+        with self.assertRaisesRegex(ValueError, 'private or unknown v4'):
+            project_view(value)
+        del value['evaluation']['benchmark_comparisons']['CSI300']['series'][0]['private_marker']
+        value['evaluation']['benchmark'] = {'record_session':'2024-01-02'}
+        with self.assertRaisesRegex(ValueError, 'private or unknown v4'):
+            project_view(value)
+        del value['evaluation']['benchmark']
+        value['evaluation']['episodes'][0]['dividends'][0]['source'] = '/Users/private/secret.csv'
+        with self.assertRaisesRegex(ValueError, 'private or unknown v4'):
+            project_view(value)
+
+    def test_v4_account_scalar_paths_reject_nested_legal_names(self):
+        value = self.chart_view()
+        value['run']['contract_version'] = 'backtest_run_v4'
+        value['run']['signal_ref'] = 'sha256:schedule'
+        value.pop('stock_ml')
+        value['stock_context']['portfolio_policy'] = {'top_k': 3}
+        value['stock_context'].update(schedule_ref='sha256:schedule', folds=[{
+            'fold_ref':'sha256:fold','fold_spec_ref':'sha256:spec',
+            'signal_run_ref':'sha256:signal','model_ref':'sha256:model',
+            'feature_ref':'sha256:feature','fit_session':'2024-01-01',
+            'oos_trade_sessions':['2024-01-02']}])
+        value['run']['orders'] = [{'security_id':'A','session':'2024-01-02',
+                                   'field_available_at':{'open':'2024-01-02T01:30:00Z'}}]
+        value['run']['fills'][0]['field_available_at'] = {'open':'2024-01-02T01:30:00Z'}
+        self.assertEqual(project_view(value)['run']['positions'][0]['quantity'], '100')
+        for container, key in ((value['run']['positions'][0], 'cost_minor'),
+                               (value['run']['metrics'], 'total_return'),
+                               (value['run']['nav'][0], 'nav_minor'),
+                               (value['run']['orders'][0]['field_available_at'], 'open'),
+                               (value['run']['fills'][0], 'price'),
+                               (value['market']['rows'][0], 'volume_shares')):
+            old = container.get(key)
+            container[key] = {'source':'PRIVATE_SENTINEL'}
+            with self.subTest(field=key), self.assertRaisesRegex(ValueError, 'private or unknown v4'):
+                project_view(value)
+            if old is None:
+                del container[key]
+            else:
+                container[key] = old
 
     def test_account_facts_preserved_and_real_close_not_inferred_from_fill(self):
         source=saved_view();before=deepcopy(source);result=project_view(source)

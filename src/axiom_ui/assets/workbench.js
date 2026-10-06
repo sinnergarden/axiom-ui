@@ -38,9 +38,21 @@
     if(!present(raw) || String(raw).trim()==='' || !Number.isFinite(Number(raw)))return '';
     return Number(raw)===0?'零滑点（'+saved(raw)+' bp）':'非零滑点（'+saved(raw)+' bp）';
   };
-  const runCaption = v => (stockAccount(v)?(v.approximate?'股票日线近似':'股票严格对照'):
+  const savedEtfTitle = v => {
+    if(v.run.contract_version!=='backtest_run_v5')return '';
+    const policy=v.configuration?.portfolio_policy || {},bps=v.configuration?.profile?.slippage_bps;
+    const slip=present(bps)&&Number.isFinite(Number(bps))?(Number(bps)===0?'0 滑点':saved(bps)+' bps'):'';
+    let name='';
+    if(policy.contract_version==='etf_rotation_policy_v1')name='ETF 轮动';
+    if(policy.contract_version==='etf_buy_and_hold_policy_v1'){
+      const id=policy.security_id,display=v.market?.security_labels?.[id];
+      name=(display || (id ? 'ETF '+(id.split('.')[3] || id) : 'ETF'))+' 买入持有';
+    }
+    return name+(name&&slip?' · '+slip:'');
+  };
+  const runCaption = v => (savedEtfTitle(v) || (stockAccount(v)?(v.approximate?'股票日线近似':'股票严格对照'):
     v.configuration?.portfolio_policy?.contract_version==='etf_buy_and_hold_policy_v1'?'ETF 买入持有':
-    v.approximate?'ETF 日线近似':'保存运行')+' · '+saved(v.configuration.start_session || v.run.nav?.[0]?.session)+' — '+saved(v.configuration.end_session || v.run.nav?.at(-1)?.session)+(slipCaption(v)?' · '+slipCaption(v):'');
+    v.approximate?'ETF 日线近似':'保存运行'))+' · '+saved(v.configuration.start_session || v.run.nav?.[0]?.session)+' — '+saved(v.configuration.end_session || v.run.nav?.at(-1)?.session)+(!savedEtfTitle(v)&&slipCaption(v)?' · '+slipCaption(v):'');
   const short = id => id ? id.replace(/^(sha256:|synthetic:)/, '').slice(0, 10) : '未提供';
   const securityName = id => chartUI ? chartUI.securityLabel(current(),id) : saved(id);
   const json = v => JSON.stringify(v, null, 2);
@@ -94,6 +106,7 @@
     state.topicOpen.set(topic,true);state.legendVisible={account:true,comparison:true,benchmark:true};
     $('episode-scope').value='window';$('episode-security').value='';$('episode-status').value='';
     if (state.compare === id || !byId.get(id).run.run_id) state.compare = '';
+    if(matchMedia('(max-width:700px)').matches)$('experiment-navigation').open=false;
     render();
   }
   function initializeFilters() {
@@ -143,14 +156,15 @@
   }
   function renderHeader(v) {
     const r = v.run, research = v.research,stock=v.stock_ml,withoutAccount=!r.run_id;
-    $('context-line').textContent = (research?.version_label || '版本说明未提供')+' / '+(r.run_id?'已保存账户结果':research?.not_run?'尚未运行':'保存研究登记')+(v.evaluation?' / 评价已载入':'');
+    $('context-line').textContent = (research?.version_label || (savedEtfTitle(v)?'研究标题未提供':'版本说明未提供'))+' / '+(r.run_id?'已保存账户结果':research?.not_run?'尚未运行':'保存研究登记')+(v.evaluation?' / 评价已载入':'');
     $('context-line').title = r.run_id || research?.run_record_ref || research?.version_id;
     $('evidence-badge').textContent = v.evidence_kind === 'research_record_only' ? '实验记录 · 账户结果未载入' : v.evidence_kind === 'synthetic_ui_fixture' ? '合成展示样例' : v.evidence_kind === 'synthetic_owner_output' ? '合成模拟回测' : '模拟回测';
     if(withoutAccount&&stock)$('evidence-badge').textContent='模型与信号 · '+(String(stock.experiment.account_status || '').startsWith('BLOCKED')?'账户未执行':'账户结果未载入');
-    $('run-title').textContent = research?.title || '模拟回测 · ' + short(r.run_id);
-    $('hypothesis').textContent = research?.hypothesis || '实验说明尚未载入。';
+    $('run-title').textContent = research?.title || savedEtfTitle(v) || '模拟回测 · ' + short(r.run_id);
+    $('hypothesis').textContent = research?.hypothesis || (savedEtfTitle(v)?'研究标题与实验说明未提供；名称来自保存的账户政策及证券显示名称。':'实验说明尚未载入。');
     const nav = r.nav || [];
     $('date-range').textContent = saved(v.configuration.start_session || nav[0]?.session) + ' — ' + saved(v.configuration.end_session || nav.at(-1)?.session);
+    $('initial-capital').textContent = present(v.configuration?.initial_account?.cash_minor)?'初始资金 '+money(v.configuration.initial_account.cash_minor)+' 元':'';
     $('run-status').textContent = statusLabel(statusOf(v)) + (r.status ? '' : ' · 账户结果未载入');
     $('policy-badge').textContent = stockAccount(v) ? (v.approximate?'股票日线事后近似 · 研究假设':'股票严格状态对照') : v.approximate ? 'ETF 日线近似 · 实验假设' : v.blocked ? '市场状态缺证 · 严格阻断' : r.run_id ? '保存的执行假设' : '执行假设未提供';
     if(stockAccount(v))$('run-status').textContent='账户：'+statusLabel(r.status)+(research?.status?' / 登记：'+statusLabel(research.status):'');
@@ -484,7 +498,7 @@
     for(const text of all.slice(0,3))panel.append(node('p',String(text),'small'));
     if(all.length>3)panel.append(node('p','另有 '+(all.length-3)+' 条保存限制，可在原始记录中查看。','small'));
     const refs=clear('source-refs');
-    for(const [label,value] of [['账户/评价合同',saved(v.run.contract_version)+' / '+saved(v.evaluation?.contract_version)],['账户最终水位',v.run.committed_sequence],['价格/数量单位',priceUnit(v)+' / '+quantityUnit(v)],['来源与固定版本','原值与身份在独立原始记录入口查看']])pointRow(refs,label,value);
+    for(const [label,value] of [['保存运行 ID',v.run.run_id],['账户/评价合同',saved(v.run.contract_version)+' / '+saved(v.evaluation?.contract_version)],['账户最终水位',v.run.committed_sequence],['价格/数量单位',priceUnit(v)+' / '+quantityUnit(v)],['来源与固定版本','原值与身份在独立原始记录入口查看']])pointRow(refs,label,value);
     const display=v.market.review_display;if(display){pointRow(refs,'固定显示锚点 A',display.context.anchor_session);pointRow(refs,'共同截止 C',display.context.knowledge_cutoff);pointRow(refs,'显示范围','原 native 图层的完整运行窗口；缩放不改变 A/C');if(v.market.security_name_scope)pointRow(refs,'名称范围',v.market.security_name_scope);if(v.market.security_label_source){pointRow(refs,'名称独立 Snapshot',v.market.security_label_source.source_snapshot_id);pointRow(refs,'名称观察截止',v.market.security_label_source.label_cutoff);}}
     $('generated-note').textContent='页面生成于 '+data.generated_at+'；不是数据更新时间。指标与交易依据均来自保存产物，浏览没有计算或执行调用。';
   }
