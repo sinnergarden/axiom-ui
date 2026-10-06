@@ -1,196 +1,46 @@
 {
   "contract_version": "public_static_site_v1",
-  "generated_at": "2026-10-05T16:32:59+08:00",
+  "generated_at": "2026-10-06T00:00:00Z",
   "authorization": "explicit_selected_public_results",
-  "selection_note": "The same explicitly selected real ETF long/short and stock current/strict saved runs; current long ETF and stock views now include independently saved v3 analysis, SSE price-index comparison, fixed Data display and Engine adjusted-fill coordinates. Old short/strict controls remain historical. No future result is auto-published.",
+  "selection_note": "Three explicitly authorized saved ETF simulations, each with CNY 500,000 initial capital: rotation at 0 bps and 5 bps, and 513100 buy-and-hold at 5 bps. No future result is auto-published.",
   "results": [
     {
-      "slug": "etf",
-      "title": "真实 ETF · 短样本与多年保存账户",
-      "file": "etf.html",
-      "source_projection_file_ref": "sha256:23ed5901d5e1894fa4ebbaae4be6565b239d86f52d1f00a7fd29e52ac0dc8ca6",
+      "slug": "etf-three-account",
+      "title": "ETF 模拟回测 · 三组精选结果",
+      "file": "etf-three-account.html",
+      "source_projection_file_ref": "sha256:285b20e49ce110f4716a8c6d16fa7808704a14f472fc77669eb379af5db76ff5",
       "public_projection": true,
       "saved_owner_refs": [
         {
-          "run_id": "sha256:c2bed666e2509ed1a8747bfae23f5d94a39f6d6db9227cd2a67f181ffcc3d77b",
-          "content_digest": "sha256:21ca7a5e9a7b3aea5435d85d58955dcbe5f3c6cfcb83c788b3372cf3bed4247c",
-          "committed_sequence": "85",
-          "implementation_ref": "sha256:ddffc7c21628ed3d569a1986142191fc0c263476a5321d66c42115d01567b27a",
-          "evaluation_ref": "sha256:78a6ae102b5b6e17a835f6e362d2668b8c9dc33cc3808425a0c2cdbaebc226d2",
-          "evaluation_content_digest": "sha256:ed68b76caaf205492c4293c5724aa4ff4d6fdd496011a04078ad437c9fc3bf63"
+          "run_id": "sha256:1eddcb0931f72f2ed2636bd146c22419bf87d8407c31e03e5f3a0274aaf1a331",
+          "content_digest": "sha256:b43558e8541004884743e9d734d30fc96325cc5d58f7df80e927e7470dfae407",
+          "committed_sequence": "2284",
+          "implementation_ref": "sha256:186655784f09505711c6e3b662b976fc5deec211dff7e22ce70e893c1326e809",
+          "evaluation_ref": "sha256:d5b7c8896c1840ed14ce40324bdfae0ea7e37161d559fadb5bbbb06d15563741",
+          "evaluation_content_digest": "sha256:399d08c00fd04a7f6b359ef4302b0743d7b8b2df9ccb32a02613e43c5c2a14ed"
         },
         {
-          "run_id": "sha256:5db294ae978d841521d0ce6e0a1dbfdd5deba02ea07fecd261da6537856a4f83",
-          "content_digest": "sha256:f04975da7ea3c26ad55af5bddea296a0a01130229c3aafc0c00462a8a2e4488d",
-          "committed_sequence": "2236",
-          "implementation_ref": "sha256:86c7fff609e63e06f87bcc4d6777bb6837e04f0611154c819d4d7c2680f89ec4",
-          "evaluation_ref": "sha256:2899d3a064c536ddfc8ea3d31049fd4f79b2304e5075a6bf59bdd2ce04617d57",
-          "evaluation_content_digest": "sha256:8570bf808c6c38c3bbfa0fd6f4279aeb5cfca08e6823f3811b182ca85a80ada7"
-        }
-      ]
-    },
-    {
-      "slug": "stock",
-      "title": "真实股票 · 新 Jan 日线近似与历史严格对照",
-      "file": "stock.html",
-      "source_projection_file_ref": "sha256:a044f5e454b07f622835416a1af836144305d19a09d34509aa69102cddf580e3",
-      "public_projection": true,
-      "saved_owner_refs": [
-        {
-          "run_id": "sha256:1bc47db1fa35fa231083f1cf6c2c76042cb38359672a0dd47970392d098878cb",
-          "content_digest": "sha256:ed5778a722b8f1ceb36177bc53ce0d505cdbf185cb427e82f02edae117fbc603",
-          "committed_sequence": "85",
-          "implementation_ref": "sha256:6836f2cf5212377d3ce793a9dfd51aba0d2054d290c2e49a60750e0bd0e926d5",
-          "evaluation_ref": "sha256:bba8b82a365c4c6b4bf60222f91511ee1d3de0afcce8cf37f066c671a4b43d0e",
-          "evaluation_content_digest": "sha256:b489ba244009ac44586ee38e0da492849bce18b497b62d885fa11b5648885b2e"
+          "run_id": "sha256:761a5cc0d7181c530459a82e7a9f67b743977cffe6fe809155a5d78d58b88af7",
+          "content_digest": "sha256:afe81896b13d3cb9a292a70bad729506e34969e933b1093f825492400e52e167",
+          "committed_sequence": "2274",
+          "implementation_ref": "sha256:186655784f09505711c6e3b662b976fc5deec211dff7e22ce70e893c1326e809",
+          "evaluation_ref": "sha256:f7a0fa1e3857ba317c085ddf731ccb83ce47b0a3a175daa043f04f81345e5acb",
+          "evaluation_content_digest": "sha256:f30643e7c50da3e302fdfb29a26f3b6c35e402e915b24aec918573cb7224c4dc"
         },
         {
-          "run_id": "sha256:12bb350e2724348f6ba2c00cbada84f03ae2daacf8b425342fd9af97de7ed311",
-          "content_digest": "sha256:f63177c277609a96a6ce47aaae929932bf3c1334b0eede57c2f881443a658558",
-          "committed_sequence": "22",
-          "implementation_ref": "sha256:836d28f351dafc50966b07f5d9c66bacdfb8a11537d3d4202b71da2f3c6e35b1",
-          "evaluation_ref": "sha256:71d52fc7bf3c0ffcff7ad21184827649c25a768f72314fbd164a600f2cb6512c",
-          "evaluation_content_digest": "sha256:13b326ff1b92fe29515f2e3741ad268cf08a9ac20e23a61af6e7fba9df023c50"
+          "run_id": "sha256:0b941fe36fbf13312508df2c3476e16d11af3326da5a4ac2d7ac62e815ab278e",
+          "content_digest": "sha256:aced4a40c0b9fba94b8ef2a79d8720bf532df30654bb41ddaef38967cfad9c16",
+          "committed_sequence": "1812",
+          "implementation_ref": "sha256:186655784f09505711c6e3b662b976fc5deec211dff7e22ce70e893c1326e809",
+          "evaluation_ref": "sha256:365e62d81e74414b8c8b1df7b1983e566933a07241bbf365a261ec797a3a4d18",
+          "evaluation_content_digest": "sha256:e25c26cd9fa23584b3594e5b1437ce8b9a3335c999ea17805528441664a36e0e"
         }
       ]
     }
   ],
-  "performance_refs": {
-    "Data": {
-      "source_commit": "253b9042b98bb234b3dcfc36deb1fef5fe53b2ed",
-      "saved_evidence_file_ref": "sha256:3c84dac62e2c3558a6add123453ae270f59a56d0327bc3341ef03db6f27cc66b",
-      "scope": "existing saved real-scope Reader receipt, 7.730395 seconds, 3.39 GiB RSS, one Snapshot load; no full-history RSS claim"
-    },
-    "Engine": {
-      "source_commit": "93de8f7f0a944e8b2ccb9b048feb588e74bffc3e",
-      "merge_commit": "d6655c70088073367b6bf4231bdf484c3acb20d7",
-      "scope": "matched saved public Reader validation, no UI backend or browser speedup inference"
-    },
-    "UI": {
-      "source_commit": "bcacc5febafc4a4938a64f0fa45ef3cd5f4c79d4",
-      "scope": "previous local Mac normal Chrome observations; no Pages visitor timing claim"
-    },
-    "Research": {
-      "scope": "saved Feb/three-day Mar control reuse wall282.337591s peak4.090042GiB; excludes inherited cold Feature/Qlib preparation; no complete historical run"
-    }
-  },
-  "performance_update": {
-    "generation_seconds": "18.611250",
-    "run_read_seconds": "14.044321",
-    "evaluation_read_seconds": "0.892343",
-    "scope": "单个新 Jan 日线近似账户＋评价，含准确 Research 登记、保存训练报告和只读行情投影；不含文件写入及后续公开包导出，与历史双账户 64.64 秒范围不同。"
-  },
-  "process_refs": {
-    "contract_version": "public_saved_process_v1",
-    "signal_ref": "sha256:d97760a1b5280235e39747012bcd943a3e85f1cb7bdba64ceb1ca03b4142eed9",
-    "model_ref": "sha256:7b61108f9019a154bd9dedaa7ea2cce9ccf7ecbcccab26d6cf004221874ddfe2",
-    "feature_ref": "sha256:9506d6ae22c1c27f56686047e27fb6cf582e15ff45d8e08149fbea79efb80ed9",
-    "dataset_ref": "sha256:5f6f6fb1296ba74e08d77ecdc2ca17098884cad176b55b1db58e0c26749adca0",
-    "experiment_ref": "sha256:233448613f514dbbc844519f793bc5a0f9c8bac7797998f363d699fe9e046094",
-    "evidence_ref": "sha256:408840599bc5ae1af856423b9e1471eabd97f757a612e78e8a2e6526e93a9975",
-    "stage_report_ref": "sha256:7639732c0c841760fce4c7a4dcffd9938269a2c659b394bfba8bb7490ed2698a",
-    "stage_report_content_digest": "sha256:8e8f16229517a07a08695e79fd32920d7873068bfef9b05ab100d3318e09cd0f",
-    "source_projection_file_ref": "sha256:8204296620c80124febbbbc19844fdd9b06ee9b3bd410b0b30dab71760554fac",
-    "target_projection_file_ref": "sha256:c8f6ba7aabd22e7f60632a8bba9aebbf87cd8ccd999e5fd850356e6523a0be0b",
-    "target_run_ref": {
-      "run_id": "sha256:1bc47db1fa35fa231083f1cf6c2c76042cb38359672a0dd47970392d098878cb",
-      "content_digest": "sha256:ed5778a722b8f1ceb36177bc53ce0d505cdbf185cb427e82f02edae117fbc603",
-      "committed_sequence": "85",
-      "signal_ref": "sha256:d97760a1b5280235e39747012bcd943a3e85f1cb7bdba64ceb1ca03b4142eed9",
-      "evaluation_ref": "sha256:bba8b82a365c4c6b4bf60222f91511ee1d3de0afcce8cf37f066c671a4b43d0e"
-    },
-    "target_run_refs": [
-      {
-        "run_id": "sha256:1bc47db1fa35fa231083f1cf6c2c76042cb38359672a0dd47970392d098878cb",
-        "content_digest": "sha256:ed5778a722b8f1ceb36177bc53ce0d505cdbf185cb427e82f02edae117fbc603",
-        "committed_sequence": "85",
-        "signal_ref": "sha256:d97760a1b5280235e39747012bcd943a3e85f1cb7bdba64ceb1ca03b4142eed9",
-        "evaluation_ref": "sha256:bba8b82a365c4c6b4bf60222f91511ee1d3de0afcce8cf37f066c671a4b43d0e"
-      }
-    ],
-    "training": {
-      "fit_cutoff": "2023-12-28T20:30:00+08:00",
-      "declared_rule": "feature-session knowledge_cutoff <= fit_cutoff (aware instant)",
-      "actual_source": "dataset.training_keys",
-      "declared": {
-        "first_feature_session": "2023-10-09",
-        "last_feature_session": "2023-12-28",
-        "session_count": "59"
-      },
-      "actual": {
-        "first_feature_session": "2023-10-09",
-        "last_feature_session": "2023-12-21",
-        "session_count": "54",
-        "training_row_count": "16200"
-      },
-      "excluded": {
-        "NOT_MEMBER": "756",
-        "missing_end_close": "1256",
-        "missing_start_open": "314"
-      }
-    },
-    "model_summary": {
-      "fit_cutoff": "2023-12-28T20:30:00+08:00",
-      "target_semantics": "forward_5_session_cs_zscore_prediction",
-      "feature_normalization": "same_date_visible_members_cs_zscore_no_fit",
-      "label_normalization": {
-        "normalization_id": "forward_label_cs_zscore_v1",
-        "semantic_version": "1",
-        "operator": "cs_zscore",
-        "operator_version": "1",
-        "maturity": "label_available_at_lte_cutoff_and_end_session_lte_cutoff_UTC_date",
-        "eligibility": "original_member_all_features_finite_valid_and_raw_label_mature",
-        "context_mode": "offline_label_cutoff"
-      },
-      "feature_selection": [
-        {
-          "id": "MOM010",
-          "semantic_version": "1.0.0"
-        },
-        {
-          "id": "MOM020",
-          "semantic_version": "1.0.0"
-        },
-        {
-          "id": "MOM030",
-          "semantic_version": "1.0.0"
-        },
-        {
-          "id": "VOL010",
-          "semantic_version": "1.0.0"
-        },
-        {
-          "id": "PRC010",
-          "semantic_version": "1.0.0"
-        },
-        {
-          "id": "LIQ010",
-          "semantic_version": "1.0.0"
-        }
-      ]
-    },
-    "signal_summary": {
-      "evaluation_cutoff": "2024-02-08T20:30:00+08:00",
-      "evidence_session_count": "22",
-      "label_semantics": "raw_forward_5_session_open_close_return",
-      "minimum_pairs": "20",
-      "missing_policy": "exclude_null_no_fill",
-      "prediction_row_count": "6908",
-      "prediction_valid_row_count": "6600",
-      "prediction_invalid_row_count": "308",
-      "valid_pair_count": "6600",
-      "excluded_pair_count": "308",
-      "weighting": "equal_valid_session",
-      "ic": {
-        "mean": 0.12040690278178623,
-        "session_count": "22"
-      },
-      "rank_ic": {
-        "mean": 0.18541374770326635,
-        "session_count": "22"
-      }
-    }
-  },
+  "performance_refs": {},
+  "performance_update": null,
+  "process_refs": null,
   "owner_digest_note": "Saved owner content_digest identifies the original complete owner result, not public HTML.",
   "future_results_auto_published": false,
   "Data_roots_current_discovery": false

@@ -251,13 +251,12 @@ Saved account event consumption follows
 
 ### ETF v5 public selection status
 
-The private workbench reads saved `backtest_run_v5` results, but `project_view`
-still rejects v5 public export. The proposed narrow selection and path
-allowlist belongs in the canonical
+The private workbench reads saved `backtest_run_v5` results. Its selected public
+export uses a narrow path allowlist defined in the canonical
 [UI read contract](https://github.com/sinnergarden/axiom-docs/blob/main/docs/ui-workbench-read-contract.md).
-Implement it only after review; the existing explicit `run_ids` selection and
-v4 public projection remain the software entry point. A private workbench page
-does not authorize publishing its raw `plan`, source evidence or DataBatch.
+The existing explicit `run_ids` selection remains the software entry point.
+A private workbench page does not authorize publishing its raw `plan`, source
+evidence or DataBatch.
 
 ## Publish the selected saved results
 
