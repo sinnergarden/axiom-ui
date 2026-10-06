@@ -119,7 +119,10 @@ V4_PUBLIC_KEYS = frozenset().union(RUN, EVALUATION, RESEARCH, TRACE, ROW, EVENT,
                                     'label_cutoff', 'original_display_manifest_sha256',
                                     'manifest_sha256', 'knowledge_cutoff', 'default_price_basis',
                                     'native_price_basis', 'usage', 'dtype', 'description',
-                                    'contract_id', 'source_profile_id'))
+                                    'contract_id', 'source_profile_id', 'field_units',
+                                    'names_status', 'events_status', 'event', 'display_ref',
+                                    'display_result_ref', 'display_price', 'source_unit',
+                                    'target_unit', 'pit_policy'))
 
 
 def _public_object(fields, **nested):
@@ -275,6 +278,11 @@ def validate_v4_public_input(view, run):
     for condition in view.get('comparison_conditions') or []:
         reject_extra(condition, ('key', 'label', 'provided', 'value'), 'condition field')
         key = condition.get('key')
+        if key in SAFE_CONDITIONS:
+            expected = (configuration if key != 'stock_action_policy' else
+                        view.get('stock_context') or {}).get(key)
+            if condition.get('value') != expected:
+                raise ValueError('unexpected private or unknown v4 condition value')
         if key == 'profile.extra':
             extra = condition.get('value') or {}
             reject_extra(extra, V4_PROFILE, 'profile condition')
@@ -408,6 +416,11 @@ def project_view(view):
         fields = ('security_id', 'session', 'open', 'high', 'low', 'close', 'native_open', 'native_high',
                   'native_low', 'native_close', 'native_pre_close', 'volume_shares', 'volume_units',
                   'amount_cny', 'display_scale', 'display_missing_reason')
+        if v4:
+            units = display.get('field_units') or {}
+            reject_extra(units, fields[2:], 'display unit field')
+            if any(value is not None and not isinstance(value, str) for value in units.values()):
+                raise ValueError('unexpected private or unknown v4 display unit')
         result['market']['review_display'] = {
             **scalars(display, ('contract_version', 'manifest_sha256', 'display_projection', 'names_status', 'events_status')),
             'public_selected_chart': True,

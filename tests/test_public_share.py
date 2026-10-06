@@ -61,6 +61,28 @@ class PublicProjectionTests(unittest.TestCase):
         self.assertEqual(result['stock_context']['folds'][0]['signal_run_ref'], 'sha256:original-signal')
         self.assertEqual(result['stock_context']['folds'][0]['oos_trade_sessions'], ['2024-01-02'])
         self.assertEqual(result['market']['native_chart']['field_meta']['volume_shares']['unit'], 'shares')
+        value['market']['review_display'] = {'contract_version':'review_display_v1',
+            'field_units':{'close':'CNY/share'},'records':[],'context':{},
+            'names_status':'saved_snapshot_labels','events_status':'saved_selected_scope'}
+        value['market']['review_display']['context']['pit_policy'] = 'saved_cutoff'
+        value['market']['review_events'] = [{'domain':'corporate_actions', 'event':{
+            'security_id':'A', 'event_id':'synthetic:event', 'ex_date':'2024-01-02'}}]
+        value['run']['fills'][0]['fill_id'] = 'synthetic:fill'
+        value['market']['fill_display'] = {
+            'contract_version':'fill_display_v1', 'display_ref':'sha256:display',
+            'display_result_ref':'sha256:display-result', 'status':'COMPLETE',
+            'coordinates':[{'fill_id':'synthetic:fill','security_id':'A',
+                            'session':'2024-01-02','display_price':'10.05',
+                            'source_unit':'CNY/share','target_unit':'CNY/share'}]}
+        public = project_view(value)['market']
+        self.assertEqual(public['review_display']['field_units']['close'], 'CNY/share')
+        self.assertEqual(public['review_display']['context']['pit_policy'], 'saved_cutoff')
+        self.assertEqual(public['review_events'][0]['event']['event_id'], 'synthetic:event')
+        self.assertEqual(public['fill_display']['coordinates'][0]['display_price'], '10.05')
+        value['market']['review_display']['field_units']['source'] = 'SYNTHETIC_SECRET_SENTINEL'
+        with self.assertRaisesRegex(ValueError, 'private or unknown v4'):
+            project_view(value)
+        del value['market']['review_display']
         value['stock_context']['schedule_ref'] = 'sha256:wrong'
         with self.assertRaisesRegex(ValueError, 'run/schedule identity'):
             project_view(value)
@@ -80,6 +102,11 @@ class PublicProjectionTests(unittest.TestCase):
             del container[key]
         value['comparison_conditions'].append({'key':'profile.private_marker','label':'private',
                                                'provided':True,'value':'SYNTHETIC_SECRET_SENTINEL'})
+        with self.assertRaisesRegex(ValueError, 'private or unknown v4'):
+            project_view(value)
+        value['comparison_conditions'].pop()
+        value['comparison_conditions'].append({'key':'initial_account','label':'start',
+                                               'provided':True,'value':{'source':'SYNTHETIC_SECRET_SENTINEL'}})
         with self.assertRaisesRegex(ValueError, 'private or unknown v4'):
             project_view(value)
         value['comparison_conditions'].pop()
