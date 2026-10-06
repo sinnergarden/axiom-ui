@@ -477,7 +477,7 @@ def _evaluation(value: Any, run: Mapping[str, Any]) -> dict:
             _analysis_display_binding(wire, run)
     else:
         _require("period_metrics" not in wire, "v1 must not acquire period metrics")
-    return _stock_evaluation_display(wire) if (run.get("contract_version") in {"backtest_run_v3", "backtest_run_v4"} or
+    return _stock_evaluation_display(wire) if (run.get("contract_version") in {"backtest_run_v3", "backtest_run_v4", "backtest_run_v6"} or
                                              wire["contract_version"] == "evaluation_report_v3") else wire
 
 

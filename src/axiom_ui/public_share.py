@@ -160,11 +160,6 @@ V4_PUBLIC_KEYS = frozenset().union(RUN, EVALUATION, RESEARCH, TRACE, ROW, EVENT,
                                     'names_status', 'events_status', 'event', 'display_ref',
                                     'display_result_ref', 'display_price', 'source_unit',
                                     'target_unit', 'pit_policy'))
-V6_PUBLIC_KEYS = V4_PUBLIC_KEYS.union(V6_RUN_EXTRA, V6_PROFILE, V6_METRICS,
-    V6_POSITION, V6_ORDER, V6_FILL, V6_DECISION, V6_POLICY, V6_LIFECYCLE,
-    V6_STOPPED, V6_TRACE)
-
-
 def _public_object(fields, **nested):
     return {**dict.fromkeys(fields.split()), **nested}
 
@@ -260,6 +255,9 @@ V4_PUBLIC_KEYS = V4_PUBLIC_KEYS | _schema_field_names(_V4_PUBLIC_EVALUATION)
 V5_PUBLIC_KEYS = (V4_PUBLIC_KEYS | frozenset((*V5_PROFILE, *V5_POSITION, *V5_ORDER,
     *V5_FILL, *V5_APPLICATION, *V5_QUOTE, *V5_BUY_HOLD_POLICY, 'portfolio_policy_ref',
     'phase', 'numerator', 'denominator', 'unit_split_policy', 'unit_splits')))
+V6_PUBLIC_KEYS = V4_PUBLIC_KEYS.union(V6_RUN_EXTRA, V6_PROFILE, V6_METRICS,
+    V6_POSITION, V6_ORDER, V6_FILL, V6_DECISION, V6_POLICY, V6_LIFECYCLE,
+    V6_STOPPED, V6_TRACE)
 
 
 def reject_public_shape(value, schema, label):

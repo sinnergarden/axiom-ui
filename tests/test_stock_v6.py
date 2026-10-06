@@ -9,7 +9,8 @@ import unittest
 from unittest.mock import patch
 
 from axiom_ui import render_saved_workbench
-from axiom_ui.public_share import project_view
+from axiom_ui.public_share import (project_view, V6_PUBLIC_KEYS,
+                                   _V4_PUBLIC_EVALUATION, _schema_field_names)
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "stock_v6.synthetic.json"
@@ -96,6 +97,105 @@ class StockV6DisplayTests(unittest.TestCase):
         self.assertEqual(public["run"]["stopped"]["reason"],
                          "HELD_MISSING_STOCK_LIFECYCLE_CAPABILITY")
         self.assertNotIn("private-native-proof", json.dumps(public))
+
+    def test_v6_export_keeps_v3_evaluation_benchmark_dividend_and_distribution(self):
+        self.assertFalse(_schema_field_names(_V4_PUBLIC_EVALUATION) - V6_PUBLIC_KEYS)
+        view, _ = saved_view(self.saved_run)
+        view["evaluation"] = {
+            "contract_version": "evaluation_report_v3",
+            "spec": {"benchmark_projection_version": "benchmark_comparison_v2"},
+            "benchmark_comparisons": {
+                "CSI300": {"projection_version": "benchmark_comparison_v2",
+                           "max_drawdown": "-0.2", "series": [
+                               {"account_session": "2024-01-02", "benchmark_drawdown": "-0.1",
+                                "relative_status": "VALID"}]},
+                "SSE_COMPOSITE": {"projection_version": "benchmark_comparison_v2",
+                                  "observation_cutoff": "2024-01-03T00:00:00Z",
+                                  "observation_pit_policy": "operational_pit_v1",
+                                  "observation_purpose": "historical_exploration",
+                                  "observation_snapshot_id": "synthetic:snapshot",
+                                  "series": []}},
+            "episodes": [{"episode_id": "synthetic:episode", "dividends": [
+                {"event_id": "synthetic:dividend", "record_session": "2024-01-02",
+                 "recognized_minor": "100", "pending_minor": None,
+                 "payment_status": "RECOGNIZED"}]}],
+            "pnl_distribution": {"bins": [{"lower_minor": "-100", "upper_minor": "0",
+                                           "count": "1"}]},
+            "return_distribution": {"bins": [{"lower": "-0.1", "upper": "0",
+                                              "count": "1"}]},
+        }
+        public = project_view(view)["evaluation"]
+        self.assertEqual(public["spec"]["benchmark_projection_version"],
+                         "benchmark_comparison_v2")
+        self.assertEqual(public["benchmark_comparisons"]["CSI300"]["series"][0]
+                         ["benchmark_drawdown"], "-0.1")
+        self.assertEqual(public["benchmark_comparisons"]["SSE_COMPOSITE"]
+                         ["observation_snapshot_id"], "synthetic:snapshot")
+        self.assertEqual(public["episodes"][0]["dividends"][0]["recognized_minor"], "100")
+        self.assertEqual(public["pnl_distribution"]["bins"][0]["upper_minor"], "0")
+        self.assertEqual(public["return_distribution"]["bins"][0]["upper"], "0")
+        view["evaluation"]["benchmark_comparisons"]["CSI300"]["series"][0]["secret"] = "private"
+        with self.assertRaises(ValueError):
+            project_view(view)
+
+    def test_v6_with_v2_evaluation_sheds_native_source_payload(self):
+        """A handwritten v2 display wire exercises the public reader binding."""
+        run = self.saved_run
+        marker = "SYNTHETIC_PRIVATE_EVALUATION_NATIVE_PAYLOAD"
+        last = run["nav"][-1]
+        unavailable = {"cagr": None, "cagr_status": "INSUFFICIENT_SPAN",
+                       "cagr_reason": "YEAR_FRACTION_BELOW_ONE"}
+        evaluation = {
+            "contract_version": "evaluation_report_v2",
+            "evaluation_version": "axiom.evaluation/2",
+            "evaluation_ref": "synthetic:evaluation-v2", "status": "COMPLETE",
+            "input_run_ref": {key: run[key] for key in
+                              ("run_id", "content_digest", "committed_sequence")},
+            **{key: run[key] for key in ("signal_ref", "market_ref", "profile_ref")},
+            "series": [{"session": point["session"], "nav_minor": point["nav_minor"],
+                        "nav_index": point["nav_index"],
+                        "committed_sequence": point["committed_sequence"],
+                        "drawdown": "0"} for point in run["nav"]],
+            "monthly_returns": [], "episodes": [],
+            "episode_metrics": {"win_rate": None, "mean_net_pnl_minor": None,
+                                "mean_episode_return": None},
+            "pnl_distribution": {"status": "INSUFFICIENT_SAMPLE",
+                                 "metric": "net_pnl_minor", "unit": "CNY fen", "bins": []},
+            "benchmark": {"anchor_session": "2024-01-01", "anchor_close": "10",
+                          "series": [{"close": "10"}]},
+            "period_metrics": {
+                "window": {"anchor_session": "2024-01-01", "end_session": last["session"],
+                           "elapsed_calendar_days": 7, "day_count": "actual_actual_calendar_year_split",
+                           "year_segments": [{"year": 2024, "days": 7, "year_days": 366}],
+                           "year_fraction": "0.01912568306010928961748633879781420765027"},
+                "account": {**unavailable, "initial_nav_minor": run["initial_nav_minor"],
+                            "final_nav_minor": last["nav_minor"],
+                            "total_return": run["metrics"]["total_return"],
+                            "max_drawdown": run["metrics"]["max_drawdown"]},
+                "benchmark": {**unavailable, "anchor_close": "10", "end_close": "10",
+                              "total_return": "0", "max_drawdown": "0"}},
+            "benchmark_input": {"source_evidence": [{"reference": "synthetic:benchmark",
+                "batch": {"records": [{"private": marker}]}}],
+                "coverage_bundle": {"payload": marker}},
+            "dividend_scope": {"actions": [], "source_evidence": [{"reference": "synthetic:dividend",
+                "batch": {"records": [{"private": marker}]}}],
+                "coverage": {"private": marker}, "coverage_bundle": {"payload": marker}},
+        }
+        runtime = ModuleType("axiom_engine.runtime")
+        runtime.load_backtest_run = lambda _path: deepcopy(run)
+        runtime.load_backtest_evaluation = lambda _path: deepcopy(evaluation)
+        with patch.dict(sys.modules, {"axiom_engine.runtime": runtime}):
+            html = render_saved_workbench(["synthetic-v6.json"],
+                                           evaluation_paths=["synthetic-v2-evaluation.json"])
+        view = json.loads(re.search(
+            r'<script type="application/json" id="workbench-data">(.*?)</script>',
+            html, re.S)[1])["views"][0]
+        self.assertEqual(view["evaluation"]["period_metrics"]["account"]["total_return"],
+                         run["metrics"]["total_return"])
+        self.assertEqual(view["evaluation"]["benchmark_input"]["source_evidence"][0]
+                         ["reference"], "synthetic:benchmark")
+        self.assertNotIn(marker, html)
+        self.assertNotIn("coverage_bundle", view["evaluation"]["dividend_scope"])
 
 
 if __name__ == "__main__":

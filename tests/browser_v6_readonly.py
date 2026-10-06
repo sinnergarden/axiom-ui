@@ -84,6 +84,7 @@ def check():
             notice = js("document.getElementById('notice').textContent")
             refs = js("document.getElementById('stock-account-refs').textContent")
             assert all(label in scope for label in ("股", "未提交", "提交后未成交", "生命周期")), scope
+            assert "上市前缺值 0" not in scope, scope
             assert "合成验收样例" in notice and "日线事后近似" in notice, notice
             assert run["stock_execution_rules_ref"] in refs and '"quantity_rules"' not in refs, refs
             js("document.querySelector('[data-pane=trade]').click()")
