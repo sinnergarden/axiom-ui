@@ -349,10 +349,12 @@ window.createAxiomInteractions = function(env) {
       ['成交假设',profile.execution==='open'?'开盘价 · 日线近似':profile.execution]];
     for(const [label,value] of summary){if(!present(value))continue;const item=node('div',null,'config-item');item.append(node('span',label),node('strong',value));settings.append(item);}
     const panel=$('configuration-differences');panel.replaceChildren();
-    panel.append(node('p',v.research?.version_explanation || '本版本说明未提供。'));
-    const changes=v.research?.changes || [];if(changes.length){const ul=node('ul');for(const change of changes)ul.append(node('li',typeof change==='string'?change:Object.entries(change).filter(([,value])=>!value || typeof value!=='object').map(([key,value])=>key+'：'+saved(value)).join(' · ') || '声明详见原始记录'));panel.append(ul);}else panel.append(node('p','未保存显式变动清单；不从收益推测改动。','small'));
+    if(v.research?.version_explanation)panel.append(node('p',v.research.version_explanation));
+    const changes=v.research?.changes || [];if(changes.length){const ul=node('ul');for(const change of changes)ul.append(node('li',typeof change==='string'?change:Object.entries(change).filter(([,value])=>!value || typeof value!=='object').map(([key,value])=>key+'：'+saved(value)).join(' · ') || '声明详见原始记录'));panel.append(ul);}else if(v.research)panel.append(node('p','未保存显式变动清单；不从收益推测改动。','small'));
     const values=$('configuration-values');values.replaceChildren();
     for(const [label,value] of [['回测范围',saved(v.configuration.start_session)+' — '+saved(v.configuration.end_session)],['初始账户',typeof v.configuration.initial_account==='object'?'见保存初始账户详情':saved(v.configuration.initial_account)],['价格口径',v.configuration.price_basis || v.market.price_basis],['执行假设',env.stockAccount(v)?'股票日线事后近似 / strict 按所选运行':v.approximate?'ETF 日线近似':'保存策略执行条件']])detailRow(values,label,value);
+    if(!v.research?.title)detailRow(values,'Research 标题','本页未载入');
+    if(!v.research?.hypothesis)detailRow(values,'实验说明','本页未载入');
     if(comparison)values.append(node('p','条件差异：'+(differences.join('、') || '未发现保存差异')+(unverified.length?'；未核实 '+unverified.join('、'):''),'small'));
     const raw=node('button','查看输入与版本差异原始记录','text-button');raw.addEventListener('click',()=>openRaw('保存输入与版本差异',{configuration:v.configuration,comparison:comparison?.configuration || null,declared_changes:v.research?.changes,version_comparison:v.research?.version_comparison}));values.append(raw);
   }

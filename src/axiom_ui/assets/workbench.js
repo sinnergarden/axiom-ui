@@ -46,7 +46,7 @@
     if(policy.contract_version==='etf_rotation_policy_v1')name='ETF 轮动';
     if(policy.contract_version==='etf_buy_and_hold_policy_v1'){
       const id=policy.security_id,display=v.market?.security_labels?.[id];
-      name=(display || (id ? 'ETF '+(id.split('.')[3] || id) : 'ETF'))+' 买入持有';
+      name=(display || id || 'ETF')+' 买入持有';
     }
     return name+(name&&slip?' · '+slip:'');
   };
@@ -128,7 +128,7 @@
       groups.get(key).push(v);
     }
     for (const [topic,group] of groups) {
-      const wrap = node('details', null, 'question-group'),summary=node('summary',group[0].research?.title || '研究问题未提供','question-title'),body=node('div',null,'topic-runs');
+      const wrap = node('details', null, 'question-group'),summary=node('summary',group[0].research?.title || '已保存运行','question-title'),body=node('div',null,'topic-runs');
       wrap.dataset.questionId=topic;
       wrap.open=state.topicOpen.has(topic)?state.topicOpen.get(topic):group.some(v=>v.view_id===state.runId);
       wrap.addEventListener('toggle',()=>state.topicOpen.set(topic,wrap.open));
@@ -140,7 +140,8 @@
       for(const v of group){const key=v.research?.version_id || v.research?.experiment_ref || 'unlinked';if(!versions.has(key))versions.set(key,[]);versions.get(key).push(v);}
       for (const members of versions.values()) {
         const first=members[0];
-        body.append(node('div', first.research?.version_label || (first.research?.experiment_ref ? '冻结实验 ' + short(first.research.experiment_ref) : '版本说明未提供'), 'version-title'));
+        const versionLabel=first.research?.version_label || (first.research?.experiment_ref ? '冻结实验 ' + short(first.research.experiment_ref) : '');
+        if(versionLabel)body.append(node('div',versionLabel,'version-title'));
         for(const v of members){
         const button = node('button', v.research?.no_version ? '尚未登记版本' : v.research?.not_run ? '尚未运行' : runCaption(v), 'run-item' + (v.view_id === state.runId ? ' selected' : ''));
         button.dataset.runId = v.view_id; button.title = v.run.run_id || v.research?.run_record_ref || v.research?.version_id;
@@ -156,12 +157,13 @@
   }
   function renderHeader(v) {
     const r = v.run, research = v.research,stock=v.stock_ml,withoutAccount=!r.run_id;
-    $('context-line').textContent = (research?.version_label || (savedEtfTitle(v)?'研究标题未提供':'版本说明未提供'))+' / '+(r.run_id?'已保存账户结果':research?.not_run?'尚未运行':'保存研究登记')+(v.evaluation?' / 评价已载入':'');
+    $('context-line').textContent = (research?.version_label?research.version_label+' / ':'')+(r.run_id?'已保存账户结果':research?.not_run?'尚未运行':'保存研究登记')+(v.evaluation?' / 评价已载入':'');
     $('context-line').title = r.run_id || research?.run_record_ref || research?.version_id;
     $('evidence-badge').textContent = v.evidence_kind === 'research_record_only' ? '实验记录 · 账户结果未载入' : v.evidence_kind === 'synthetic_ui_fixture' ? '合成展示样例' : v.evidence_kind === 'synthetic_owner_output' ? '合成模拟回测' : '模拟回测';
     if(withoutAccount&&stock)$('evidence-badge').textContent='模型与信号 · '+(String(stock.experiment.account_status || '').startsWith('BLOCKED')?'账户未执行':'账户结果未载入');
     $('run-title').textContent = research?.title || savedEtfTitle(v) || '模拟回测 · ' + short(r.run_id);
-    $('hypothesis').textContent = research?.hypothesis || (savedEtfTitle(v)?'研究标题与实验说明未提供；名称来自保存的账户政策及证券显示名称。':'实验说明尚未载入。');
+    $('hypothesis').textContent = research?.hypothesis || '';
+    $('hypothesis').hidden = !research?.hypothesis;
     const nav = r.nav || [];
     $('date-range').textContent = saved(v.configuration.start_session || nav[0]?.session) + ' — ' + saved(v.configuration.end_session || nav.at(-1)?.session);
     $('initial-capital').textContent = present(v.configuration?.initial_account?.cash_minor)?'初始资金 '+money(v.configuration.initial_account.cash_minor)+' 元':'';
