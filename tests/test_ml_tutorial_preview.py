@@ -1,4 +1,3 @@
-import base64
 from hashlib import sha256
 import json
 from pathlib import Path
@@ -12,50 +11,64 @@ from prepare_ml_tutorial_preview import prepare, transform  # noqa: E402
 
 
 COMMIT = "a" * 40
-SVG = b'<svg xmlns="http://www.w3.org/2000/svg"><rect width="2" height="2"/></svg>'
-
-
-def source(svg=SVG, extra_link=""):
-    image = base64.b64encode(svg).decode()
-    return ('<!doctype html><html><head><style>body{color:black}</style></head>'
-            '<header><a href="researcher_tutorial.html">Researcher</a></header>'
-            '<nav><a href="#section-14">Case</a></nav>'
-            '<section id="section-14"><img src="data:image/svg+xml;base64,' + image
-            + '"><a href="../docs/design/05_axiom_research.md#experiment-records">Docs</a>'
-            + extra_link + '</section><script>document.body.dataset.nav=1</script>'
-            '</html>').encode()
 
 
 def digest(data):
     return "sha256:" + sha256(data).hexdigest()
 
 
-class PreviewTest(unittest.TestCase):
-    def test_fixed_source_has_script_free_local_navigation(self):
-        raw = source()
-        html, diagram = transform(raw, digest(raw), COMMIT)
-        text = html.decode()
-        self.assertEqual(diagram, digest(SVG))
-        self.assertNotIn("<script", text)
-        self.assertIn("Content-Security-Policy", text)
-        self.assertIn('href="index.html"', text)
-        self.assertIn('href="#section-14"', text)
-        self.assertIn(COMMIT + "/docs/design/05_axiom_research.md#experiment-records", text)
-        self.assertIn(COMMIT + "/notebooks/researcher_tutorial.ipynb", text)
+def source(case_extra=""):
+    return (
+        '<!doctype html><html><head><style>body{color:black}</style></head><body>'
+        '<nav><a href="#section-1">old result</a></nav><main>'
+        '<section id="section-1">Feb5 37.72 s Top3/Top5 private result</section>'
+        '<section id="section-14" class="markdown">'
+        '<h2>14. 三个小用例：从正式输入到保存结果</h2>'
+        '<p>第 1–13 节的历史回执无须加载。</p>'
+        '<a href="../docs/design/04_axiom_trade.md#stock-bounded-v7-proposal">Trade</a>'
+        '<a href="../docs/design/04_axiom_trade.md#long-history-evaluation">Evaluate</a>'
+        + case_extra + '</section>'
+        '<section id="cell-20">generic inputs/config.json</section>'
+        '<section id="cell-22"><h3>14.1 CaseC：四折</h3></section>'
+        '<section id="cell-33"><h3>14.2 CaseA：配置</h3></section>'
+        '<section id="cell-34"><h3>14.3 CaseB：组合</h3></section>'
+        '<section id="cell-35"><h3>14.4 结果记录</h3>'
+        '<p>未执行，无新增结果。</p>'
+        '<p>小例之后沿同一实现做 M1 多年计划。</p></section>'
+        '</main><script>old navigation</script></body></html>'
+    ).encode()
 
-    def test_rejects_changed_source_and_unsafe_content(self):
+
+class PreviewTest(unittest.TestCase):
+    def test_excerpt_excludes_historical_results_and_old_navigation(self):
+        raw = source()
+        text = transform(raw, digest(raw), COMMIT).decode()
+        self.assertIn('id="progress"', text)
+        self.assertIn('id="case-c"', text)
+        self.assertIn('id="case-a"', text)
+        self.assertIn('id="case-b"', text)
+        self.assertIn("505 交易日 Feature", text)
+        self.assertIn("29.43%", text)
+        self.assertIn("未执行，无新增结果", text)
+        self.assertNotIn("Feb5", text)
+        self.assertNotIn("37.72 s", text)
+        self.assertNotIn("Top3/Top5", text)
+        self.assertNotIn("小例之后", text)
+        self.assertNotIn("<script", text)
+        self.assertNotIn("#section-1", text)
+        self.assertNotIn("notebooks/", text)
+        self.assertIn(COMMIT + "/docs/design/04_axiom_trade.md", text)
+
+    def test_rejects_changed_source_and_private_case_material(self):
         raw = source()
         with self.assertRaisesRegex(ValueError, "reviewed digest"):
             transform(raw, digest(b"different"), COMMIT)
-        bad_svg = source(b'<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>')
-        with self.assertRaisesRegex(ValueError, "active SVG"):
-            transform(bad_svg, digest(bad_svg), COMMIT)
-        bad_link = source(extra_link='<a href="/Users/example/private">secret</a>')
+        private = source(case_extra='<p>/Users/example/private/run.json</p>')
         with self.assertRaisesRegex(ValueError, "private path"):
-            transform(bad_link, digest(bad_link), COMMIT)
-        missing_anchor = raw.replace(b'href="#section-14"', b'href="#missing"')
-        with self.assertRaisesRegex(ValueError, "missing tutorial anchor"):
-            transform(missing_anchor, digest(missing_anchor), COMMIT)
+            transform(private, digest(private), COMMIT)
+        old_result = source(case_extra='<p>Feb19 real fold result</p>')
+        with self.assertRaisesRegex(ValueError, "historical result"):
+            transform(old_result, digest(old_result), COMMIT)
 
     def test_preview_preserves_etf_and_publication(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -76,7 +89,8 @@ class PreviewTest(unittest.TestCase):
                              (copy / "etf-three-account.html").read_bytes())
             self.assertEqual((site / "publication.json").read_bytes(),
                              (copy / "publication.json").read_bytes())
-            self.assertIn('id="ml-engineering-tutorial"',
+            self.assertIn('>机器学习研究</h2>', (copy / "index.html").read_text())
+            self.assertIn('>查看流程、用例与当前进展。</p>',
                           (copy / "index.html").read_text())
             self.assertFalse(report["published"])
             self.assertTrue(json.loads((root / "preview" / "acceptance.json").read_text())
