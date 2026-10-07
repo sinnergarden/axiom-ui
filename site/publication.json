@@ -38,6 +38,17 @@
       ]
     }
   ],
+  "tutorial": {
+    "file": "ml-engineering.html",
+    "title": "机器学习研究",
+    "status": "public_unexecuted_semantic_preview",
+    "source_repo": "sinnergarden/axiom-docs",
+    "source_commit": "48196b13af56d5e99c3ffdfa8c00199a116d89f7",
+    "source_html_sha256": "sha256:6abdceda59451e0788d83225668c6b9382e8c9361b50d1657380ddd8bae70799",
+    "public_html_sha256": "sha256:005936b3a701a802f2801dd317460156054629b8e579d69753ae66773cca04b7",
+    "excerpt": "current_progress_workflow_and_case_c_a_b_only",
+    "business_execution": false
+  },
   "performance_refs": {},
   "performance_update": null,
   "process_refs": null,

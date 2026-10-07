@@ -1,0 +1,340 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Axiom · 机器学习研究：流程与当前进展</title><style>
+html {scroll-behavior:smooth} body{margin:0;background:#f4f6fa;color:#202b3c;font:16px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+header{background:#14283d;color:#f3f7fc;padding:24px max(26px,calc((100vw - 1120px)/2))} header b{font-size:24px} header p{margin:4px 0;color:#c5d4e6}
+.layout{max-width:1450px;margin:auto;display:grid;grid-template-columns:245px minmax(0,1fr);gap:28px;padding:28px}
+nav{position:sticky;top:20px;height:calc(100vh - 60px);overflow:auto} nav a{display:block;color:#354a63;text-decoration:none;padding:8px 10px;font-size:13px;border-bottom:1px solid #e0e7ef} nav a:hover{background:#e7edf5}
+main{max-width:1120px;min-width:0} section{background:white;padding:24px 30px;margin:0 0 18px;border:1px solid #e1e6ed;border-radius:10px}
+h1{font-size:31px;line-height:1.35} h2{font-size:23px;border-bottom:2px solid #eaf0f7;padding-bottom:12px;line-height:1.5} h3{font-size:19px} a{color:#176c9e}
+table{border-collapse:collapse;width:100%;font-size:13px;margin:16px 0} th{background:#edf3fa;color:#213e59;text-align:left;font-weight:650} th,td{border-bottom:1px solid #dfe6ee;padding:10px;vertical-align:top;word-break:normal} tr:nth-child(even) td{background:#fafbfd}
+pre{background:#f3f6fa;border-radius:7px;padding:16px;overflow:auto;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace} code{font-size:.9em} p code,li code{background:#edf2f7;padding:2px 4px;border-radius:3px}
+.example{border-left:4px solid #328778}.example-label{font-size:12px;font-weight:700;color:#277469;letter-spacing:.07em}.output-text{max-height:660px}.table-scroll{overflow:auto}.table-scroll table{width:max-content;min-width:100%}.table-scroll td,.table-scroll th{max-width:300px}.chart{width:100%;max-width:1000px;height:auto}
+details{border-top:1px solid #e4e9ef;padding-top:12px;margin-top:18px} summary{cursor:pointer;color:#577087;font-size:13px}.code{max-height:650px}
+.security-code{white-space:nowrap}.markdown img{max-width:100%;height:auto}.markdown>details{border:0;margin:0;padding:0}.markdown>details>summary{font-size:18px;color:#213e59}.supporting-output{margin-top:12px}
+.wide-table-note{font-size:12px;color:#577087;margin:14px 0 0}.table-scroll:focus-visible{outline:2px solid #328778;outline-offset:3px}
+@media(max-width:980px){.layout{display:block;padding:14px}nav{position:static;height:auto;max-height:220px;margin-bottom:18px}section{padding:18px}h1{font-size:26px}}
+@media print{nav,details{display:none}.layout{display:block}body{background:white}section{break-inside:auto;border:0}pre{white-space:pre-wrap}.table-scroll{overflow:visible}}
+
+header a{color:#d3eaff;text-decoration:underline}header a:hover{color:#fff}</style><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"></head><body><header><b>Axiom · 机器学习研究</b><p>流程、三个用例与当前进展 · 未执行的示例明确标注</p><a href="index.html">← 返回研究工作台</a></header><div class="layout"><nav><a href="#progress">当前进展</a><a href="#workflow">流程与职责</a><a href="#cases">三个用例</a><a href="#inputs">通用输入配置</a><a href="#case-c">CaseC：四折与 Top5</a><a href="#case-a">CaseA：训练配置</a><a href="#case-b">CaseB：组合评价</a><a href="#checks">验收顺序</a></nav><main><section id="progress" class="markdown"><h1>机器学习研究：当前进展</h1><p>505 交易日 Feature 的完整验收已通过。真实 20 日旧、新实现对照记录提速 29.43%；这个数字仅适用于该次对照。</p><p>Label 统一修正代码已完成两轮独立审查，整段贯通验证尚未通过。完整四折训练和账户尚未运行；CaseA 两字段候选只有 helper unit 结果，真实保存闭环待验；CaseB 通用保存组合待实现。</p><p>下方代码单元均未执行、没有新结果。实际输入由各 owner 交接后再逐项验收。</p></section><section id="workflow" class="markdown"><h2>流程与职责</h2><p>Feature/Label → Model → 原始 Prediction → 组合 Signal → 信号评价 → 策略账户。Data 保存事实；Research 管训练输入、模型、预测与信号评价；Engine 管账户执行和评价；UI 只读展示保存结果。</p><p>训练只读取拟合截止时已成熟的 Label；预测的可用时间、独立评价 Label 与执行日须分别核对。这里展示接口和待验条件，不代表回测或收益验收。</p></section><section id="cases" class="markdown"><h2>三个用例：从正式输入到保存结果</h2>
+<p>这部分沿“Feature/Label → Model → 原始 Prediction → 组合 Signal → 信号评价 → 策略账户”展开。下面的 CaseC 单元直接调用正式入口，真实数据引用尚待交接，本轮只核对语法和轻量单元。CaseA 两字段训练配置候选只有 helper unit 结果，尚待真实保存闭环；CaseB 的通用组合继续留在待接区，完成相应验证与接口后再执行。</p>
+<table>
+<thead>
+<tr>
+  <th>编号与目的</th>
+  <th>当前能力</th>
+  <th>待接项</th>
+  <th>输入与输出</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1. CaseC：四个周度 fold 与 Top5，优先验收</td>
+  <td>matrix_v2 保存准备、fold v3、OOS 评价冻结和 Runtime v7 均有正式入口</td>
+  <td>已验 Feature 的交接定位；Label 贯通、四折、回放与评价输入仍待本次验证；本页未运行</td>
+  <td>同一六列 Feature 和 5D Label → 四份模型/原始预测、信号评价、50 万元账户与账户评价</td>
+</tr>
+<tr>
+  <td>2. CaseA：同输入比较两个训练配置</td>
+  <td>CaseC 可验证准备复用与同配置 fold HIT</td>
+  <td>本页沿固定默认参数；两字段候选仅 helper unit，真实 MISS/HIT 与保存闭环待验</td>
+  <td>同一 prepared 矩阵及两个真实配置 → 两份模型/预测和阶段成本</td>
+</tr>
+<tr>
+  <td>3. CaseB：保存预测组合后统一评价</td>
+  <td>保存预测可经 OOS frozen-input 路径，使用独立 Raw evaluationLabel</td>
+  <td>正式组合及其保存件的评价准入；按年汇总与分组收益入口</td>
+  <td>原始预测、固定权重、同一实际可用 Label → 保存组合与共同样本比较</td>
+</tr>
+</tbody>
+</table>
+<p>从本节单独执行，使用 Python 3.11 及以上的 kernel，先安装 owner 交接的 Data、Research、Engine 环境；本公开节选不含历史回执。所有新增输出保存在外部验收根目录，公开 Notebook 保持空输出。6、158、300 列复用同一正式列式和窗口入口；当前固定六列，扩列所需正式定义由 Research 交接。Data Qlib view 保存事实，Research prepared 矩阵保存派生训练输入，两者沿用同一事实来源。</p>
+</section><section id="inputs" class="markdown"><p><strong>输入目录。</strong> 设置 <code>AXIOM_M1_ROOT</code> 为实际验收根目录，在其中放入 <code>case-inputs.json</code>。下表和 JSON 只说明位置；每份输入由原 owner 保存并核验，日期、版本、时钟和预算采用交接值。这些相对位置只组织输入目录；实际 ArtifactRef 的绝对定位和原件引用按原协议保留。迁移时由原 owner 交接已验定位映射和完整闭包，用户按映射加载原保存件。</p>
+<pre><code class="language-json">{
+  &quot;data_root&quot;: &quot;data&quot;,
+  &quot;feature_inputs&quot;: &quot;inputs/features-six&quot;,
+  &quot;fold_specs&quot;: &quot;inputs/four-weekly-folds.json&quot;,
+  &quot;preparation_options&quot;: &quot;inputs/preparation-options.json&quot;,
+  &quot;batch_limits&quot;: &quot;inputs/batch-limits.json&quot;,
+  &quot;evaluation_scope&quot;: &quot;inputs/signal-evaluation-scope.json&quot;,
+  &quot;raw_evaluation_label&quot;: null,
+  &quot;runtime_request&quot;: &quot;inputs/top5-request-v7.json&quot;,
+  &quot;runtime_limits&quot;: &quot;inputs/runtime-limits.json&quot;,
+  &quot;block_sessions&quot;: 5,
+  &quot;benchmark&quot;: &quot;inputs/csi300-benchmark.json&quot;,
+  &quot;dividend_scope&quot;: &quot;inputs/dividend-scope-v3.json&quot;
+}
+</code></pre>
+<p><code>features-six</code> 是已完成的 <code>stock_feature_inputs_v3</code> 目录，采用 <code>matrix_v2</code>，包含原来源引用。<code>fold_specs</code> 是四个有序、OOS 互不重叠的正式 spec，覆盖约四个交易周和各自训练窗口。<code>preparation_options</code> 精确提供 <code>row_block_sessions</code>、<code>column_block</code>、<code>maximum_resident_bytes</code>、<code>normalization_backend</code>；后者固定为 <code>core_cs_batch_v1</code>。<code>batch_limits</code> 提供 <code>maximum_source_bytes</code> 和 <code>maximum_matrix_bytes</code>。Runtime 请求、预算及账户评价输入分别见 <a href="https://github.com/sinnergarden/axiom-docs/blob/48196b13af56d5e99c3ffdfa8c00199a116d89f7/docs/design/04_axiom_trade.md#stock-bounded-v7-proposal">Trade §6.5</a> 与 <a href="https://github.com/sinnergarden/axiom-docs/blob/48196b13af56d5e99c3ffdfa8c00199a116d89f7/docs/design/04_axiom_trade.md#long-history-evaluation">Trade §11.2</a>。</p>
+<p><code>raw_evaluation_label</code> 留空时，冻结入口取同一 batch 的原 OOS Raw 目标；也可填写一个小型 descriptor 文件的相对位置，显式提供共同评价 Label。scope 固定评价日期、证券、完整日历和评价 cutoff，须覆盖目标成熟所需日期。训练 target 使用 5D 横截面标准化目标，评价使用原收益 Label，各自保存定义。</p>
+<p>下一个单元只加载配置、小型 Feature 索引和正式 catalog，并建立本次计时文件。只有后续单元会执行准备、训练或账户。准备及 fold 缓存保留在根目录 <code>cache/</code>，每次运行的记录和独立账户保存到新的 <code>runs/</code> 子目录。缺少输入会明确报错，待补齐后按单元继续。</p>
+</section><section class="example" data-cell-id="m1-config"><details><summary>CaseC 1：输入配置与 catalog（未执行，无新增结果）</summary><pre class="code">import json
+import os
+import resource
+import sys
+import time
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from pathlib import Path
+from uuid import uuid4
+
+ROOT = Path(os.environ[&quot;AXIOM_M1_ROOT&quot;]).expanduser().resolve(strict=True)
+
+def case_path(relative):
+    value = Path(relative)
+    if value.is_absolute():
+        raise ValueError(&quot;配置位置应相对 AXIOM_M1_ROOT&quot;)
+    result = (ROOT / value).resolve()
+    if not result.is_relative_to(ROOT):
+        raise ValueError(&quot;配置位置超出验收根目录&quot;)
+    return result
+
+def read_small_json(path, maximum=16 * 1024**2):
+    # 只读配置和小型索引；矩阵及来源闭包交给正式 reader。
+    with Path(path).open(&quot;rb&quot;) as saved:
+        raw = saved.read(maximum + 1)
+    if len(raw) &gt; maximum:
+        raise ValueError(&quot;小型配置超过读取预算&quot;)
+    return json.loads(raw)
+
+cfg = read_small_json(ROOT / &quot;case-inputs.json&quot;)
+feature_path = case_path(cfg[&quot;feature_inputs&quot;])
+feature_index = read_small_json(feature_path / &quot;index.json&quot;)
+if feature_index[&quot;contract_version&quot;] != &quot;stock_feature_inputs_v3&quot; or feature_index[&quot;status&quot;] != &quot;COMPLETE&quot;:
+    raise ValueError(&quot;待交接完成的 matrix_v2 / stock_feature_inputs_v3 输入&quot;)
+feature_spec = feature_index[&quot;definition&quot;][&quot;spec&quot;]
+from axiom_research import load_feature_catalog
+catalog = load_feature_catalog()
+selected = catalog.select(feature_spec[&quot;feature_selection&quot;])
+if [item[&quot;id&quot;] for item in selected] != feature_spec[&quot;ordered_features&quot;] or len(selected) != 6:
+    raise ValueError(&quot;首个 CaseC 需要交接的正式六列选择&quot;)
+for item in selected:
+    print({key: item[key] for key in (&quot;id&quot;, &quot;name&quot;, &quot;formula&quot;, &quot;dependencies&quot;, &quot;lookback&quot;, &quot;semantic_version&quot;)})
+del feature_index, feature_spec, selected, catalog
+
+run_name = datetime.now(timezone.utc).strftime(&quot;%Y%m%dT%H%M%SZ&quot;) + &quot;-&quot; + uuid4().hex[:8]
+RUN_ROOT = ROOT / &quot;runs&quot; / run_name
+RUN_ROOT.mkdir(parents=True, exist_ok=False)
+timing_path = RUN_ROOT / &quot;timings.jsonl&quot;
+
+@contextmanager
+def measure(stage, api_metrics=None):
+    # 计时探针只记录调用；业务由下面各单元直接执行。
+    before = resource.getrusage(resource.RUSAGE_SELF)
+    started = time.perf_counter()
+    record = {&quot;stage&quot;: stage, &quot;status&quot;: &quot;RETURNED&quot;}
+    try:
+        yield
+    except BaseException as error:
+        record.update(status=&quot;ERROR&quot;, error_type=type(error).__name__)
+        raise
+    finally:
+        after = resource.getrusage(resource.RUSAGE_SELF)
+        record.update(elapsed_seconds=time.perf_counter() - started,
+            rss_process_peak_bytes=int(after.ru_maxrss * (1 if sys.platform == &quot;darwin&quot; else 1024)),
+            input_block_ops_delta=after.ru_inblock - before.ru_inblock,
+            output_block_ops_delta=after.ru_oublock - before.ru_oublock,
+            api_metrics={} if api_metrics is None else api_metrics)
+        with timing_path.open(&quot;a&quot;, encoding=&quot;utf-8&quot;) as output:
+            output.write(json.dumps(record, ensure_ascii=False, allow_nan=False) + &quot;\n&quot;)
+        print(record)
+</pre></details></section><section id="case-c" class="markdown"><h3>CaseC：准备一次，保存四折，再运行 Top5</h3>
+<ol>
+<li><strong>目的与输入。</strong> 固定六列 Feature、实际五交易日 Label、四折日历和时钟，检查成熟训练、原始 OOS 预测、唯一 Runtime 账户及资源成本。完整 Feature 输入须覆盖训练窗；505 交易日 Feature 已验通过，Label 与四折保存件仍待本次贯通验证和交接。</li>
+<li><strong>准备与预期。</strong> 下方只调用一次 prepare，生成共享 prepared view 和四折 selectors，Data 保持 <code>cache_bytes=0</code>。首次精确定义为 MISS；已有同定义保存件可 HIT，两种结果均记录实际计数。HIT 的 Data/Core/fit/predict/account 调用应为零。prepare 不重新 build Feature，完成后沿正式实现释放当前 Data 实例缓存。</li>
+<li><strong>要看什么。</strong> 检查准备耗时、逻辑 Data 调用、Core 调用、实际读/hash 字节和工作集峰值。物理分区计数尚未由公共 Data API 暴露时，保留正式报告中的空值和原因。这里的 Data 内存缓存与磁盘 prepared HIT 分别解释。</li>
+</ol>
+</section><section id="cell-23" class="markdown"><p><strong>具体日期怎么读。</strong> 选本次第一折的一个交易日 D〔待填：<code>oos_trade_sessions</code> 中的实际日期〕，从同一冻结日历取其严格前一交易日 F〔待填：对应预测日期〕；再读取这折的拟合日 T〔待填：<code>fit_session</code>〕。四折产物交接后逐项填入原值；以下 20:30、20:45、21:00 来自当前正式 fold 时钟定义，日期暂留待填。阅读时统一显示上海时间，保留原保存时钟。</p>
+<ol>
+<li><strong>Feature 可见。</strong> F〔待填〕这次预测使用的原 Feature 可见时间〔待填：<code>feature_available_at</code>〕、事实选择截止时间〔待填：<code>feature_knowledge_cutoff</code>〕和成员资格，须在本次推理截止时间内有效。输入沿原 Feature 保存件核验，缺失或不可见状态继续保留。</li>
+<li><strong>训练 Label 成熟。</strong> 由 owner 从本折实际训练键中选一条日期 g〔待填〕，列出其 Raw Label 起日〔待填：<code>start_session</code>〕、止日〔待填：<code>end_session</code>〕和可用时间〔待填：<code>label_available_at</code>〕。当前 5D 定义为 g 后第一个交易日开盘至第五个交易日收盘的复权收益；训练要求止日不晚于拟合截止日期、Label 可用时间不晚于 <code>fit_cutoff</code>，并通过原成员和 Feature 资格筛选。F 的未来 5D 收益留给独立评价，训练只使用拟合时已经成熟的样本。</li>
+<li><strong>Model 可用。</strong> 读取 <code>fit_cutoff</code>〔T 待填，20:30 +08:00〕和 <code>simulated_model_available_at</code>〔T 待填，20:45 +08:00〕。它们是本折声明的模拟拟合与发布时钟；本次真实准备、fit、predict 耗时继续从阶段记录读取。</li>
+<li><strong>Prediction 发布。</strong> 原始预测的 <code>session</code> 为 F〔待填〕，<code>knowledge_cutoff</code> 与 <code>available_at</code> 均取 <code>inference_cutoff_by_session[F]</code>〔F 待填，21:00 +08:00〕，同时保留这次实际使用的 model/fold 和原 Feature 时钟。模型可用时点早于此次发布；更换事后评价 Label 时，这份预测及其生成时参考截面保持固定。</li>
+<li><strong>下一交易日执行。</strong> Runtime 在 D〔待填〕按已验请求读取上述预测，用当日执行行情、成员、规则和费用推进账户。D 由冻结交易日历定位，周末和休市日直接沿日历跨过。订单、成交、ledger 与扣费 NAV 从本次保存账户读取；独立 Label 统计另从信号评价读取。</li>
+</ol>
+<p><strong>三个用例的可执行范围。</strong> 同数据换 model：准备复用、固定参数训练和同配置 HIT 已有入口，saved-fold 两字段候选已有 helper unit 结果，真实保存闭环与本页接入仍待完成。同一评价 Label 比不同 prediction：OOS 冻结、显式 Raw Label、共同成熟样本和自然覆盖已有入口，补齐两组真实预测与评价引用即可调用；固定加权组合的保存执行/准入、按年汇总和分组收益仍待实现。同 signal 换策略：正式 Runtime 可消费相同已准入预测与不同已支持策略请求；本页当前接 50 万元 Top5，其余策略请求和预算由 Engine owner 另行交接，超出现有 policy 的能力单列待实现。六个业务单元仍未执行；505 交易日 Feature 已验，待 Label 与四折保存件交接后逐项验收。</p>
+</section><section class="example" data-cell-id="m1-prepare"><details><summary>CaseC 2：prepare 正式调用（未执行，无新增结果）</summary><pre class="code">from axiom_data import Data
+from axiom_research import prepare_stock_ml_batch_inputs
+
+fold_specs = read_small_json(case_path(cfg[&quot;fold_specs&quot;]))
+if type(fold_specs) is not list or len(fold_specs) != 4:
+    raise ValueError(&quot;CaseC 需要四个正式周度 fold spec&quot;)
+preparation_options = read_small_json(case_path(cfg[&quot;preparation_options&quot;]))
+batch_limits = read_small_json(case_path(cfg[&quot;batch_limits&quot;]))
+data = Data(case_path(cfg[&quot;data_root&quot;]), cache_bytes=0, max_readers=4)
+prepare_metrics = {}
+with measure(&quot;C.prepare&quot;, prepare_metrics):
+    prepared = prepare_stock_ml_batch_inputs(data, feature_inputs=feature_path,
+        fold_specs=fold_specs, destination=ROOT / &quot;cache&quot; / &quot;prepared&quot;,
+        preparation_options=preparation_options, metrics=prepare_metrics)
+del data
+assert prepared[&quot;contract_version&quot;] == &quot;stock_ml_batch_inputs_v2&quot;
+assert len(prepared[&quot;folds&quot;]) == 4
+assert prepare_metrics[&quot;feature_core_calls&quot;] == prepare_metrics[&quot;train_calls&quot;] == prepare_metrics[&quot;predict_calls&quot;] == 0
+</pre></details></section><section id="cell-25" class="markdown"><p><strong>四折保存与复用。</strong> 本单元只初始化一个 batch，并在同一生命周期内构建四折、逐折检查同定义 HIT、冻结 OOS 评价输入，结束时释放矩阵。每折只投影当前训练窗和声明列；模型参数沿用当前固定 LightGBM。每份保存结果分别保留 Dataset、Model 和原始 Prediction；小型 metadata 展示成熟训练行数、训练键引用、排除原因及 OOS 交易区间。</p>
+<p>第一次每折可能新 fit/predict，也可能已有保存件 HIT，实际次数由 builder 记录。随后同配置重试应 HIT 且零 fit/predict；此检查仍会核验保存件和当前投影，成本单列。batch metrics 记录共同索引构建、descriptor 校验、hash/decode、投影次数与字节。中断后重新使用同定义入口可重用完成的 Research fold，Runtime 账户从新请求完整运行。</p>
+<p>冻结沿正式 OOS-only 路径，保留输入模型/fold 来源和原评价 Label。这里复用 batch 的共享来源表；独立完整来源审计留给整体复审。教程没有调用私有投影方法，也没有重新写证券/日期 join。</p>
+</section><section class="example" data-cell-id="m1-folds-and-freeze"><details><summary>CaseC 3：四折保存、HIT 和冻结（未执行，无新增结果）</summary><pre class="code">from axiom_research import (load_stock_ml_batch_inputs,
+    build_stock_ml_fold_from_saved_inputs, save_stock_signal_evaluation_inputs)
+
+signal_scope = read_small_json(case_path(cfg[&quot;evaluation_scope&quot;]))
+raw_override = None if cfg[&quot;raw_evaluation_label&quot;] is None else read_small_json(case_path(cfg[&quot;raw_evaluation_label&quot;]))
+fold_records, prediction_inputs = [], []
+batch_metrics = {}
+with measure(&quot;C.batch.lifecycle&quot;, batch_metrics):
+    with measure(&quot;C.batch.admission&quot;):
+        batch = load_stock_ml_batch_inputs(prepared, limits=batch_limits)
+    with batch:
+        for number, item in enumerate(prepared[&quot;folds&quot;], 1):
+            metrics = {}
+            with measure(f&quot;C.fold.{number}.build&quot;, metrics):
+                fold = build_stock_ml_fold_from_saved_inputs(item[&quot;input_manifest&quot;],
+                    fold_spec=item[&quot;fold_spec&quot;], destination=ROOT / &quot;cache&quot; / &quot;folds&quot;,
+                    metrics=metrics, batch=batch)
+            meta = read_small_json(fold.path / &quot;fold.json&quot;)
+            files = read_small_json(fold.path / &quot;manifest.json&quot;)[&quot;files&quot;]
+            dataset = read_small_json(fold.path / &quot;dataset.json&quot;)
+            record = {key: meta[key] for key in (&quot;fold_ref&quot;, &quot;model_ref&quot;, &quot;feature_ref&quot;, &quot;signal_run_ref&quot;)}
+            record.update(fold_spec_ref=meta[&quot;definition&quot;][&quot;fold_spec_ref&quot;],
+                training_rows=dataset[&quot;training_row_count&quot;],
+                training_keys_digest=dataset[&quot;training_keys_digest&quot;],
+                excluded=dataset[&quot;excluded&quot;],
+                oos_trade_sessions=item[&quot;fold_spec&quot;][&quot;oos_trade_sessions&quot;])
+            fold_records.append(record)
+            prediction_inputs.append({&quot;path&quot;: str(fold.path / &quot;predictions.json&quot;),
+                &quot;file_digest&quot;: files[&quot;predictions.json&quot;], &quot;signal_run_ref&quot;: meta[&quot;signal_run_ref&quot;]})
+            print(record)
+            hit_metrics = {}
+            with measure(f&quot;C.fold.{number}.same_config_hit&quot;, hit_metrics):
+                hit = build_stock_ml_fold_from_saved_inputs(item[&quot;input_manifest&quot;],
+                    fold_spec=item[&quot;fold_spec&quot;], destination=ROOT / &quot;cache&quot; / &quot;folds&quot;,
+                    metrics=hit_metrics, batch=batch)
+            assert hit.reused and hit.path == fold.path
+            assert hit_metrics[&quot;cache_hit&quot;] and hit_metrics[&quot;train_calls&quot;] == hit_metrics[&quot;predict_calls&quot;] == 0
+            del fold, hit, meta, dataset, files
+        with measure(&quot;C.signal.freeze&quot;):
+            signal_input_ref = save_stock_signal_evaluation_inputs(
+                {&quot;baseline_5d&quot;: prediction_inputs}, raw_label_input=raw_override,
+                scope=signal_scope, destination=ROOT / &quot;cache&quot; / &quot;signal-inputs&quot;, batch=batch)
+        batch_metrics.update(batch.metrics)
+        assert batch_metrics[&quot;common_key_index_builds&quot;] == 1
+</pre></details></section><section id="cell-27" class="markdown"><p><strong>独立信号评价。</strong> 下方仅消费已冻结的输入，保存整体 IC、RankIC、非年化 ICIR、共同有效样本和各信号自然覆盖，然后原定义重试验证评价 HIT。HIT 复用统计结果，冻结文件仍会核验；该阶段的正常返回与完整用例通过分别记录。当前统计入口尚未输出按年汇总和分组 Label 收益，补齐后按预测日期所属年份下钻。长 horizon 的重叠样本与短窗口 ICIR需谨慎解释；Top5 扣费收益另从账户评价读取。</p>
+</section><section class="example" data-cell-id="m1-signal-evaluation"><details><summary>CaseC 4：独立信号评价（未执行，无新增结果）</summary><pre class="code">from axiom_research import evaluate_stock_signal_inputs
+
+with measure(&quot;C.signal.evaluate&quot;):
+    signal_reports = evaluate_stock_signal_inputs(signal_input_ref,
+        scope=signal_scope, destination=ROOT / &quot;cache&quot; / &quot;signal-evaluations&quot;)
+for name, saved in signal_reports.items():
+    report = saved.to_dict()
+    print({&quot;signal&quot;: name, &quot;status&quot;: report[&quot;status&quot;], &quot;summary&quot;: report[&quot;summary&quot;],
+        &quot;common_pairs&quot;: report[&quot;coverage&quot;][&quot;valid_pair_count&quot;],
+        &quot;natural_pairs&quot;: report[&quot;coverage&quot;][&quot;native&quot;][&quot;valid_pair_count&quot;],
+        &quot;excluded&quot;: report[&quot;coverage&quot;][&quot;excluded_counts&quot;], &quot;saved_report&quot;: str(saved.path)})
+with measure(&quot;C.signal.same_definition_hit&quot;):
+    signal_hit = evaluate_stock_signal_inputs(signal_input_ref,
+        scope=signal_scope, destination=ROOT / &quot;cache&quot; / &quot;signal-evaluations&quot;)
+assert all(saved.reused for saved in signal_hit.values())
+del report, signal_hit, signal_reports
+</pre></details></section><section id="cell-29" class="markdown"><p><strong>唯一 Runtime 账户。</strong> Engine owner 根据本次四折保存件绑定并核验 v7 请求后交接，用户按交接路径加载该完整请求。请求须逐项引用上面四折保存预测、原 model metadata、fold spec、执行行情与 profile；请求会绑定现金分红、成员可见时间、成交规则和费用。下方核对引用与初始账户，再让 <code>run_stock_backtest</code> 执行其正式两遍扫描及同一 planner/simulator/ledger。输入扫描的完整核验已包含在回测入口中。</p>
+<p>初始现金为 50 万元，保存单位为 CNY 分，所以填 <code>50000000</code>；持仓为空，策略为周度 Top5。账户结果写入本次新目录，当前 v7 的任意崩溃恢复尚待实现。输出要看订单、成交、ledger 和扣费 NAV 的相同提交序号，另记录费用、未成交数量、源审计计数与 result parts。账户耗时包含正式输入准入和执行，保存单独计时。</p>
+</section><section class="example" data-cell-id="m1-runtime"><details><summary>CaseC 5：Runtime 账户（未执行，无新增结果）</summary><pre class="code">from axiom_engine.runtime import (BacktestRequest, StockInputSource, StockResultSink,
+    stock_run_id, run_stock_backtest, save_backtest_run)
+
+request_wire = read_small_json(case_path(cfg[&quot;runtime_request&quot;]))
+runtime_limits = read_small_json(case_path(cfg[&quot;runtime_limits&quot;]))
+assert request_wire[&quot;contract_version&quot;] == &quot;backtest_request_v7&quot;
+assert request_wire[&quot;initial_account&quot;] == {&quot;cash_minor&quot;: 50000000, &quot;positions&quot;: {}}
+assert request_wire[&quot;portfolio_policy&quot;][&quot;top_k&quot;] == 5
+keys = (&quot;fold_ref&quot;, &quot;fold_spec_ref&quot;, &quot;model_ref&quot;, &quot;feature_ref&quot;, &quot;signal_run_ref&quot;)
+assert [tuple(frame[key] for key in keys) for frame in request_wire[&quot;prediction_input&quot;][&quot;frames&quot;]] == [tuple(row[key] for key in keys) for row in fold_records]
+request = BacktestRequest.from_dict(request_wire)
+runtime_path = RUN_ROOT / &quot;runtime&quot; / &quot;run.json&quot;
+runtime_metrics = {}
+with measure(&quot;C.runtime.run&quot;, runtime_metrics):
+    runtime_run = run_stock_backtest(request, source=StockInputSource(),
+        sink=StockResultSink(RUN_ROOT / &quot;runtime&quot; / &quot;parts&quot;, run_id=stock_run_id(request_wire)),
+        block_sessions=cfg[&quot;block_sessions&quot;], limits=runtime_limits)
+    runtime_wire = runtime_run.to_dict()
+    runtime_metrics.update(runtime_wire[&quot;metrics&quot;])
+with measure(&quot;C.runtime.save&quot;):
+    save_backtest_run(runtime_run, runtime_path)
+print({&quot;status&quot;: runtime_wire[&quot;status&quot;], &quot;metrics&quot;: runtime_wire[&quot;metrics&quot;],
+    &quot;source_counts&quot;: runtime_wire[&quot;source_audit&quot;][&quot;counts&quot;],
+    &quot;result_parts&quot;: len(runtime_wire[&quot;result_parts&quot;])})
+assert runtime_wire[&quot;status&quot;] == &quot;COMPLETE&quot;
+del runtime_run, request, request_wire, runtime_wire
+</pre></details></section><section id="cell-31" class="markdown"><p><strong>从保存账户做评价。</strong> 下方只读取 v7 保存结果、分片和小型 profile，再消费独立保存的 CSI300 benchmark 与分红范围。原生行情和训练父件沿完整回测准入核验，此处复用正式保存结果投影。基准须覆盖账户前一 anchor 和全部 NAV 日期，并绑定执行侧 Snapshot；分红范围按 v3 绑定该账户的 account events。</p>
+<p>查看扣费总收益、最大回撤、最终 NAV、费用、基准对齐及评价的完整/部分状态。三到四周窗口的 CAGR会保留跨度不足状态；本单元的基础评价无 Sharpe 输出，后续沿正式分析评价补齐。结果是否完整取决于原输入覆盖，正常返回本身不表示整个 CaseC 通过。评价保存与实际耗时均在本次目录中。</p>
+</section><section class="example" data-cell-id="m1-account-evaluation"><details><summary>CaseC 6：保存账户评价（未执行，无新增结果）</summary><pre class="code">from axiom_engine.runtime import (load_stock_backtest_projection, BenchmarkSeries,
+    DividendScope, long_history_evaluation_spec, evaluate_backtest, save_backtest_evaluation)
+
+with measure(&quot;C.account.saved_projection&quot;):
+    projection = load_stock_backtest_projection(runtime_path,
+        artifact_reader=lambda ref: ref[&quot;manifest_uri&quot;], limits=runtime_limits)
+with measure(&quot;C.account.evaluate&quot;):
+    benchmark = BenchmarkSeries.from_dict(read_small_json(case_path(cfg[&quot;benchmark&quot;])))
+    dividend_scope = DividendScope.from_dict(read_small_json(case_path(cfg[&quot;dividend_scope&quot;])))
+    account_report = evaluate_backtest(projection, benchmark=benchmark,
+        spec=long_history_evaluation_spec(), dividend_scope=dividend_scope)
+with measure(&quot;C.account.save&quot;):
+    save_backtest_evaluation(account_report, RUN_ROOT / &quot;runtime&quot; / &quot;evaluation.json&quot;)
+account = account_report.to_dict()
+print({&quot;status&quot;: account[&quot;status&quot;], &quot;period_metrics&quot;: account[&quot;period_metrics&quot;],
+    &quot;benchmark_status&quot;: account[&quot;benchmark&quot;][&quot;status&quot;],
+    &quot;last_nav&quot;: projection.rows[&quot;nav&quot;][-1], &quot;runtime_metrics&quot;: projection.wire[&quot;metrics&quot;]})
+del projection, benchmark, dividend_scope, account_report, account
+print(&quot;本次阶段记录：&quot;, timing_path)
+</pre></details></section><section id="case-a" class="markdown"><h3>CaseA：同输入比较两份训练配置，候选待验证</h3>
+<ol>
+<li><strong>目的。</strong> 固定事实、Feature、训练 target、窗口与成熟训练键，只改变一个训练参数，比较模型/预测与真实成本。</li>
+<li><strong>当前能力。</strong> CaseC 已接同一 prepared view 和 batch 内的 fold HIT 单元，能够记录准备、训练和预测的实际次数与耗时。本页沿固定默认 LightGBM 参数。新候选已接 learning_rate 和 num_boost_round 两字段，当前只有 helper unit 结果，暂未纳入本页已验证能力。</li>
+<li><strong>差距与待接输入。</strong> Research 候选需完成真实 MISS/HIT、保存闭环及独立复审，再交接两份真实配置和正式输入。当前没有这两份配置的真实训练对照结果；这里保留验证与接入 TODO，后续沿用 CaseC 的 batch 生命周期和计时位置。</li>
+<li><strong>执行与输出要求。</strong> 对同一准备输入依次首建配置一、原配置 HIT、配置二；保存两份 Model 和原始 OOS Prediction，并核对相同训练键及预测范围。兼容的 Feature/Label/prepared 层应复用；配置变化触发新的 fit/predict。分别列首建、HIT、只改配置的次数、阶段耗时和投影成本，模型优劣由独立评价观察。</li>
+</ol>
+</section><section id="case-b" class="markdown"><h3>CaseB：固定加权组合，同一 evaluationLabel，待组合</h3>
+<ol>
+<li><strong>目的与输入。</strong> 用两组真实保存原始预测和显式固定权重生成可复用组合 Signal，再把两组原预测和组合放到同一实际可用的五交易日评价 Label 上比较。训练 target 与 evaluationLabel 各自固定，60/180 训练及 Y40/Y180待真实目标具备后接入。</li>
+<li><strong>当前能力。</strong> CaseC 展示了准确的 <code>save_stock_signal_evaluation_inputs(..., batch=batch)</code> 与 <code>evaluate_stock_signal_inputs(...)</code> 调用，已支持矩阵 OOS 输入和显式 Raw Label override；共同有效样本、各信号自然覆盖与整体 IC/RankIC 可保存复用。更换 evaluationLabel 时保留模型和预测，只重建对应冻结输入与评价。</li>
+<li><strong>差距。</strong> 通用保存组合入口仍待实现；当前矩阵准入接受正式 fold 的 <code>predictions.json</code>，组合保存件的准入也需原 owner 交接。因此本节暂不放组合执行单元。另待按年汇总、分组标签收益的正式统计入口，Notebook 沿同一入口展示结果。</li>
+<li><strong>执行与输出要求。</strong> 正式组合按同证券/session精确 join，缺输入保持 invalid；权重固定，rank/zscore 只在显式指定时调用，参考 cohort 沿预测生成时冻结。保留全部 model/fold 来源和包含变换、发布延迟的 availability。冻结比较组的评价定义/版本、日期、证券和共同成熟 mask，并另报自然覆盖；整体、按预测年份的 IC/RankIC/非年化 ICIR及分组 Label 收益分别保存。预测或 Label 缺失不会触发重新标准化、填零、ffill 或重分权。IC 提升与 Top5 扣费 NAV分别从信号和账户结果判断。</li>
+</ol>
+<p><strong>待接引用清单。</strong> 两组真实原始预测 descriptor、固定权重与显式变换定义、正式组合保存引用及准入合同、共同 Raw evaluationLabel descriptor、冻结 scope。准确调用由原 owner 提供并经独立审查后补入，继续使用 CaseC 的共享 batch与计时探针。</p>
+</section><section id="checks" class="markdown"><h3>结果记录与验收顺序</h3>
+<p>计时位置为 <code>$AXIOM_M1_ROOT/runs/&lt;本次运行&gt;/timings.jsonl</code>。每条记录包含阶段实际耗时、正式 API metrics、进程从启动起的峰值 RSS以及本阶段的块 IO 操作数变化。嵌套的 batch 生命周期耗时包含 admission、fold 和冻结子阶段，合计时只取一层。块操作数保留其原单位；实际物理字节只使用 owner 暴露的计数，尚无接口的项目注明待测。后台进程和 notebook kernel 的历史峰值会影响 RSS，最终效率验收需同环境独立进程记录。</p>
+<table>
+<thead>
+<tr>
+  <th>观察层</th>
+  <th>应看到的复用与重要指标</th>
+  <th>记录位置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Data / Feature</td>
+  <td>Data cache0；保存 Feature 只读；公共物理分区计数待 owner 暴露</td>
+  <td><code>C.prepare</code> 的实际 Data/Core/来源 metrics</td>
+</tr>
+<tr>
+  <td>Prepared</td>
+  <td>本流程 prepare一次；已有完全同定义结果可 HIT</td>
+  <td><code>C.prepare</code>，<code>cache/prepared/.../batch.json</code></td>
+</tr>
+<tr>
+  <td>Batch / fold</td>
+  <td>一个 batch；当前窗投影；同配置 HIT 零 fit/predict，仍核验保存件</td>
+  <td><code>C.batch.lifecycle</code>、各 <code>C.fold.*</code>，<code>cache/folds/...</code></td>
+</tr>
+<tr>
+  <td>信号评价</td>
+  <td>冻结 OOS 输入；相同定义统计 HIT，仍核验冻结文件</td>
+  <td><code>C.signal.*</code>，<code>cache/signal-inputs/</code>、<code>cache/signal-evaluations/</code></td>
+</tr>
+<tr>
+  <td>Runtime / 账户评价</td>
+  <td>新账户完整执行；评价复用保存结果，记录 NAV、回撤、费用、缺失状态</td>
+  <td><code>C.runtime.*</code>、<code>C.account.*</code>，本次 <code>runtime/</code></td>
+</tr>
+</tbody>
+</table>
+<p>先逐单元接 CaseC 的四折小窗口，自查成熟 mask、键、值、null、成员、时钟、排名边界和引用，再检查实际准备、投影、IO与RSS，固定补丁提交父审；整体运行及独立来源复审另行安排。本轮新增单元无输出，未声称 Notebook、训练或账户验收通过。</p>
+
+</section></main></div></body></html>

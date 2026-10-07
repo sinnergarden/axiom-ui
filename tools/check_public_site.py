@@ -1,5 +1,6 @@
 """Standard-library public artifact and relative-link checks; no Owner dependencies."""
 from html.parser import HTMLParser
+from hashlib import sha256
 from pathlib import Path
 import json,re,sys
 
@@ -35,6 +36,14 @@ def check(root):
     manifest=json.loads((root/'publication.json').read_text())
     assert manifest['authorization']=='explicit_selected_public_results'
     assert manifest['future_results_auto_published'] is False and manifest['Data_roots_current_discovery'] is False
+    tutorial=manifest.get('tutorial')
+    if tutorial:
+        assert tutorial['file']=='ml-engineering.html'
+        assert tutorial['status']=='public_unexecuted_semantic_preview'
+        assert tutorial['business_execution'] is False
+        assert re.fullmatch(r'[0-9a-f]{40}',tutorial['source_commit'])
+        assert re.fullmatch(r'sha256:[0-9a-f]{64}',tutorial['source_html_sha256'])
+        assert tutorial['excerpt']=='current_progress_workflow_and_case_c_a_b_only'
     files=list(root.rglob('*'));count=0
     for p in files:
         assert not p.is_symlink(),p
@@ -45,6 +54,10 @@ def check(root):
         if p.suffix=='.json':check_json(json.loads(text))
         if p.suffix=='.html':
             links=Links();links.feed(text)
+            if tutorial and p.name==tutorial['file']:
+                assert tutorial['public_html_sha256']=='sha256:'+sha256(p.read_bytes()).hexdigest()
+                assert not re.search(r'<(?:script|iframe|object|embed|img)\b',text,re.I)
+                assert '#section-1' not in text and 'notebooks/' not in text
             for link in links.links:
                 if link.startswith(('https://','#','mailto:')):continue
                 assert not link.startswith(('/', 'http:', 'file:')),link
@@ -77,6 +90,7 @@ def check(root):
                         assert all(str(ref[k])==str(v['run'][k]) for k in ('run_id','content_digest','committed_sequence'))
         count+=1
     expected={r['file'] for r in manifest['results']}|{'index.html','publication.json','.nojekyll'}
+    if tutorial:expected.add(tutorial['file'])
     for vendor in ('echarts.LICENSE.txt','echarts.NOTICE.txt','echarts.vendor.json'):
         if (root/vendor).exists():expected.add(vendor)
     if (root/'performance.html').exists():expected.add('performance.html')

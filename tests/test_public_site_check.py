@@ -1,4 +1,5 @@
 import importlib.util
+from hashlib import sha256
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -43,6 +44,25 @@ class PublicSiteCheckTests(unittest.TestCase):
                 text=p.read_text().replace(private,''.join('\\u'+format(ord(c),'04x') for c in private))
                 p.write_text(text)
                 with self.assertRaises(AssertionError):checker.check(root)
+
+    def test_tutorial_requires_exact_declared_static_page(self):
+        with TemporaryDirectory() as root:
+            self.bundle(root,self.wire())
+            page='<main><h1>机器学习研究</h1><p>未执行</p></main>'.encode()
+            (Path(root)/'ml-engineering.html').write_bytes(page)
+            publication=Path(root)/'publication.json'
+            manifest=json.loads(publication.read_text())
+            manifest['tutorial']={
+                'file':'ml-engineering.html','status':'public_unexecuted_semantic_preview',
+                'business_execution':False,'source_commit':'a'*40,
+                'source_html_sha256':'sha256:'+'b'*64,
+                'public_html_sha256':'sha256:'+sha256(page).hexdigest(),
+                'excerpt':'current_progress_workflow_and_case_c_a_b_only',
+            }
+            publication.write_text(json.dumps(manifest))
+            checker.check(root)
+            (Path(root)/'ml-engineering.html').write_bytes(page+b'<script>run()</script>')
+            with self.assertRaises(AssertionError):checker.check(root)
 
 
 if __name__=='__main__':unittest.main()
