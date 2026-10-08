@@ -23,18 +23,18 @@ def source(case_extra=""):
         '<nav><a href="#section-1">old result</a></nav><main>'
         '<section id="section-1">Feb5 37.72 s Top3/Top5 private result</section>'
         '<section id="section-14" class="markdown">'
-        '<h2>14. 三个小用例：从正式输入到保存结果</h2>'
-        '<p>第 1–13 节的历史回执无须加载。</p>'
-        '<a href="../docs/design/04_axiom_trade.md#stock-bounded-v7-proposal">Trade</a>'
-        '<a href="../docs/design/04_axiom_trade.md#long-history-evaluation">Evaluate</a>'
+        '<h2>14. 三个研究用例与操作入口</h2>'
+        '<a href="../docs/design/04_axiom_trade.md#backtest-shadow-parity">Trade</a>'
         + case_extra + '</section>'
-        '<section id="cell-20">generic inputs/config.json</section>'
-        '<section id="cell-22"><h3>14.1 CaseC：四折</h3></section>'
-        '<section id="cell-33"><h3>14.2 CaseA：配置</h3></section>'
-        '<section id="cell-34"><h3>14.3 CaseB：组合</h3></section>'
-        '<section id="cell-35"><h3>14.4 结果记录</h3>'
+        '<section id="cell-20"><h3>14.1 CaseA：配置</h3></section>'
+        '<section id="cell-21"><h3>14.2 CaseB：组合</h3></section>'
+        '<section id="cell-22"><h3>14.3 CaseC：四折</h3></section>'
+        '<section id="cell-23"><h3>14.4 验收顺序与结果记录</h3>'
         '<p>未执行，无新增结果。</p>'
-        '<p>小例之后沿同一实现做 M1 多年计划。</p></section>'
+        '<p>M1 的用例、正确性与性能验收全部完成后再做 M2。</p></section>'
+        '<section id="cell-24"><h3>14.5 独立 Signal 质量：全窗与按预测年份</h3></section>'
+        '<section class="example" data-cell-id="signal-eval-periods-cell">'
+        '<pre>Signal 质量：全窗与年度（未执行，无保存输出）</pre></section>'
         '</main><script>old navigation</script></body></html>'
     ).encode()
 
@@ -47,16 +47,17 @@ class PreviewTest(unittest.TestCase):
         self.assertIn('id="case-c"', text)
         self.assertIn('id="case-a"', text)
         self.assertIn('id="case-b"', text)
-        self.assertIn("505 交易日 Feature", text)
-        self.assertIn("29.43%", text)
+        self.assertIn('id="signal-quality"', text)
+        self.assertIn("真实四折预测与 Top5 账户已通过小窗口验证", text)
+        self.assertIn("五年范围尚未验收", text)
         self.assertIn("未执行，无新增结果", text)
         self.assertNotIn("Feb5", text)
         self.assertNotIn("37.72 s", text)
         self.assertNotIn("Top3/Top5", text)
-        self.assertNotIn("小例之后", text)
+        self.assertNotIn("M1 的用例、正确性", text)
         self.assertNotIn("<script", text)
         self.assertNotIn("#section-1", text)
-        self.assertNotIn("notebooks/", text)
+        self.assertIn(COMMIT + "/notebooks/ml_engineering_tutorial.ipynb", text)
         self.assertIn(COMMIT + "/docs/design/04_axiom_trade.md", text)
 
     def test_rejects_changed_source_and_private_case_material(self):
@@ -76,7 +77,8 @@ class PreviewTest(unittest.TestCase):
             site = root / "site"
             site.mkdir()
             (site / "index.html").write_text(
-                '<section><details><summary>结果口径与来源</summary></details></section>'
+                '<section id="ml-engineering-tutorial">'
+                '<a href="ml-engineering.html">阅读教程</a></section>'
             )
             (site / "etf-three-account.html").write_bytes(b"ETF FIXED")
             (site / "publication.json").write_text('{"published":true}')
@@ -89,10 +91,12 @@ class PreviewTest(unittest.TestCase):
                              (copy / "etf-three-account.html").read_bytes())
             self.assertEqual((site / "publication.json").read_bytes(),
                              (copy / "publication.json").read_bytes())
-            self.assertIn('>机器学习研究</h2>', (copy / "index.html").read_text())
-            self.assertIn('>查看流程、用例与当前进展。</p>',
-                          (copy / "index.html").read_text())
+            self.assertEqual((site / "index.html").read_bytes(),
+                             (copy / "index.html").read_bytes())
             self.assertFalse(report["published"])
+            self.assertEqual(report["source_ref"],
+                             "https://github.com/sinnergarden/axiom-docs/blob/"
+                             + COMMIT + "/notebooks/ml_engineering_tutorial.ipynb")
             self.assertTrue(json.loads((root / "preview" / "acceptance.json").read_text())
                             ["publication_unchanged"])
             with self.assertRaisesRegex(ValueError, "must be new"):

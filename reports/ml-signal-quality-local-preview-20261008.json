@@ -1,0 +1,22 @@
+{
+  "status": "PASS_LOCAL_PREVIEW_ONLY",
+  "source_ref": "https://github.com/sinnergarden/axiom-docs/blob/b639c2f954f63e6cb0af1acaf921052df9325a93/notebooks/ml_engineering_tutorial.ipynb",
+  "source_html_sha256": "sha256:c4d3d51d46d5ff603387a0413d53ec5acaaa4ed7532f2c6cedcbac0e0bf1b953",
+  "preview_html_sha256": "sha256:4f88654b6d748a9699a050b6e0cbe5727fa1ae43a0c3f14d8a73d411c346e6f8",
+  "preview_path": "preview/ml-signal-quality-20261008/site/ml-engineering.html",
+  "screenshot_path": "preview/ml-signal-quality-20261008/signal-quality.png",
+  "screenshot_sha256": "sha256:b25e5db6c9fa4305700671cc145e2280de9a9dad9773387be7bb601976474cdb",
+  "page_title": "Axiom · 机器学习研究：流程与信号质量",
+  "local_link_resolved": true,
+  "eight_page_anchors_resolved": true,
+  "fixed_docs_source_and_design_links": true,
+  "signal_quality_heading_visible_in_default_security_chrome": true,
+  "signal_quality_cell_unexecuted": true,
+  "five_year_unverified_label_visible": true,
+  "etf_source_sha256": "sha256:911de1a6652fe6a39a53b86e564ff9d670a465df325ebe47bb0d4f0416cbfc16",
+  "etf_preview_sha256": "sha256:911de1a6652fe6a39a53b86e564ff9d670a465df325ebe47bb0d4f0416cbfc16",
+  "index_unchanged": true,
+  "publication_unchanged": true,
+  "business_execution": false,
+  "published": false
+}
