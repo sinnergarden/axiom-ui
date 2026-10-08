@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .report import render_backtest_report, render_sample_report
 from .workbench import render_saved_workbench, render_sample_workbench
+from .ml_result_entry import render_empty_stock_ml_entry
 
 
 def _unique(pairs):
@@ -25,6 +26,7 @@ def main() -> None:
     labels = parser.add_mutually_exclusive_group()
     labels.add_argument("--sample", action="store_true", help="handwritten synthetic display fixture; bypasses Engine Reader")
     labels.add_argument("--synthetic", action="store_true", help="owner-saved synthetic run; validates with Engine Reader and labels synthetic")
+    labels.add_argument("--empty-stock-ml", action="store_true", help="explicit static ML result absence; opens no Owner inputs")
     parser.add_argument("--shareable", action="store_true", help="omit frozen raw inputs and complete payload from the export")
     parser.add_argument("--workbench", action="store_true", help="export the interactive, read-only workbench")
     parser.add_argument("--compare", action="append", type=Path, default=[], help="explicit saved comparison run; repeatable")
@@ -37,14 +39,21 @@ def main() -> None:
     args = parser.parse_args()
     if args.workbench and args.shareable:
         parser.error("--shareable applies to the static report; workbench exports are private local results")
-    if args.run is None and not (args.workbench and args.experiment_index and not (args.sample or args.synthetic)):
-        parser.error("a saved run or --workbench --experiment-index is required")
+    empty_conflicts = (args.run is not None or args.shareable or args.compare or args.evaluation or
+                       args.experiment or args.experiment_index or args.data_batch or args.stock_ml or
+                       args.stock_stage_report)
+    if args.empty_stock_ml and (not args.workbench or empty_conflicts):
+        parser.error("--empty-stock-ml requires --workbench and no saved inputs")
+    if args.run is None and not (args.workbench and (args.experiment_index or args.empty_stock_ml) and not (args.sample or args.synthetic)):
+        parser.error("a saved run, --workbench --experiment-index, or --workbench --empty-stock-ml is required")
     if not args.workbench and (args.compare or args.evaluation or args.experiment or args.experiment_index or args.data_batch or args.stock_ml or args.stock_stage_report):
         parser.error("comparison/evaluation/experiment inputs require --workbench")
     if args.sample and (args.compare or args.evaluation or args.experiment or args.experiment_index or args.data_batch or args.stock_ml or args.stock_stage_report):
         parser.error("synthetic UI fixtures cannot load saved owner inputs")
     try:
-        if args.workbench:
+        if args.empty_stock_ml:
+            html = render_empty_stock_ml_entry()
+        elif args.workbench:
             if args.sample:
                 run = json.loads(args.run.read_text(encoding="utf-8"), object_pairs_hook=_unique)
                 html = render_sample_workbench(run)

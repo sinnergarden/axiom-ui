@@ -44,6 +44,13 @@ def check(root):
         assert re.fullmatch(r'[0-9a-f]{40}',tutorial['source_commit'])
         assert re.fullmatch(r'sha256:[0-9a-f]{64}',tutorial['source_html_sha256'])
         assert tutorial['excerpt']=='current_progress_workflow_and_case_c_a_b_only'
+    ml_result_entry=manifest.get('ml_result_entry')
+    if ml_result_entry:
+        assert set(ml_result_entry)=={'file','status','public_html_sha256','research_index_bound','business_execution'}
+        assert ml_result_entry['file']=='ml-results.html'
+        assert ml_result_entry['status']=='NO_SAVED_RESEARCH_REGISTRATION'
+        assert ml_result_entry['research_index_bound'] is False and ml_result_entry['business_execution'] is False
+        assert ml_result_entry['file'] not in {r['file'] for r in manifest['results']}
     files=list(root.rglob('*'));count=0
     for p in files:
         assert not p.is_symlink(),p
@@ -58,6 +65,10 @@ def check(root):
                 assert tutorial['public_html_sha256']=='sha256:'+sha256(p.read_bytes()).hexdigest()
                 assert not re.search(r'<(?:script|iframe|object|embed|img)\b',text,re.I)
                 assert '#section-1' not in text and 'notebooks/' not in text
+            if ml_result_entry and p.name==ml_result_entry['file']:
+                assert ml_result_entry['public_html_sha256']=='sha256:'+sha256(p.read_bytes()).hexdigest()
+                assert 'id="empty-stock-ml-result"' in text and '尚无可展示的保存结果' in text
+                assert not re.search(r'<(?:script|iframe|object|embed|img)\b',text,re.I)
             for link in links.links:
                 if link.startswith(('https://','#','mailto:')):continue
                 assert not link.startswith(('/', 'http:', 'file:')),link
@@ -91,6 +102,7 @@ def check(root):
         count+=1
     expected={r['file'] for r in manifest['results']}|{'index.html','publication.json','.nojekyll'}
     if tutorial:expected.add(tutorial['file'])
+    if ml_result_entry:expected.add(ml_result_entry['file'])
     for vendor in ('echarts.LICENSE.txt','echarts.NOTICE.txt','echarts.vendor.json'):
         if (root/vendor).exists():expected.add(vendor)
     if (root/'performance.html').exists():expected.add('performance.html')

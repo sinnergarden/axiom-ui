@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from axiom_ui import render_empty_stock_ml_entry
 
 spec=importlib.util.spec_from_file_location('public_site_check',Path(__file__).parents[1]/'tools/check_public_site.py')
 checker=importlib.util.module_from_spec(spec);spec.loader.exec_module(checker)
@@ -62,6 +63,28 @@ class PublicSiteCheckTests(unittest.TestCase):
             publication.write_text(json.dumps(manifest))
             checker.check(root)
             (Path(root)/'ml-engineering.html').write_bytes(page+b'<script>run()</script>')
+            with self.assertRaises(AssertionError):checker.check(root)
+
+    def test_empty_ml_entry_is_explicit_and_digest_bound(self):
+        with TemporaryDirectory() as root:
+            self.bundle(root,self.wire())
+            root=Path(root)
+            tutorial='<main><h1>机器学习研究</h1></main>'.encode()
+            (root/'ml-engineering.html').write_bytes(tutorial)
+            empty=render_empty_stock_ml_entry().encode()
+            (root/'ml-results.html').write_bytes(empty)
+            (root/'index.html').write_text('<a href="result.html">Saved account</a><a href="ml-results.html">ML result</a>')
+            manifest=json.loads((root/'publication.json').read_text())
+            manifest['tutorial']={'file':'ml-engineering.html','status':'public_unexecuted_semantic_preview',
+                'business_execution':False,'source_commit':'a'*40,'source_html_sha256':'sha256:'+'b'*64,
+                'public_html_sha256':'sha256:'+sha256(tutorial).hexdigest(),
+                'excerpt':'current_progress_workflow_and_case_c_a_b_only'}
+            manifest['ml_result_entry']={'file':'ml-results.html','status':'NO_SAVED_RESEARCH_REGISTRATION',
+                'public_html_sha256':'sha256:'+sha256(empty).hexdigest(),
+                'research_index_bound':False,'business_execution':False}
+            (root/'publication.json').write_text(json.dumps(manifest))
+            checker.check(root)
+            (root/'ml-results.html').write_bytes(empty+b'<script>run()</script>')
             with self.assertRaises(AssertionError):checker.check(root)
 
 

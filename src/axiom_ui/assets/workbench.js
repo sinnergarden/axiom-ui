@@ -114,6 +114,12 @@
     for (const status of statuses) option($('status-filter'), status, statusLabel(status));
     const tags = new Set(views.flatMap(v => v.research?.tags || []));
     for (const tag of tags) option($('tag-filter'), tag, tag);
+    const organization=$('run-organization-filter');
+    for(const key of ['favorite','shelved']){
+      if(!views.some(v=>v.research?.[key]===true))organization.querySelector('option[value="'+key+'"]').remove();
+    }
+    organization.hidden=organization.options.length===1;
+    if(organization.hidden)$('navigation-filter-label').textContent='状态 / 标签';
   }
   function renderTree() {
     const tree = clear('run-tree');

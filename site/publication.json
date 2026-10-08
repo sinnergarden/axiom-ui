@@ -1,6 +1,6 @@
 {
   "contract_version": "public_static_site_v1",
-  "generated_at": "2026-10-06T00:00:00Z",
+  "generated_at": "2026-10-08T02:51:37Z",
   "authorization": "explicit_selected_public_results",
   "selection_note": "Three explicitly authorized saved ETF simulations, each with CNY 500,000 initial capital: rotation at 0 bps and 5 bps, and 513100 buy-and-hold at 5 bps. No future result is auto-published.",
   "results": [
@@ -47,6 +47,13 @@
     "source_html_sha256": "sha256:6abdceda59451e0788d83225668c6b9382e8c9361b50d1657380ddd8bae70799",
     "public_html_sha256": "sha256:005936b3a701a802f2801dd317460156054629b8e579d69753ae66773cca04b7",
     "excerpt": "current_progress_workflow_and_case_c_a_b_only",
+    "business_execution": false
+  },
+  "ml_result_entry": {
+    "file": "ml-results.html",
+    "status": "NO_SAVED_RESEARCH_REGISTRATION",
+    "public_html_sha256": "sha256:fd9131e69c23c2f1dd1d42b6787670404bf5f2813fd5e947b0f782e898560088",
+    "research_index_bound": false,
     "business_execution": false
   },
   "performance_refs": {},
