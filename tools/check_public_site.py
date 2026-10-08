@@ -67,7 +67,7 @@ def check(root):
                 assert '#section-1' not in text and 'notebooks/' not in text
             if ml_result_entry and p.name==ml_result_entry['file']:
                 assert ml_result_entry['public_html_sha256']=='sha256:'+sha256(p.read_bytes()).hexdigest()
-                assert 'id="empty-stock-ml-result"' in text and '尚无可展示的保存结果' in text
+                assert 'id="empty-stock-ml-result"' in text and '结果准备中' in text
                 assert not re.search(r'<(?:script|iframe|object|embed|img)\b',text,re.I)
             for link in links.links:
                 if link.startswith(('https://','#','mailto:')):continue
