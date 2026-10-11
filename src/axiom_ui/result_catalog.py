@@ -268,30 +268,37 @@ def _artifact_summary(ref: dict, roots: Mapping[str, Path], *, engine_limits: di
                 "artifact_id": ref.get("artifact_id"), "reason": type(exc).__name__}
 
 
-def _account_bindings(manifest: dict, summaries: Mapping[str, dict]) -> None:
-    for account in manifest.get("accounts") or []:
+def _account_bindings(manifest: dict, summaries: Mapping[str, dict]) -> set[int]:
+    invalid = set()
+    for index, account in enumerate(manifest.get("accounts") or []):
         backtest = account.get("backtest_ref")
         if backtest is None:
             continue
-        key = backtest.get("artifact_key")
-        report = summaries.get(key)
-        if report and report.get("availability") == "VERIFIED":
-            _require(all(report.get(field) == backtest.get(reference) for field, reference in
-                         (("artifact_id", "run_id"), ("content_digest", "content_digest"),
-                          ("committed_sequence", "committed_sequence"))),
-                     "account BacktestRun identity mismatch")
-        expected = {field: backtest.get(field) for field in
-                    ("run_id", "content_digest", "committed_sequence")}
-        for evaluation in account.get("evaluation_refs") or []:
-            _require(evaluation.get("input_run_ref") == expected,
-                     "account evaluation is bound to another run")
-            saved = summaries.get(evaluation.get("artifact_key"))
-            if saved and saved.get("availability") == "VERIFIED":
-                _require(saved.get("artifact_id") == evaluation.get("evaluation_ref") and
-                         saved.get("input_run_ref") == expected and
-                         all(saved.get(field) == report.get(field) for field in
-                             ("signal_ref", "market_ref", "profile_ref")),
-                         "loaded account evaluation identity mismatch")
+        try:
+            report = summaries.get(backtest.get("artifact_key")) or {}
+            run_verified = report.get("availability") == "VERIFIED"
+            if run_verified:
+                _require(all(report.get(field) == backtest.get(reference) for field, reference in
+                             (("artifact_id", "run_id"), ("content_digest", "content_digest"),
+                              ("committed_sequence", "committed_sequence"))),
+                         "account BacktestRun identity mismatch")
+            expected = {field: backtest.get(field) for field in
+                        ("run_id", "content_digest", "committed_sequence")}
+            for evaluation in account.get("evaluation_refs") or []:
+                _require(evaluation.get("input_run_ref") == expected,
+                         "account evaluation is bound to another run")
+                saved = summaries.get(evaluation.get("artifact_key")) or {}
+                if saved.get("availability") == "VERIFIED":
+                    _require(saved.get("artifact_id") == evaluation.get("evaluation_ref") and
+                             saved.get("input_run_ref") == expected,
+                             "loaded account evaluation identity mismatch")
+                    if run_verified:
+                        _require(all(saved.get(field) == report.get(field) for field in
+                                     ("signal_ref", "market_ref", "profile_ref")),
+                                 "loaded account evaluation input refs mismatch")
+        except ResultCatalogError:
+            invalid.add(index)
+    return invalid
 
 
 def _page(title: str, body: str, *, local_form: bool = False) -> str:
@@ -328,15 +335,7 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
     refs = {ref["artifact_key"]: ref for ref in manifest["artifacts"]}
     summaries = {key: _artifact_summary(ref, roots, engine_limits=engine_limits)
                  for key, ref in refs.items()}
-    try:
-        _account_bindings(manifest, summaries)
-    except ResultCatalogError:
-        for account in manifest.get("accounts") or []:
-            linked = [account.get("backtest_ref"), *(account.get("evaluation_refs") or [])]
-            for item in linked:
-                if type(item) is dict and item.get("artifact_key") in summaries:
-                    summaries[item["artifact_key"]] = {
-                        "availability": "UNAVAILABLE", "reason": "CONTEXT_MISMATCH"}
+    invalid_accounts = _account_bindings(manifest, summaries)
     folds = manifest.get("folds") or []
     pieces.append('<section><h2>训练折（' + str(len(folds)) + '）</h2>' +
                   ('<ul>' + ''.join('<li>Fold <code>' + _text(_short(row.get("fold_ref"))) +
@@ -369,9 +368,10 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
                   (''.join(signal_cards) if signal_cards else '<section>未登记</section>'))
     accounts = manifest.get("accounts") or []
     account_cards = []
-    for account in accounts:
+    for index, account in enumerate(accounts):
         backtest = account.get("backtest_ref") or {}
-        run = summaries.get(backtest.get("artifact_key")) or {}
+        run = ({"availability": "UNAVAILABLE", "reason": "CONTEXT_MISMATCH"}
+               if index in invalid_accounts else summaries.get(backtest.get("artifact_key")) or {})
         metrics = run.get("metrics") or {}
         label = _strategy_label(run.get("strategy_spec"), account.get("strategy_ref"))
         values = _metrics([
@@ -410,12 +410,15 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
     pieces.append('<section><h2>保存产物与完整引用</h2><ul>' + ''.join(
         '<li><details><summary>' + _text(ref["artifact_type"]) + ' · ' +
         _text(summaries[key]["availability"]) + '</summary><pre>' +
-        _text(json.dumps({"reference": ref, "owner_summary": summaries[key]},
+        _text(json.dumps({"reference": ref, "owner_summary": {
+            name: value for name, value in summaries[key].items() if name not in
+            {"metrics", "period_metrics", "final_nav_minor"}}},
                          ensure_ascii=False, indent=2)) + '</pre></details></li>'
         for key, ref in refs.items()) + '</ul></section>')
-    verified_runs = {summary["artifact_id"] for summary in summaries.values()
-                     if summary.get("artifact_type") == "BacktestRun" and
-                     summary.get("availability") == "VERIFIED"}
+    verified_runs = {summaries[account["backtest_ref"]["artifact_key"]]["artifact_id"]
+                     for index, account in enumerate(accounts) if index not in invalid_accounts and
+                     type(account.get("backtest_ref")) is dict and
+                     summaries.get(account["backtest_ref"]["artifact_key"], {}).get("availability") == "VERIFIED"}
     return _page(title, ''.join(pieces)), verified_runs
 
 

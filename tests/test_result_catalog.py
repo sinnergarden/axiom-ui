@@ -227,7 +227,16 @@ class CatalogTest(TestCase):
         mismatched = Path(self.refresh(open_id=first_head["result_id"])["output_file"]).read_text()
         self.assertIn("CONTEXT_MISMATCH", mismatched)
         self.assertNotIn("10%", mismatched)
+        self.assertIn("5%", mismatched)
         self.eval_wire["market_ref"] = self.market_ref
+        (self.engine / "run.json").unlink()
+        missing_run = Path(self.refresh(open_id=first_head["result_id"])["output_file"]).read_text()
+        self.assertIn("账户保存件未提供", missing_run)
+        self.assertNotIn("CONTEXT_MISMATCH", missing_run)
+        self.assertNotIn("10%", missing_run)
+        self.assertIn("5%", missing_run)
+        self.assertIn("保存账户或评价不可用，指标暂不展示", missing_run)
+        (self.engine / "run.json").write_text("{}")
         second = self.refresh()
         self.assertEqual(first["index_sha256"], second["index_sha256"])
         self.heads[0]["revision"] = 1
