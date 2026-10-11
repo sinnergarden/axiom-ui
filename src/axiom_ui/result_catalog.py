@@ -384,6 +384,10 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
         evaluations = []
         for item in account.get("evaluation_refs") or []:
             report = summaries.get(item.get("artifact_key")) or {}
+            if run.get("availability") != "VERIFIED" or report.get("availability") != "VERIFIED":
+                evaluations.append('<p>评价 ' + _text(_short(item.get("evaluation_ref"))) +
+                                   ' · 保存账户或评价不可用，指标暂不展示</p>')
+                continue
             period = report.get("period_metrics") or {}
             leg = period.get("account") or {}
             evaluations.append('<p>评价 ' + _text(_short(item.get("evaluation_ref"))) +
