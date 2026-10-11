@@ -34,7 +34,48 @@ def main() -> None:
     parser.add_argument("--stock-ml", action="append", type=Path, default=[], help="explicit saved stock ML directory via Research public Readers")
     parser.add_argument("--stock-stage-report", action="append", type=Path, default=[], help="explicit saved stage report via Research public Reader; requires --stock-ml")
     parser.add_argument("--data-batch", action="append", default=[], metavar="RUN_ID=PATH", help="explicit saved DataBatch public response; no Data query")
+    parser.add_argument("--refresh-results", action="store_true", help="refresh the private Research v2 result catalog")
+    parser.add_argument("--open-result", help="read one registered result detail after a list refresh")
+    parser.add_argument("--workspace-config", type=Path, help="private JSON with research_root and engine_root")
+    parser.add_argument("--research-root", type=Path, help="trusted Research root containing index.json")
+    parser.add_argument("--engine-root", type=Path, help="trusted Engine artifact root")
     args = parser.parse_args()
+    if args.refresh_results or args.open_result is not None:
+        if (args.refresh_results and args.open_result is not None) or (
+                args.workspace_config is not None and
+                (args.research_root is not None or args.engine_root is not None)) or (
+                args.workspace_config is None and
+                (args.research_root is None or args.engine_root is None)) or (
+                args.run is not None or
+                args.workbench or args.sample or args.synthetic or
+                args.shareable or args.compare or args.evaluation or args.experiment or
+                args.experiment_index or args.stock_ml or args.stock_stage_report or args.data_batch):
+            parser.error("result catalog requires one action, trusted roots and --output DIR")
+        try:
+            from .result_catalog import refresh_result_catalog, open_result_detail
+            if args.workspace_config is not None:
+                config = json.loads(args.workspace_config.read_text(encoding="utf-8"),
+                                    object_pairs_hook=_unique)
+                if type(config) is not dict or set(config) != {"research_root", "engine_root"}:
+                    raise ValueError("workspace config needs only research_root and engine_root")
+                research_root, engine_root = config["research_root"], config["engine_root"]
+            else:
+                research_root, engine_root = args.research_root, args.engine_root
+            if args.refresh_results:
+                refreshed = refresh_result_catalog(research_root=research_root,
+                                                   engine_root=engine_root,
+                                                   output_dir=args.output)
+                result_path = refreshed["output_dir"]
+            else:
+                opened = open_result_detail(research_root=research_root, engine_root=engine_root,
+                                            output_dir=args.output, result_id=args.open_result)
+                result_path = opened["output_file"]
+        except (OSError, ValueError, ImportError) as exc:
+            parser.exit(2, f"Axiom results: {exc}\n")
+        print(result_path)
+        return
+    if args.research_root is not None or args.engine_root is not None or args.workspace_config is not None:
+        parser.error("trusted roots require --refresh-results or --open-result")
     if args.workbench and args.shareable:
         parser.error("--shareable applies to the static report; workbench exports are private local results")
     if args.run is None and not (args.workbench and args.experiment_index and not (args.sample or args.synthetic)):
