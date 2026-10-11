@@ -61,15 +61,19 @@ def main() -> None:
             if args.workspace_config is not None:
                 config = json.loads(args.workspace_config.read_text(encoding="utf-8"),
                                     object_pairs_hook=_unique)
-                if type(config) is not dict or set(config) != {"research_root", "engine_root"}:
-                    raise ValueError("workspace config needs only research_root and engine_root")
+                if (type(config) is not dict or
+                        not {"research_root", "engine_root"} <= set(config) or
+                        not set(config) <= {"research_root", "engine_root", "engine_limits"}):
+                    raise ValueError("workspace config needs trusted roots and optional engine_limits")
                 research_root, engine_root = config["research_root"], config["engine_root"]
+                engine_limits = config.get("engine_limits")
             else:
                 research_root, engine_root = args.research_root, args.engine_root
+                engine_limits = None
             if args.serve_results:
                 from .result_server import serve_result_catalog
                 serve_result_catalog(research_root=research_root, engine_root=engine_root,
-                                     port=args.port)
+                                     engine_limits=engine_limits, port=args.port)
                 return
             if args.refresh_results:
                 refreshed = refresh_result_catalog(research_root=research_root,
@@ -78,7 +82,8 @@ def main() -> None:
                 result_path = refreshed["output_dir"]
             else:
                 opened = open_result_detail(research_root=research_root, engine_root=engine_root,
-                                            output_dir=args.output, result_id=args.open_result)
+                                            output_dir=args.output, result_id=args.open_result,
+                                            engine_limits=engine_limits)
                 result_path = opened["output_file"]
         except (OSError, ValueError, ImportError) as exc:
             parser.exit(2, f"Axiom results: {exc}\n")

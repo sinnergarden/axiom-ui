@@ -9,6 +9,14 @@ Once Research has published an `experiment_index_v2` through its public
 {"research_root":"/private/research-artifacts","engine_root":"/private/engine-artifacts"}
 ```
 
+For larger v7/v8 saved accounts, the same private config may also contain
+`engine_limits`: the complete positive budget object accepted by Engine's
+`validate_limits` and supplied with the owner handoff. Without it, this UI uses
+the explicit bounded defaults in `STOCK_LIMITS` (64 MiB per decoded block,
+8 MiB per result part, 512 MiB total). A result above those budgets is shown
+unavailable until a suitable owner-approved budget is configured; it is never
+treated as an empty account.
+
 Start a temporary local browser. Its index page has a refresh button; clicking
 one result reads only that saved result. Stop it with Ctrl-C. It binds only to
 `127.0.0.1`, uses no polling, and never writes an owner result:

@@ -11,11 +11,13 @@ from .result_catalog import LocalResultCatalog, ResultCatalogError, _page
 RESULT_ROUTE = re.compile(r"/result/([0-9a-f]{64})\Z")
 
 
-def build_result_server(*, research_root, engine_root, port: int = 0) -> HTTPServer:
+def build_result_server(*, research_root, engine_root, engine_limits=None,
+                        port: int = 0) -> HTTPServer:
     """Return a server bound only to IPv4 loopback; caller owns its lifetime."""
     if type(port) is not int or not 0 <= port <= 65535:
         raise ValueError("invalid loopback port")
-    catalog = LocalResultCatalog(research_root=research_root, engine_root=engine_root)
+    catalog = LocalResultCatalog(research_root=research_root, engine_root=engine_root,
+                                 engine_limits=engine_limits)
 
     class Handler(BaseHTTPRequestHandler):
         def _allowed_host(self):
@@ -77,9 +79,10 @@ def build_result_server(*, research_root, engine_root, port: int = 0) -> HTTPSer
     return HTTPServer(("127.0.0.1", port), Handler)
 
 
-def serve_result_catalog(*, research_root, engine_root, port: int = 0) -> None:
+def serve_result_catalog(*, research_root, engine_root, engine_limits=None,
+                         port: int = 0) -> None:
     with build_result_server(research_root=research_root, engine_root=engine_root,
-                             port=port) as server:
+                             engine_limits=engine_limits, port=port) as server:
         print(f"http://127.0.0.1:{server.server_port}/", flush=True)
         try:
             server.serve_forever()

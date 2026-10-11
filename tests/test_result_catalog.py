@@ -11,7 +11,8 @@ import sys
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from axiom_ui.result_catalog import (ResultCatalogError, _engine_nested_artifact,
+from axiom_ui.result_catalog import (STOCK_LIMITS, ResultCatalogError, _engine_limits,
+                                     _engine_nested_artifact,
                                      _relative_file, open_result_detail, refresh_result_catalog)
 from axiom_ui.__main__ import main
 from axiom_ui.result_server import build_result_server
@@ -42,17 +43,39 @@ class CatalogTest(TestCase):
         self.run2_digest = digest("second run content")
         self.run2_ref = {"run_id": self.run2_id, "content_digest": self.run2_digest,
                          "committed_sequence": 9}
+        self.shared_signal = digest("shared-signal")
+        self.signal_input = digest("engine-prediction-input")
+        self.market_ref = digest("market")
+        self.profile_ref = digest("profile")
+        self.signal_eval_id = digest("signal-evaluation")
+        self.signal_eval_digest = digest("signal-evaluation-content")
         self.run_wire = {"contract_version": "backtest_run_v8", "run_id": self.run_id,
                          "content_digest": self.run_digest,
-                         "committed_sequence": 7, "status": "COMPLETE", "metrics": {"total_return": "0.1"}}
+                         "committed_sequence": 7, "status": "COMPLETE",
+                         "signal_ref": self.signal_input, "market_ref": self.market_ref,
+                         "profile_ref": self.profile_ref,
+                         "request_manifest": {"portfolio_policy": {"strategy_spec": {
+                             "selection": "top_k", "top_k": 5}}},
+                         "metrics": {"total_return": "0.1", "max_drawdown": "-0.05",
+                                     "total_fees_minor": 123}}
         self.eval_wire = {"contract_version": "evaluation_report_v3",
                           "evaluation_ref": self.eval_id, "content_digest": self.eval_digest,
                           "status": "COMPLETE", "input_run_ref": self.run_ref,
-                          "period_metrics": {"window": {"status": "INSUFFICIENT_SPAN"}}}
+                          "signal_ref": self.signal_input, "market_ref": self.market_ref,
+                          "profile_ref": self.profile_ref,
+                          "period_metrics": {"account": {"cagr": None,
+                                                         "cagr_reason": "INSUFFICIENT_SPAN"}}}
+        self.signal_eval_wire = {"contract_version": "stock_signal_evidence_v8",
+                                 "evidence_ref": self.signal_eval_id,
+                                 "content_digest": self.signal_eval_digest,
+                                 "status": "COMPLETE", "summary": {"mean_ic": "0.03",
+                                 "mean_rank_ic": "0.04", "valid_ic_session_count": 10,
+                                 "valid_rank_ic_session_count": 9}}
         self.manifests = {}
         self.heads = []
         self.owner_calls = []
         self.result_calls = []
+        self.signal_calls = []
 
     def artifact(self, key, kind, identity, content, filename, contract="v1"):
         (self.engine / filename).write_text("{}")
@@ -102,6 +125,10 @@ class CatalogTest(TestCase):
 
         research = ModuleType("axiom_research")
         research.ExperimentReader = Reader
+        def signal_loader(path, *, research_root):
+            outer.signal_calls.append((path, research_root))
+            return outer.signal_eval_wire
+        research.load_stock_signal_evaluation = signal_loader
         engine = ModuleType("axiom_engine")
         runtime = ModuleType("axiom_engine.runtime")
 
@@ -111,7 +138,14 @@ class CatalogTest(TestCase):
             wire = (outer.run_wire if path.name == "run.json" else
                     {"contract_version": "backtest_run_v8", "run_id": outer.run2_id,
                      "content_digest": outer.run2_digest,
-                     "committed_sequence": 9, "status": "COMPLETE", "metrics": {"total_return": "0.05"}})
+                     "committed_sequence": 9, "status": "COMPLETE",
+                     "signal_ref": outer.signal_input, "market_ref": outer.market_ref,
+                     "profile_ref": outer.profile_ref,
+                     "request_manifest": {"portfolio_policy": {"strategy_spec": {
+                         "selection": "rank_buffer", "top_k": 5,
+                         "rank_buffer": {"keep_rank": 10}}}},
+                     "metrics": {"total_return": "0.05", "max_drawdown": "-0.02",
+                                 "total_fees_minor": 456}})
             return SimpleNamespace(wire=wire, rows={"nav": [{"nav_minor": 110000}]})
 
         def evaluation_loader(path):
@@ -137,19 +171,29 @@ class CatalogTest(TestCase):
                              "run-b.json", "backtest_run_v8")
         report = self.artifact("eval-a", "BacktestEvaluation", self.eval_id,
                                self.eval_digest, "eval.json", "evaluation_report_v3")
-        account = {"strategy_ref": "strategy-a", "status": "COMPLETE", "reason": None,
+        (self.research / "signal-eval.json").write_text("{}")
+        signal_eval = {"artifact_key": "signal-eval", "owner": "Research",
+                       "artifact_type": "StockSignalEvaluation",
+                       "artifact_id": self.signal_eval_id,
+                       "artifact_contract_version": "stock_signal_evidence_v8",
+                       "content_digest": self.signal_eval_digest,
+                       "root_id": "research", "relative_path": "signal-eval.json"}
+        account = {"strategy_ref": digest("strategy-a"), "signal_run_ref": self.shared_signal,
+                   "status": "COMPLETE", "reason": None,
                    "backtest_ref": {"artifact_key": "run-a", **self.run_ref},
                    "evaluation_refs": [{"artifact_key": "eval-a", "evaluation_ref": self.eval_id,
                                         "content_digest": self.eval_digest,
                                         "input_run_ref": self.run_ref}]}
-        account2 = {"strategy_ref": "strategy-b", "status": "COMPLETE", "reason": None,
+        account2 = {"strategy_ref": digest("strategy-b"), "signal_run_ref": self.shared_signal,
+                    "status": "COMPLETE", "reason": None,
                     "backtest_ref": {"artifact_key": "run-b", **self.run2_ref},
                     "evaluation_refs": []}
         first_head = self.add("r1", "q1", "v1", accounts=[account, account2],
-                 artifacts=[run, run2, report], signals=[{"signal_run_ref": digest("signal-a"),
-                                                   "status": "COMPLETE"},
-                                                  {"signal_run_ref": digest("signal-b"),
-                                                   "status": "COMPLETE"}])
+                 artifacts=[run, run2, report, signal_eval],
+                 signals=[{"signal_run_ref": self.shared_signal, "status": "COMPLETE",
+                           "evaluation_artifact_keys": ["signal-eval"]},
+                          {"signal_run_ref": digest("signal-b"), "status": "PARTIAL",
+                           "reason": "评价未提供", "evaluation_artifact_keys": []}])
         self.add("r2", "q1", "v2", status="PARTIAL", reason="评价未齐")
         self.add("r3", "q2", "v3", status="BLOCKED", reason="输入不足")
         first = self.refresh()
@@ -167,7 +211,23 @@ class CatalogTest(TestCase):
         self.assertEqual((opened["availability"], opened["verified_saved_backtest_count"]),
                          ("MANIFEST_VERIFIED", 2))
         self.assertEqual(len(self.owner_calls), 3)
+        self.assertEqual(len(self.signal_calls), 1)
+        self.assertEqual(self.signal_calls[0][1], self.research.resolve())
+        detail = Path(opened["output_file"]).read_text()
+        self.assertIn("策略：top_k · Top 5", detail)
+        self.assertIn("策略：rank_buffer · Top 5 · keep_rank 10", detail)
+        self.assertGreaterEqual(detail.count(self.shared_signal), 3)
+        self.assertIn("累计收益 · 原回测", detail)
+        self.assertIn("10%", detail)
+        self.assertIn("平均 IC", detail)
+        self.assertIn("0.03", detail)
+        self.assertIn("INSUFFICIENT_SPAN", detail)
         self.assertEqual(self.result_calls, [first_head["result_id"]])
+        self.eval_wire["market_ref"] = digest("other-market")
+        mismatched = Path(self.refresh(open_id=first_head["result_id"])["output_file"]).read_text()
+        self.assertIn("CONTEXT_MISMATCH", mismatched)
+        self.assertNotIn("10%", mismatched)
+        self.eval_wire["market_ref"] = self.market_ref
         second = self.refresh()
         self.assertEqual(first["index_sha256"], second["index_sha256"])
         self.heads[0]["revision"] = 1
@@ -222,7 +282,8 @@ class CatalogTest(TestCase):
     def test_cli_uses_one_private_root_config_for_both_actions(self):
         config = self.root / "roots.json"
         config.write_text(json.dumps({"research_root": str(self.research),
-                                      "engine_root": str(self.engine)}))
+                                      "engine_root": str(self.engine),
+                                      "engine_limits": dict(STOCK_LIMITS)}))
         with patch.object(sys, "argv", ["axiom-ui", "--refresh-results", "--workspace-config",
                                         str(config), "--output", str(self.output)]), \
              patch("axiom_ui.result_catalog.refresh_result_catalog",
@@ -237,11 +298,14 @@ class CatalogTest(TestCase):
              patch("builtins.print"):
             main()
         self.assertEqual(opened.call_args.kwargs["result_id"], digest("r1"))
+        self.assertEqual(opened.call_args.kwargs["engine_limits"], STOCK_LIMITS)
         with patch.object(sys, "argv", ["axiom-ui", "--serve-results", "--workspace-config",
                                         str(config)]), \
              patch("axiom_ui.result_server.serve_result_catalog") as serve:
             main()
         self.assertEqual(serve.call_args.kwargs["research_root"], str(self.research))
+        with self.assertRaises(ResultCatalogError):
+            _engine_limits({"max_result_bytes": 100})
 
     def test_loopback_click_reads_only_selected_result_and_refreshes(self):
         first = self.add("r1", "q1", "v1")

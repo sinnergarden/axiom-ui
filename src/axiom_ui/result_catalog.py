@@ -6,6 +6,7 @@ directory or interprets a manifest-supplied loader name as executable code.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal, localcontext
 from hashlib import sha256
 from html import escape
 import json
@@ -68,11 +69,73 @@ def _value(value: Any) -> str:
     return _text(value)
 
 
+def _short(value: Any) -> str:
+    return str(value)[7:19] if type(value) is str and value.startswith("sha256:") else str(value)
+
+
+def _percent(value: Any) -> str:
+    if value is None:
+        return "未提供（Owner 值为空）"
+    try:
+        with localcontext() as context:
+            context.prec = 100
+            shown = format(Decimal(str(value)) * 100, "f")
+            return _text((shown.rstrip("0").rstrip(".") if "." in shown else shown) + "%")
+    except (ArithmeticError, ValueError):
+        return _text(value)
+
+
+def _money(value: Any) -> str:
+    if type(value) is not int:
+        return "未提供（Owner 值为空）"
+    sign = "-" if value < 0 else ""
+    major, minor = divmod(abs(value), 100)
+    return f"{sign}{major:,}.{minor:02d} 元"
+
+
+def _metrics(rows: list[tuple[str, str]]) -> str:
+    return '<table class="metrics"><tbody>' + ''.join(
+        '<tr><th scope="row">' + _text(label) + '</th><td>' + value + '</td></tr>'
+        for label, value in rows) + '</tbody></table>'
+
+
+def _strategy_label(spec: Any, strategy_ref: Any) -> str:
+    if type(spec) is not dict:
+        return "策略 " + _short(strategy_ref)
+    parts = [str(spec.get("selection") or "策略")]
+    if type(spec.get("top_k")) is int:
+        parts.append("Top " + str(spec["top_k"]))
+    buffer = spec.get("rank_buffer")
+    if type(buffer) is dict and type(buffer.get("keep_rank")) is int:
+        parts.append("keep_rank " + str(buffer["keep_rank"]))
+    if spec.get("exit_overlay") is not None:
+        parts.append("含退出规则")
+    return " · ".join(parts)
+
+
+def _signal_stat(value: Any, valid_count: Any) -> str:
+    if value is None:
+        reason = ("有效日 " + str(valid_count) if valid_count is not None
+                  else "Owner 值为空")
+        return "未提供（" + _text(reason) + "）"
+    return _text(value) + ("（有效日 " + _text(valid_count) + "）"
+                           if valid_count is not None else "")
+
+
 def _root_map(research_root: str | Path, engine_root: str | Path) -> dict[str, Path]:
     roots = {"research": Path(research_root).resolve(strict=True),
              "engine": Path(engine_root).resolve(strict=True)}
     _require(all(path.is_dir() for path in roots.values()), "trusted roots must be directories")
     return roots
+
+
+def _engine_limits(value: dict | None) -> dict:
+    if value is None:
+        return dict(STOCK_LIMITS)
+    _require(type(value) is dict and set(value) == set(STOCK_LIMITS) and
+             all(type(item) is int and item > 0 for item in value.values()),
+             "engine_limits needs the complete positive Engine budget")
+    return dict(value)
 
 
 def _relative_file(ref: Mapping[str, Any], roots: Mapping[str, Path]) -> Path:
@@ -110,7 +173,7 @@ def _engine_nested_artifact(ref: dict, root: Path) -> Path:
     return resolved
 
 
-def _artifact_summary(ref: dict, roots: Mapping[str, Path]) -> dict:
+def _artifact_summary(ref: dict, roots: Mapping[str, Path], *, engine_limits: dict | None = None) -> dict:
     """Only fixed owner readers may supply values beyond the manifest."""
     kind = ref["artifact_type"]
     if kind not in {"BacktestRun", "BacktestEvaluation", "StockSignalEvaluation",
@@ -145,7 +208,7 @@ def _artifact_summary(ref: dict, roots: Mapping[str, Path]) -> dict:
                 from axiom_engine.runtime import load_stock_backtest_projection
                 saved = load_stock_backtest_projection(
                     path, artifact_reader=lambda nested: _engine_nested_artifact(
-                        nested, roots["engine"]), limits=STOCK_LIMITS)
+                        nested, roots["engine"]), limits=engine_limits or STOCK_LIMITS)
                 wire = saved.wire
                 nav = saved.rows["nav"]
             else:
@@ -164,6 +227,10 @@ def _artifact_summary(ref: dict, roots: Mapping[str, Path]) -> dict:
                     "artifact_id": wire["run_id"], "status": wire.get("status"),
                     "content_digest": wire["content_digest"],
                     "committed_sequence": wire.get("committed_sequence"),
+                    **{field: wire.get(field) for field in
+                       ("signal_ref", "market_ref", "profile_ref")},
+                    "strategy_spec": (wire.get("request_manifest", {}).get("portfolio_policy", {})
+                                      .get("strategy_spec")),
                     "final_nav_minor": nav[-1].get("nav_minor") if nav else None,
                     "metrics": wire.get("metrics")}
         if kind == "BacktestEvaluation":
@@ -176,9 +243,11 @@ def _artifact_summary(ref: dict, roots: Mapping[str, Path]) -> dict:
             return {"availability": "VERIFIED", "artifact_type": kind,
                     "artifact_id": wire["evaluation_ref"], "status": wire.get("status"),
                     "input_run_ref": wire.get("input_run_ref"),
+                    **{field: wire.get(field) for field in
+                       ("signal_ref", "market_ref", "profile_ref")},
                     "period_metrics": wire.get("period_metrics")}
         from axiom_research import load_stock_signal_evaluation
-        saved = load_stock_signal_evaluation(path)
+        saved = load_stock_signal_evaluation(path, research_root=roots["research"])
         wire = _wire(saved)
         _require(wire.get("contract_version") == ref["artifact_contract_version"] and
                  wire.get("evidence_ref") == ref["artifact_id"] and
@@ -187,6 +256,7 @@ def _artifact_summary(ref: dict, roots: Mapping[str, Path]) -> dict:
         summary = wire.get("summary") or {}
         return {"availability": "VERIFIED", "artifact_type": kind,
                 "artifact_id": wire["evidence_ref"], "status": wire.get("status"),
+                "signal_refs": wire.get("input_signal_refs"),
                 "summary": {key: summary.get(key) for key in
                             ("mean_ic", "mean_rank_ic", "valid_ic_session_count",
                              "valid_rank_ic_session_count")}}
@@ -218,7 +288,9 @@ def _account_bindings(manifest: dict, summaries: Mapping[str, dict]) -> None:
             saved = summaries.get(evaluation.get("artifact_key"))
             if saved and saved.get("availability") == "VERIFIED":
                 _require(saved.get("artifact_id") == evaluation.get("evaluation_ref") and
-                         saved.get("input_run_ref") == expected,
+                         saved.get("input_run_ref") == expected and
+                         all(saved.get(field) == report.get(field) for field in
+                             ("signal_ref", "market_ref", "profile_ref")),
                          "loaded account evaluation identity mismatch")
 
 
@@ -234,12 +306,16 @@ def _page(title: str, body: str, *, local_form: bool = False) -> str:
             'margin:36px auto;padding:0 20px}section{background:#fff;border:1px solid #dce5ef;'
             'border-radius:12px;padding:20px;margin:14px 0}a{color:#416e99}small{color:#52677e}'
             'h1{font-size:29px}h2{font-size:21px}h3{font-size:17px}ul{padding-left:22px}'
-            'code{overflow-wrap:anywhere}dl{display:grid;grid-template-columns:150px 1fr;gap:6px 12px}'
+            'code{overflow-wrap:anywhere}.metrics{width:100%;border-collapse:collapse;margin:10px 0}'
+            '.metrics th,.metrics td{padding:7px 10px;border-bottom:1px solid #dce5ef;text-align:left}'
+            '.metrics th{width:38%;color:#52677e;font-weight:500}.metrics td{overflow-wrap:anywhere}'
+            'dl{display:grid;grid-template-columns:150px 1fr;gap:6px 12px}'
             'dt{font-weight:600}dd{margin:0;overflow-wrap:anywhere}</style></head><body><main>'
             + body + '</main></body></html>')
 
 
-def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error: str | None) -> tuple[str, set[str]]:
+def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error: str | None,
+            *, engine_limits: dict | None = None) -> tuple[str, set[str]]:
     title = "实验结果 · " + head["result_id"][7:19]
     pieces = ['<p><a href="index.html">← 返回实验列表</a></p><h1>' + _text(title) + '</h1>',
               '<section><p>登记状态：' + _text(head["status"]) +
@@ -250,31 +326,88 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
                       '。保留索引记录，不展示账户或统计。</section>')
         return _page(title, ''.join(pieces)), set()
     refs = {ref["artifact_key"]: ref for ref in manifest["artifacts"]}
-    summaries = {key: _artifact_summary(ref, roots) for key, ref in refs.items()}
+    summaries = {key: _artifact_summary(ref, roots, engine_limits=engine_limits)
+                 for key, ref in refs.items()}
     try:
         _account_bindings(manifest, summaries)
     except ResultCatalogError:
-        summaries = {key: {"availability": "UNAVAILABLE", "reason": "CONTEXT_MISMATCH"}
-                     for key in summaries}
-    for key, label in (("folds", "训练折"), ("signals", "保存 Signal"),
-                       ("accounts", "策略账户")):
-        rows = manifest.get(key) or []
-        items = []
-        for row in rows:
-            identity = row.get("fold_ref") or row.get("signal_run_ref") or row.get("strategy_ref")
-            status = row.get("status")
-            items.append('<li><strong>' + _value(identity) + '</strong> · ' + _value(status) +
-                         (' · ' + _text(row["reason"]) if row.get("reason") else '') + '</li>')
-        pieces.append('<section><h2>' + label + '（' + str(len(rows)) + '）</h2>' +
-                      ('<ul>' + ''.join(items) + '</ul>' if items else '<p>未登记</p>') + '</section>')
-    pieces.append('<section><h2>已登记产物</h2><ul>' + ''.join(
-        '<li>' + _text(ref["artifact_type"]) + ' · <code>' + _text(ref["artifact_id"]) +
-        '</code> · ' + _text(summaries[key]["availability"]) +
-        (' · ' + _text(summaries[key]["reason"]) if summaries[key].get("reason") else '') +
-        ('<details><summary>Owner 保存摘要</summary><pre>' + _text(json.dumps(
-            {k: v for k, v in summaries[key].items() if k not in
-             {"availability", "artifact_type", "artifact_id"}}, ensure_ascii=False, indent=2)) +
-         '</pre></details>' if summaries[key]["availability"] == "VERIFIED" else '') + '</li>'
+        for account in manifest.get("accounts") or []:
+            linked = [account.get("backtest_ref"), *(account.get("evaluation_refs") or [])]
+            for item in linked:
+                if type(item) is dict and item.get("artifact_key") in summaries:
+                    summaries[item["artifact_key"]] = {
+                        "availability": "UNAVAILABLE", "reason": "CONTEXT_MISMATCH"}
+    folds = manifest.get("folds") or []
+    pieces.append('<section><h2>训练折（' + str(len(folds)) + '）</h2>' +
+                  ('<ul>' + ''.join('<li>Fold <code>' + _text(_short(row.get("fold_ref"))) +
+                   '</code> · ' + _value(row.get("status")) +
+                   (' · ' + _text(row["reason"]) if row.get("reason") else '') + '</li>'
+                   for row in folds) + '</ul>' if folds else '<p>未登记</p>') + '</section>')
+    signals = manifest.get("signals") or []
+    signal_cards = []
+    for signal in signals:
+        rows = []
+        for key in signal.get("evaluation_artifact_keys") or []:
+            saved = summaries.get(key) or {}
+            if saved.get("availability") != "VERIFIED":
+                rows.append('<p>信号评价未提供：' + _text(saved.get("reason") or "Owner 未验证") + '</p>')
+                continue
+            metrics = saved.get("summary") or {}
+            valid_ic = metrics.get("valid_ic_session_count")
+            valid_rank = metrics.get("valid_rank_ic_session_count")
+            rows.append(_metrics([
+                ("平均 IC", _signal_stat(metrics.get("mean_ic"), valid_ic)),
+                ("平均 RankIC", _signal_stat(metrics.get("mean_rank_ic"), valid_rank)),
+            ]))
+        signal_cards.append('<section><h3>Signal ' + _text(_short(signal.get("signal_run_ref"))) +
+                            '</h3><p>状态：' + _value(signal.get("status")) +
+                            ' · 原因：' + _value(signal.get("reason")) + '</p>' +
+                            (''.join(rows) if rows else '<p>信号评价未登记</p>') +
+                            '<details><summary>完整 Signal 引用</summary><code>' +
+                            _value(signal.get("signal_run_ref")) + '</code></details></section>')
+    pieces.append('<h2>保存 Signal（' + str(len(signals)) + '）</h2>' +
+                  (''.join(signal_cards) if signal_cards else '<section>未登记</section>'))
+    accounts = manifest.get("accounts") or []
+    account_cards = []
+    for account in accounts:
+        backtest = account.get("backtest_ref") or {}
+        run = summaries.get(backtest.get("artifact_key")) or {}
+        metrics = run.get("metrics") or {}
+        label = _strategy_label(run.get("strategy_spec"), account.get("strategy_ref"))
+        values = _metrics([
+            ("累计收益 · 原回测", _percent(metrics.get("total_return"))),
+            ("最大回撤 · 原回测", _percent(metrics.get("max_drawdown"))),
+            ("总费用", _money(metrics.get("total_fees_minor"))),
+            ("期末净资产", _money(run.get("final_nav_minor"))),
+        ]) if run.get("availability") == "VERIFIED" else '<p>账户保存件未提供：' + _text(
+            run.get("reason") or "Owner 未验证") + '</p>'
+        evaluations = []
+        for item in account.get("evaluation_refs") or []:
+            report = summaries.get(item.get("artifact_key")) or {}
+            period = report.get("period_metrics") or {}
+            leg = period.get("account") or {}
+            evaluations.append('<p>评价 ' + _text(_short(item.get("evaluation_ref"))) +
+                               ' · ' + _text(report.get("availability") or "未提供") +
+                               ' · 保存 CAGR：' + _percent(leg.get("cagr")) +
+                               ("（" + _text(leg["cagr_reason"]) + "）"
+                                if leg.get("cagr_reason") else '') + '</p>')
+        account_cards.append('<section><h3>策略：' + _text(label) + '</h3><p>状态：' +
+                             _value(account.get("status")) + ' · 原因：' +
+                             _value(account.get("reason")) + '</p><p>关联 Signal：<code>' +
+                             _value(account.get("signal_run_ref")) + '</code></p>' + values +
+                             ''.join(evaluations) + '<details><summary>策略与账户原始引用</summary><pre>' +
+                             _text(json.dumps({"strategy_ref": account.get("strategy_ref"),
+                                               "backtest_ref": account.get("backtest_ref"),
+                                               "evaluation_refs": account.get("evaluation_refs")},
+                                              ensure_ascii=False, indent=2)) +
+                             '</pre></details></section>')
+    pieces.append('<h2>策略账户（' + str(len(accounts)) + '）</h2>' +
+                  (''.join(account_cards) if account_cards else '<section>未登记</section>'))
+    pieces.append('<section><h2>保存产物与完整引用</h2><ul>' + ''.join(
+        '<li><details><summary>' + _text(ref["artifact_type"]) + ' · ' +
+        _text(summaries[key]["availability"]) + '</summary><pre>' +
+        _text(json.dumps({"reference": ref, "owner_summary": summaries[key]},
+                         ensure_ascii=False, indent=2)) + '</pre></details></li>'
         for key, ref in refs.items()) + '</ul></section>')
     verified_runs = {summary["artifact_id"] for summary in summaries.values()
                      if summary.get("artifact_type") == "BacktestRun" and
@@ -390,10 +523,12 @@ def refresh_result_catalog(*, research_root: str | Path, engine_root: str | Path
 
 
 def open_result_detail(*, research_root: str | Path, engine_root: str | Path,
-                       output_dir: str | Path, result_id: str) -> dict:
+                       output_dir: str | Path, result_id: str,
+                       engine_limits: dict | None = None) -> dict:
     """Read one registered manifest and its fixed owner types into one local page."""
     result_id = _hash(result_id, "result_id")
     roots = _root_map(research_root, engine_root)
+    limits = _engine_limits(engine_limits)
     output = _private_output(output_dir, roots)
     index_file = output / "index.html"
     _require(index_file.is_file(), "refresh the light list before opening a result")
@@ -432,7 +567,7 @@ def open_result_detail(*, research_root: str | Path, engine_root: str | Path,
                  "Research head/manifest mismatch")
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         manifest, error = None, type(exc).__name__
-    html, run_ids = _detail(head, manifest, roots, error)
+    html, run_ids = _detail(head, manifest, roots, error, engine_limits=limits)
     _atomic_html(target, html)
     return {"contract_version": "ui_result_detail_v1", "result_id": result_id,
             "verified_saved_backtest_count": len(run_ids), "availability":
@@ -442,8 +577,10 @@ def open_result_detail(*, research_root: str | Path, engine_root: str | Path,
 class LocalResultCatalog:
     """In-memory index snapshot for a short-lived loopback-only UI session."""
 
-    def __init__(self, *, research_root: str | Path, engine_root: str | Path):
+    def __init__(self, *, research_root: str | Path, engine_root: str | Path,
+                 engine_limits: dict | None = None):
         self.roots = _root_map(research_root, engine_root)
+        self.engine_limits = _engine_limits(engine_limits)
         from axiom_research import ExperimentReader
         self.reader = ExperimentReader(self.roots["research"] / "index.json")
         self.refresh()
@@ -525,6 +662,7 @@ class LocalResultCatalog:
                      "Research head/manifest mismatch")
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
             manifest, error = None, type(exc).__name__
-        html, run_ids = _detail(head, manifest, self.roots, error)
+        html, run_ids = _detail(head, manifest, self.roots, error,
+                                engine_limits=self.engine_limits)
         self.opened_runs[result_id] = run_ids
         return html.replace('href="index.html"', 'href="/"', 1)
