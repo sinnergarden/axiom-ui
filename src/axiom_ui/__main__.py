@@ -22,7 +22,7 @@ def _unique(pairs):
 def main() -> None:
     parser = argparse.ArgumentParser(description="Export an offline, read-only Axiom run report")
     parser.add_argument("run", type=Path, nargs="?", help="explicit saved Engine backtest JSON; optional for a Research index workbench")
-    parser.add_argument("--output", required=True, type=Path, help="new HTML file; existing files are refused")
+    parser.add_argument("--output", type=Path, help="HTML file or private catalog directory")
     labels = parser.add_mutually_exclusive_group()
     labels.add_argument("--sample", action="store_true", help="handwritten synthetic display fixture; bypasses Engine Reader")
     labels.add_argument("--synthetic", action="store_true", help="owner-saved synthetic run; validates with Engine Reader and labels synthetic")
@@ -38,21 +38,26 @@ def main() -> None:
     parser.add_argument("--data-batch", action="append", default=[], metavar="RUN_ID=PATH", help="explicit saved DataBatch public response; no Data query")
     parser.add_argument("--refresh-results", action="store_true", help="refresh the private Research v2 result catalog")
     parser.add_argument("--open-result", help="read one registered result detail after a list refresh")
+    parser.add_argument("--serve-results", action="store_true", help="temporary loopback read-only result browser")
+    parser.add_argument("--port", type=int, default=0, help="loopback port for --serve-results; default chooses a free port")
     parser.add_argument("--workspace-config", type=Path, help="private JSON with research_root and engine_root")
     parser.add_argument("--research-root", type=Path, help="trusted Research root containing index.json")
     parser.add_argument("--engine-root", type=Path, help="trusted Engine artifact root")
     args = parser.parse_args()
-    if args.refresh_results or args.open_result is not None:
-        if (args.refresh_results and args.open_result is not None) or (
+    if args.refresh_results or args.open_result is not None or args.serve_results:
+        if sum((bool(args.refresh_results), args.open_result is not None, bool(args.serve_results))) != 1 or (
                 args.workspace_config is not None and
                 (args.research_root is not None or args.engine_root is not None)) or (
                 args.workspace_config is None and
                 (args.research_root is None or args.engine_root is None)) or (
+                not args.serve_results and args.output is None) or (
+                args.serve_results and args.output is not None) or (
+                not args.serve_results and args.port != 0) or (
                 args.run is not None or
                 args.workbench or args.sample or args.synthetic or args.empty_stock_ml or
                 args.shareable or args.compare or args.evaluation or args.experiment or
                 args.experiment_index or args.stock_ml or args.stock_stage_report or args.data_batch):
-            parser.error("result catalog requires one action, trusted roots and --output DIR")
+            parser.error("result catalog requires one action and trusted roots; export also needs --output DIR")
         try:
             from .result_catalog import refresh_result_catalog, open_result_detail
             if args.workspace_config is not None:
@@ -63,6 +68,11 @@ def main() -> None:
                 research_root, engine_root = config["research_root"], config["engine_root"]
             else:
                 research_root, engine_root = args.research_root, args.engine_root
+            if args.serve_results:
+                from .result_server import serve_result_catalog
+                serve_result_catalog(research_root=research_root, engine_root=engine_root,
+                                     port=args.port)
+                return
             if args.refresh_results:
                 refreshed = refresh_result_catalog(research_root=research_root,
                                                    engine_root=engine_root,
@@ -76,8 +86,10 @@ def main() -> None:
             parser.exit(2, f"Axiom results: {exc}\n")
         print(result_path)
         return
-    if args.research_root is not None or args.engine_root is not None or args.workspace_config is not None:
-        parser.error("trusted roots require --refresh-results or --open-result")
+    if args.research_root is not None or args.engine_root is not None or args.workspace_config is not None or args.port != 0:
+        parser.error("trusted roots/port require a result catalog action")
+    if args.output is None:
+        parser.error("--output is required for report exports")
     if args.workbench and args.shareable:
         parser.error("--shareable applies to the static report; workbench exports are private local results")
     empty_conflicts = (args.run is not None or args.shareable or args.compare or args.evaluation or

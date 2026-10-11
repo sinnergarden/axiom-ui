@@ -9,7 +9,19 @@ Once Research has published an `experiment_index_v2` through its public
 {"research_root":"/private/research-artifacts","engine_root":"/private/engine-artifacts"}
 ```
 
-Refresh the light list, then open one selected result by its saved `result_id`:
+Start a temporary local browser. Its index page has a refresh button; clicking
+one result reads only that saved result. Stop it with Ctrl-C. It binds only to
+`127.0.0.1`, uses no polling, and never writes an owner result:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 \
+PYTHONPATH=src:/path/to/axiom-research/src:/path/to/axiom-engine/src \
+  python3 -m axiom_ui --serve-results --workspace-config /private/axiom-roots.json
+```
+
+The command prints a local browser URL. The offline export below remains a
+fallback for environments where a loopback server cannot run. Refresh the
+light list, then explicitly export one selected detail by its saved `result_id`:
 
 ```sh
 PYTHONPATH=src:/path/to/axiom-research/src:/path/to/axiom-engine/src \

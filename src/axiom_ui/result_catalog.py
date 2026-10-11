@@ -28,6 +28,14 @@ STOCK_LIMITS = dict(max_folds=10, max_prediction_rows=20000, max_market_rows=250
                     max_block_bytes=64 * 1024 * 1024, max_result_part_bytes=8 * 1024 * 1024,
                     max_result_buffer_bytes=64 * 1024 * 1024,
                     max_result_bytes=512 * 1024 * 1024)
+RESEARCH_READERS = {
+    "StockResultConfiguration": "load_stock_result_configuration",
+    "StockSequentialResult": "load_stock_sequential_result",
+    "StockMLBatchManifest": "load_stock_ml_batch_manifest",
+    "StockPredictionBindings": "load_stock_prediction_bindings",
+    "StockMLFoldProjection": "load_stock_fold_projection",
+    "StockPredictionRun": "load_stock_prediction_projection",
+}
 
 
 class ResultCatalogError(ValueError):
@@ -105,11 +113,33 @@ def _engine_nested_artifact(ref: dict, root: Path) -> Path:
 def _artifact_summary(ref: dict, roots: Mapping[str, Path]) -> dict:
     """Only fixed owner readers may supply values beyond the manifest."""
     kind = ref["artifact_type"]
-    if kind not in {"BacktestRun", "BacktestEvaluation", "StockSignalEvaluation"}:
+    if kind not in {"BacktestRun", "BacktestEvaluation", "StockSignalEvaluation",
+                    *RESEARCH_READERS}:
         return {"availability": "METADATA_ONLY", "artifact_type": kind,
                 "artifact_id": ref["artifact_id"]}
     try:
         path = _relative_file(ref, roots)
+        if kind in RESEARCH_READERS:
+            import axiom_research
+            loader = getattr(axiom_research, RESEARCH_READERS[kind])
+            saved = (loader(path, research_root=roots["research"])
+                     if kind in {"StockSequentialResult", "StockMLFoldProjection",
+                                 "StockPredictionRun"}
+                     else loader(path))
+            wire = _wire(saved)
+            _require(saved.identity == ref["artifact_id"] and
+                     saved.content_digest == ref["content_digest"] and
+                     wire.get("contract_version") == ref["artifact_contract_version"],
+                     "Research artifact identity mismatch")
+            return {"availability": "VERIFIED", "artifact_type": kind,
+                    "artifact_id": saved.identity, "contract_version": wire["contract_version"],
+                    "status": wire.get("status"), "configuration_ref":
+                    wire.get("configuration_ref"), "batch_ref": wire.get("batch_ref"),
+                    "fold_count": len(wire["folds"]) if type(wire.get("folds")) is list else None,
+                    "signal_count": (len(wire["frames"]) if type(wire.get("frames")) is list
+                                     else len(wire["prediction_input"]["frames"])
+                                     if type(wire.get("prediction_input")) is dict and
+                                     type(wire["prediction_input"].get("frames")) is list else None)}
         if kind == "BacktestRun":
             if ref["artifact_contract_version"] in {"backtest_run_v7", "backtest_run_v8"}:
                 from axiom_engine.runtime import load_stock_backtest_projection
@@ -192,11 +222,12 @@ def _account_bindings(manifest: dict, summaries: Mapping[str, dict]) -> None:
                          "loaded account evaluation identity mismatch")
 
 
-def _page(title: str, body: str) -> str:
+def _page(title: str, body: str, *, local_form: bool = False) -> str:
     return ('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1">'
             '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; '
-            'style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">'
+            'style-src \'unsafe-inline\'; base-uri \'none\'; form-action ' +
+            ("'self'" if local_form else "'none'") + '">'
             + MARKER + '<title>' + _text(title) + '</title>'
             '<style>body{margin:0;background:#f3f6fa;color:#25374d;font:15px/1.6 '
             '-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}main{max-width:1000px;'
@@ -406,3 +437,94 @@ def open_result_detail(*, research_root: str | Path, engine_root: str | Path,
     return {"contract_version": "ui_result_detail_v1", "result_id": result_id,
             "verified_saved_backtest_count": len(run_ids), "availability":
             "MANIFEST_VERIFIED" if manifest is not None else "UNAVAILABLE", "output_file": str(target)}
+
+
+class LocalResultCatalog:
+    """In-memory index snapshot for a short-lived loopback-only UI session."""
+
+    def __init__(self, *, research_root: str | Path, engine_root: str | Path):
+        self.roots = _root_map(research_root, engine_root)
+        from axiom_research import ExperimentReader
+        self.reader = ExperimentReader(self.roots["research"] / "index.json")
+        self.refresh()
+
+    def refresh(self) -> None:
+        projection = _wire(self.reader.index())
+        _require(projection.get("contract_version") == "experiment_projection_v2",
+                 "Research v2 index required")
+        heads = projection.get("result_heads")
+        _require(type(heads) is list and type(projection.get("questions")) is list,
+                 "malformed Research result index")
+        questions = {}
+        for item in projection["questions"]:
+            _require(type(item) is dict and type(item.get("question")) is dict and
+                     type(item.get("versions")) is list, "malformed Research question")
+            question = item["question"]
+            versions = {v["version_ref"]: v for v in item["versions"]}
+            questions[question["question_id"]] = (question, versions)
+        indexed = {}
+        for head in heads:
+            _require(type(head) is dict and set(head) == HEAD_FIELDS,
+                     "malformed Research result head")
+            result_id = _hash(head["result_id"], "result_id")
+            ref = head["manifest_ref"]
+            _require(result_id not in indexed and head["status"] in STATUSES and
+                     type(head["revision"]) is int and head["revision"] >= 0 and
+                     type(ref) is dict and set(ref) ==
+                     {"root_id", "relative_path", "content_digest"} and
+                     ref["root_id"] == "research" and
+                     head["question_id"] in questions and
+                     head["version_ref"] in questions[head["question_id"]][1],
+                     "duplicate or malformed registered result")
+            _hash(ref["content_digest"], "manifest digest")
+            indexed[result_id] = head
+        self.projection = projection
+        self.questions = questions
+        self.heads = indexed
+        self.generated_at = datetime.now(timezone.utc).isoformat()
+        self.opened_runs: dict[str, set[str]] = {}
+
+    def index_html(self) -> str:
+        cards = []
+        for result_id, head in sorted(self.heads.items(),
+                                      key=lambda pair: pair[1]["updated_at"], reverse=True):
+            question, versions = self.questions[head["question_id"]]
+            cards.append('<section><h2>' + _value(question.get("title")) + ' · ' +
+                         _value(versions[head["version_ref"]].get("label")) + '</h2><p>' +
+                         '状态 ' + _text(head["status"]) + ' · 修订 ' +
+                         _text(head["revision"]) + ' · 结果 <code>' +
+                         _text(result_id[7:19]) + '</code></p><p>原因：' +
+                         _value(head["reason"]) + '</p><p><a href="/result/' +
+                         _text(result_id[7:]) + '">打开保存结果</a></p></section>')
+        run_ids = set().union(*self.opened_runs.values()) if self.opened_runs else set()
+        body = ('<h1>研究实验结果</h1><p>本机只读 · 仅打开所选详情</p>'
+                '<form method="post" action="/refresh"><button type="submit">刷新保存索引</button></form>'
+                '<p>结果 ' + str(len(self.heads)) + ' · 本次已打开并验证的保存回测 ' +
+                str(len(run_ids)) + ' · 登记修订 ' +
+                str(sum(h["revision"] + 1 for h in self.heads.values())) + '</p>'
+                '<small>生成时间：' + _text(self.generated_at) + ' · 索引修订：' +
+                _text(self.projection.get("store_revision")) + ' · 索引摘要：' +
+                _text(self.projection.get("content_digest")) + '</small>' +
+                (''.join(cards) if cards else '<section>暂无登记结果。</section>'))
+        return _page("Axiom · 研究实验结果", body, local_form=True)
+
+    def detail_html(self, result_id: str) -> str:
+        _hash(result_id, "result_id")
+        _require(result_id in self.heads, "result_id is not in the current index")
+        head = self.heads[result_id]
+        ref = head["manifest_ref"]
+        error = None
+        try:
+            _checked_relative_path(ref["root_id"], ref["relative_path"], self.roots)
+            manifest = _wire(self.reader.result(result_id, roots=self.roots))
+            _require(manifest.get("contract_version") == "experiment_result_manifest_v1" and
+                     manifest.get("content_digest") == ref["content_digest"] and
+                     all(manifest.get(key) == head.get(key) for key in
+                         ("result_id", "question_id", "version_ref", "revision", "status", "reason")) and
+                     type(manifest.get("artifacts")) is list,
+                     "Research head/manifest mismatch")
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+            manifest, error = None, type(exc).__name__
+        html, run_ids = _detail(head, manifest, self.roots, error)
+        self.opened_runs[result_id] = run_ids
+        return html.replace('href="index.html"', 'href="/"', 1)
