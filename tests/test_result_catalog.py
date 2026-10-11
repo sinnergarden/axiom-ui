@@ -3,14 +3,18 @@ from hashlib import sha256
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import Thread
 from types import ModuleType, SimpleNamespace
 from unittest import TestCase
 from unittest.mock import patch
 import sys
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 from axiom_ui.result_catalog import (ResultCatalogError, _engine_nested_artifact,
                                      _relative_file, open_result_detail, refresh_result_catalog)
 from axiom_ui.__main__ import main
+from axiom_ui.result_server import build_result_server
 
 
 def digest(seed):
@@ -74,7 +78,7 @@ class CatalogTest(TestCase):
         self.heads.append(head)
         return head
 
-    def refresh(self, open_id=None):
+    def refresh(self, open_id=None, action=None):
         outer = self
 
         class Reader:
@@ -118,6 +122,8 @@ class CatalogTest(TestCase):
         runtime.load_backtest_evaluation = evaluation_loader
         with patch.dict(sys.modules, {"axiom_research": research, "axiom_engine": engine,
                                       "axiom_engine.runtime": runtime}):
+            if action is not None:
+                return action()
             if open_id is not None:
                 return open_result_detail(research_root=self.research, engine_root=self.engine,
                                           output_dir=self.output, result_id=open_id)
@@ -231,3 +237,40 @@ class CatalogTest(TestCase):
              patch("builtins.print"):
             main()
         self.assertEqual(opened.call_args.kwargs["result_id"], digest("r1"))
+        with patch.object(sys, "argv", ["axiom-ui", "--serve-results", "--workspace-config",
+                                        str(config)]), \
+             patch("axiom_ui.result_server.serve_result_catalog") as serve:
+            main()
+        self.assertEqual(serve.call_args.kwargs["research_root"], str(self.research))
+
+    def test_loopback_click_reads_only_selected_result_and_refreshes(self):
+        first = self.add("r1", "q1", "v1")
+
+        def run():
+            with build_result_server(research_root=self.research, engine_root=self.engine) as server:
+                worker = Thread(target=server.serve_forever, daemon=True)
+                worker.start()
+                base = f"http://127.0.0.1:{server.server_port}"
+                try:
+                    index = urlopen(base + "/", timeout=3).read().decode()
+                    self.assertIn(first["result_id"][7:], index)
+                    self.assertEqual(self.result_calls, [])
+                    self.assertEqual(self.owner_calls, [])
+                    urlopen(base + "/result/" + first["result_id"][7:], timeout=3).read()
+                    self.assertEqual(self.result_calls, [first["result_id"]])
+                    self.add("r2", "q2", "v3", status="BLOCKED", reason="事实缺失")
+                    self.assertNotIn("事实缺失", urlopen(base + "/", timeout=3).read().decode())
+                    urlopen(Request(base + "/refresh", data=b"", method="POST"), timeout=3)
+                    self.assertIn("事实缺失", urlopen(base + "/", timeout=3).read().decode())
+                    with self.assertRaises(HTTPError) as absent:
+                        urlopen(base + "/result/" + "0" * 64, timeout=3)
+                    self.assertEqual(absent.exception.code, 404)
+                    with self.assertRaises(HTTPError) as foreign:
+                        urlopen(Request(base + "/refresh", data=b"", method="POST",
+                                        headers={"Origin": "https://other.example"}), timeout=3)
+                    self.assertEqual(foreign.exception.code, 403)
+                finally:
+                    server.shutdown()
+                    worker.join(timeout=3)
+
+        self.refresh(action=run)
