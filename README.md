@@ -1,5 +1,63 @@
 # Axiom UI research workbench
 
+## Private Research v2 result catalog
+
+Once Research has published an `experiment_index_v2` through its public
+`ExperimentStore`, put the two trusted roots in a private JSON file once:
+
+```json
+{"research_root":"/private/research-artifacts","engine_root":"/private/engine-artifacts"}
+```
+
+For larger v7/v8 saved accounts, the same private config may also contain
+`engine_limits`: the complete positive budget object accepted by Engine's
+`validate_limits` and supplied with the owner handoff. Without it, this UI uses
+the explicit bounded defaults in `STOCK_LIMITS` (64 MiB per decoded block,
+8 MiB per result part, 512 MiB total). A result above those budgets is shown
+unavailable until a suitable owner-approved budget is configured; it is never
+treated as an empty account.
+
+Start a temporary local browser. Its index page has a refresh button; clicking
+one result reads only that saved result. Stop it with Ctrl-C. It binds only to
+`127.0.0.1`, uses no polling, and never writes an owner result:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 \
+PYTHONPATH=src:/path/to/axiom-research/src:/path/to/axiom-engine/src \
+  python3 -m axiom_ui --serve-results --workspace-config /private/axiom-roots.json
+```
+
+The command prints a local browser URL. The offline export below remains a
+fallback for environments where a loopback server cannot run. Refresh the
+light list, then explicitly export one selected detail by its saved `result_id`:
+
+```sh
+PYTHONPATH=src:/path/to/axiom-research/src:/path/to/axiom-engine/src \
+  python3 -m axiom_ui --refresh-results \
+  --workspace-config /private/axiom-roots.json --output /private/ui-catalog
+
+PYTHONPATH=src:/path/to/axiom-research/src:/path/to/axiom-engine/src \
+  python3 -m axiom_ui --open-result sha256:<saved-result-id> \
+  --workspace-config /private/axiom-roots.json --output /private/ui-catalog
+```
+
+Open `index.html` in the output directory. Refresh reads only the Research v2
+index and builds lightweight result links; the selected detail command reads
+only that result's manifest and fixed owner Readers. It never scans for unregistered runs, calls
+Data or executes training, account replay or evaluation. The generated time,
+index revision and digest identify the snapshot; a new saved result appears
+after another explicit refresh. If the index changes before a detail is opened,
+refresh the list first. The catalog keeps unavailable artifacts and
+failed or blocked results visible. `BacktestRun` v8 is read through Engine's
+saved projection loader with its nested files confined to the Engine root.
+Unknown artifact types show only registered metadata. This local export may
+contain private result data and must stay outside a public site or repository.
+
+Research must implement the v2 `ExperimentReader.result` and the A01 fixed
+Readers described in the [owner contract](https://github.com/sinnergarden/axiom-docs/blob/main/docs/design/05_axiom_research.md#experiment-result-discovery)
+before real A01 artifacts can be verified in this catalog. The older v1
+workbench entry below remains available.
+
 This minimal Python package is a read-only P12 boundary for the demo. It
 projects an already-read DataBatch into a canonical Data layer, pins explicit
 session-to-query refs for chart replay, and returns an unavailable state for
