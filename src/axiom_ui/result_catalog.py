@@ -6,7 +6,7 @@ directory or interprets a manifest-supplied loader name as executable code.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from decimal import Decimal, localcontext
+from decimal import Decimal, ROUND_HALF_UP, localcontext
 from hashlib import sha256
 from html import escape
 import json
@@ -38,6 +38,7 @@ RESEARCH_READERS = {
     "StockPredictionRun": "load_stock_prediction_projection",
     "StockDerivedSignal": "load_stock_derived_signal",
 }
+LONG_RESULT_FOLD_THRESHOLD = 100
 
 
 class ResultCatalogError(ValueError):
@@ -80,8 +81,24 @@ def _percent(value: Any) -> str:
     try:
         with localcontext() as context:
             context.prec = 100
-            shown = format(Decimal(str(value)) * 100, "f")
-            return _text((shown.rstrip("0").rstrip(".") if "." in shown else shown) + "%")
+            shown = format((Decimal(str(value)) * 100).quantize(
+                Decimal("0.0001"), rounding=ROUND_HALF_UP), "f")
+            shown = shown.rstrip("0").rstrip(".") if "." in shown else shown
+            return '<span title="Owner 原值：' + _text(value) + '">' + _text(shown + "%") + '</span>'
+    except (ArithmeticError, ValueError):
+        return _text(value)
+
+
+def _decimal_display(value: Any) -> str:
+    if value is None:
+        return "未提供（Owner 值为空）"
+    try:
+        with localcontext() as context:
+            context.prec = 100
+            shown = format(Decimal(str(value)).quantize(
+                Decimal("0.0001"), rounding=ROUND_HALF_UP), "f")
+            shown = shown.rstrip("0").rstrip(".") if "." in shown else shown
+            return '<span title="Owner 原值：' + _text(value) + '">' + _text(shown) + '</span>'
     except (ArithmeticError, ValueError):
         return _text(value)
 
@@ -236,6 +253,10 @@ def _artifact_summary(ref: dict, roots: Mapping[str, Path], *, engine_limits: di
                        ("signal_ref", "market_ref", "profile_ref")},
                     "strategy_spec": (wire.get("request_manifest", {}).get("portfolio_policy", {})
                                       .get("strategy_spec")),
+                    "first_session": nav[0].get("session") if nav else None,
+                    "last_session": nav[-1].get("session") if nav else None,
+                    "nav_count": len(nav),
+                    "initial_nav_minor": wire.get("initial_nav_minor"),
                     "final_nav_minor": nav[-1].get("nav_minor") if nav else None,
                     "metrics": wire.get("metrics")}
         if kind == "BacktestEvaluation":
@@ -245,12 +266,25 @@ def _artifact_summary(ref: dict, roots: Mapping[str, Path], *, engine_limits: di
                      wire.get("evaluation_ref") == ref["artifact_id"] and
                      wire.get("content_digest") == ref["content_digest"],
                      "BacktestEvaluation identity mismatch")
+            series = wire.get("series") if type(wire.get("series")) is list else []
             return {"availability": "VERIFIED", "artifact_type": kind,
-                    "artifact_id": wire["evaluation_ref"], "status": wire.get("status"),
+                    "artifact_id": wire["evaluation_ref"],
+                    "contract_version": wire["contract_version"],
+                    "status": wire.get("status"),
                     "input_run_ref": wire.get("input_run_ref"),
                     **{field: wire.get(field) for field in
                        ("signal_ref", "market_ref", "profile_ref")},
-                    "period_metrics": wire.get("period_metrics")}
+                    "period_metrics": wire.get("period_metrics"),
+                    "first_session": series[0].get("session") if series else None,
+                    "last_session": series[-1].get("session") if series else None,
+                    "session_count": len(series),
+                    "risk_metrics": wire.get("risk_metrics"),
+                    "execution_summary": wire.get("execution_summary"),
+                    "monthly_returns": wire.get("monthly_returns"),
+                    "benchmark_comparisons": {
+                        name: {field: item.get(field) for field in
+                               ("status", "return_basis", "unavailable_reason")}
+                        for name, item in (wire.get("benchmark_comparisons") or {}).items()}}
         from axiom_research import load_stock_signal_evaluation
         saved = load_stock_signal_evaluation(path, research_root=roots["research"])
         wire = _wire(saved)
@@ -338,15 +372,23 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
                       '。保留索引记录，不展示账户或统计。</section>')
         return _page(title, ''.join(pieces)), set()
     refs = {ref["artifact_key"]: ref for ref in manifest["artifacts"]}
-    summaries = {key: _artifact_summary(ref, roots, engine_limits=engine_limits)
+    # A long result can declare hundreds of Fold and raw prediction files.
+    # Keep refs visible; read the compact saved evaluations for the first view.
+    long_result = len(manifest.get("folds") or []) > LONG_RESULT_FOLD_THRESHOLD
+    summaries = {key: (_artifact_summary(ref, roots, engine_limits=engine_limits)
+                       if not long_result or
+                       ref["artifact_type"] == "BacktestEvaluation" else
+                       {"availability": "NOT_OPENED", "artifact_type": ref["artifact_type"],
+                        "artifact_id": ref["artifact_id"]})
                  for key, ref in refs.items()}
     invalid_accounts = _account_bindings(manifest, summaries)
     folds = manifest.get("folds") or []
-    pieces.append('<section><h2>训练折（' + str(len(folds)) + '）</h2>' +
+    pieces.append('<details><summary>训练折（' + str(len(folds)) +
+                  '）· 登记引用，未展开验证</summary>' +
                   ('<ul>' + ''.join('<li>Fold <code>' + _text(_short(row.get("fold_ref"))) +
                    '</code> · ' + _value(row.get("status")) +
                    (' · ' + _text(row["reason"]) if row.get("reason") else '') + '</li>'
-                   for row in folds) + '</ul>' if folds else '<p>未登记</p>') + '</section>')
+                   for row in folds) + '</ul>' if folds else '<p>未登记</p>') + '</details>')
     signals = manifest.get("signals") or []
     signal_cards = []
     for signal in signals:
@@ -361,12 +403,16 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
                     prediction.get("parent_signal_refs"), ensure_ascii=False, sort_keys=True))),
             ]))
         elif signal.get("prediction_artifact_key") and prediction.get("availability") != "VERIFIED":
-            rows.append('<p>信号保存件未提供：' +
+            rows.append('<p>信号保存件' +
+                        ('未展开验证' if prediction.get("availability") == "NOT_OPENED"
+                         else '未提供') + '：' +
                         _text(prediction.get("reason") or "Owner 未验证") + '</p>')
         for key in signal.get("evaluation_artifact_keys") or []:
             saved = summaries.get(key) or {}
             if saved.get("availability") != "VERIFIED":
-                rows.append('<p>信号评价未提供：' + _text(saved.get("reason") or "Owner 未验证") + '</p>')
+                rows.append('<p>信号评价' + ('未展开' if saved.get("availability") == "NOT_OPENED"
+                                             else '未提供') + '：' +
+                            _text(saved.get("reason") or "Owner 未验证") + '</p>')
                 continue
             metrics = saved.get("summary") or {}
             valid_ic = metrics.get("valid_ic_session_count")
@@ -381,8 +427,10 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
                             (''.join(rows) if rows else '<p>信号评价未登记</p>') +
                             '<details><summary>完整 Signal 引用</summary><code>' +
                             _value(signal.get("signal_run_ref")) + '</code></details></section>')
-    pieces.append('<h2>保存 Signal（' + str(len(signals)) + '）</h2>' +
-                  (''.join(signal_cards) if signal_cards else '<section>未登记</section>'))
+    signal_section = ('<details><summary>保存 Signal（' + str(len(signals)) +
+                      '）· 展开查看</summary>' +
+                      (''.join(signal_cards) if signal_cards else '<p>未登记</p>') +
+                      '</details>')
     accounts = manifest.get("accounts") or []
     account_cards = []
     for index, account in enumerate(accounts):
@@ -392,27 +440,84 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
         metrics = run.get("metrics") or {}
         label = _strategy_label(run.get("strategy_spec"), account.get("strategy_ref"))
         values = _metrics([
+            ("保存交易范围", _value(run.get("first_session")) + ' — ' +
+             _value(run.get("last_session")) + ' · ' + _value(run.get("nav_count")) + ' 日'),
+            ("初始资金", _money(run.get("initial_nav_minor"))),
             ("累计收益 · 原回测", _percent(metrics.get("total_return"))),
             ("最大回撤 · 原回测", _percent(metrics.get("max_drawdown"))),
             ("总费用", _money(metrics.get("total_fees_minor"))),
             ("期末净资产", _money(run.get("final_nav_minor"))),
-        ]) if run.get("availability") == "VERIFIED" else '<p>账户保存件未提供：' + _text(
-            run.get("reason") or "Owner 未验证") + '</p>'
+        ]) if run.get("availability") == "VERIFIED" else (
+            '<p>账户原件未展开验证；以下数值只取已验证的 Owner 评价及其保存的账户引用。</p>'
+            if run.get("availability") == "NOT_OPENED" else
+            '<p>账户保存件未提供：' + _text(run.get("reason") or "Owner 未验证") + '</p>')
         evaluations = []
         for item in account.get("evaluation_refs") or []:
             report = summaries.get(item.get("artifact_key")) or {}
-            if run.get("availability") != "VERIFIED" or report.get("availability") != "VERIFIED":
+            if run.get("availability") not in {"VERIFIED", "NOT_OPENED"} or \
+                    report.get("availability") != "VERIFIED":
                 evaluations.append('<p>评价 ' + _text(_short(item.get("evaluation_ref"))) +
                                    ' · 保存账户或评价不可用，指标暂不展示</p>')
                 continue
             period = report.get("period_metrics") or {}
             leg = period.get("account") or {}
-            evaluations.append('<p>评价 ' + _text(_short(item.get("evaluation_ref"))) +
-                               ' · ' + _text(report.get("availability") or "未提供") +
-                               ' · 保存 CAGR：' + _percent(leg.get("cagr")) +
-                               ("（" + _text(leg["cagr_reason"]) + "）"
-                                if leg.get("cagr_reason") else '') + '</p>')
-        account_cards.append('<section><h3>策略：' + _text(label) + '</h3><p>状态：' +
+            benchmark = period.get("benchmark") or {}
+            risk = report.get("risk_metrics") or {}
+            sharpe = risk.get("sharpe") or {}
+            execution = report.get("execution_summary") or {}
+            benchmarks = report.get("benchmark_comparisons") or {}
+            window = period.get("window") or {}
+            rows = [("账户累计收益 · 原评价", _percent(leg.get("total_return"))),
+                    ("账户期末净资产 · 原评价", _money(leg.get("final_nav_minor"))),
+                    ("账户 CAGR · 原评价", _percent(leg.get("cagr")) +
+                     ("（" + _text(leg["cagr_reason"]) + "）"
+                      if leg.get("cagr_reason") else '')),
+                    ("沪深 300 累计收益 · 价格指数", _percent(benchmark.get("total_return"))),
+                    ("沪深 300 CAGR · 价格指数", _percent(benchmark.get("cagr"))),
+                    ("沪深 300 最大回撤 · 价格指数", _percent(benchmark.get("max_drawdown")))]
+            if risk:
+                rows.extend([
+                    ("账户最大回撤 · 原评价", _percent(leg.get("max_drawdown"))),
+                    ("Sharpe · 原评价", _decimal_display(sharpe.get("value")) + ' · ' +
+                     _value(sharpe.get("status"))),
+                    ("Sharpe 无风险年利率假设", _percent(
+                        (sharpe.get("risk_free") or {}).get("annual_effective_rate"))),
+                    ("初始资金 · 原评价", _money(leg.get("initial_nav_minor"))),
+                    ("总费用 · 原评价", _money(execution.get("fees_minor"))),
+                    ("双边换手 · Owner 比值", _decimal_display(
+                        execution.get("two_sided_turnover"))),
+                    ("费用率 · Owner 保存值", _percent(execution.get("fee_ratio"))),
+                    ("保存交易日", _value(report.get("first_session")) + ' — ' +
+                     _value(report.get("last_session")) + ' · ' +
+                     _value(report.get("session_count")) + ' 日'),
+                    ("评价范围", _value(window.get("anchor_session")) + ' — ' +
+                     _value(window.get("end_session")) + ' · Sharpe 观测日 ' +
+                     _value(sharpe.get("observations"))),
+                ])
+            benchmark_rows = ''.join(
+                '<li>' + _text(name) + '：' + _value(value.get("status")) +
+                (' · ' + _text(value["return_basis"]) if value.get("return_basis") else '') +
+                (' · 原因 ' + _text(value["unavailable_reason"])
+                 if value.get("unavailable_reason") else '') + '</li>'
+                for name, value in benchmarks.items())
+            monthly = report.get("monthly_returns") or []
+            monthly_rows = ''.join('<li>' + _value(row.get("month")) + '：' +
+                                   _percent(row.get("return")) + ' · ' +
+                                   _value(row.get("status")) +
+                                   (' · ' + _text(row["reason"]) if row.get("reason") else '') +
+                                   '</li>' for row in monthly)
+            evaluations.append('<div><h4>评价 ' + _text(_short(item.get("evaluation_ref"))) +
+                               ' · ' + _value(report.get("contract_version")) +
+                               ' · ' + _value(report.get("status")) + '</h4>' +
+                               _metrics(rows) +
+                               ('<p>基准供应状态（账户指标仍按保存值展示）：</p><ul>' +
+                                benchmark_rows + '</ul>' if benchmarks else '') +
+                               ('<p>年度收益：该保存评价未提供独立年度序列；不由 UI 汇总月收益。</p>'
+                                '<details><summary>保存月收益（' + str(len(monthly)) +
+                                '）</summary><ul>' + monthly_rows + '</ul></details>'
+                                if monthly else '') + '</div>')
+        account_cards.append('<section><h3>账户 ' + str(index + 1) + ' · 策略：' +
+                             _text(label) + '</h3><p>状态：' +
                              _value(account.get("status")) + ' · 原因：' +
                              _value(account.get("reason")) + '</p><p>关联 Signal：<code>' +
                              _value(account.get("signal_run_ref")) + '</code></p>' + values +
@@ -424,6 +529,7 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
                              '</pre></details></section>')
     pieces.append('<h2>策略账户（' + str(len(accounts)) + '）</h2>' +
                   (''.join(account_cards) if account_cards else '<section>未登记</section>'))
+    pieces.append(signal_section)
     pieces.append('<section><h2>保存产物与完整引用</h2><ul>' + ''.join(
         '<li><details><summary>' + _text(ref["artifact_type"]) + ' · ' +
         _text(summaries[key]["availability"]) + '</summary><pre>' +

@@ -223,6 +223,49 @@ class CatalogTest(TestCase):
         self.assertIn("0.03", detail)
         self.assertIn("INSUFFICIENT_SPAN", detail)
         self.assertEqual(self.result_calls, [first_head["result_id"]])
+        original_eval = self.eval_wire
+        self.eval_wire = {**original_eval, "status": "PARTIAL",
+            "period_metrics": {"account": {"cagr": "0.12", "max_drawdown": "-0.25",
+                                           "initial_nav_minor": 50000000},
+                               "benchmark": {"total_return": "0.2", "cagr": "0.05",
+                                             "max_drawdown": "-0.3"},
+                               "window": {"anchor_session": "2018-12-28",
+                                          "end_session": "2025-12-31"}},
+            "risk_metrics": {"sharpe": {"value": "0.57", "status": "AVAILABLE",
+                                         "observations": 1699,
+                                         "risk_free": {"annual_effective_rate": "0"}}},
+            "execution_summary": {"fee_ratio": "0.01", "two_sided_turnover": "3"},
+            "benchmark_comparisons": {
+                "CSI300": {"status": "COMPLETE", "return_basis": "price_index_excluding_dividends"},
+                "NASDAQ100": {"status": "SOURCE_UNAVAILABLE",
+                              "unavailable_reason": "OWNER_NATIVE_INPUT_NOT_SUPPLIED"}},
+            "monthly_returns": [{"month": "2019-01", "return": "0.02",
+                                 "status": "COMPLETE", "reason": None}]}
+        fold_ref = {"artifact_key": "long-fold", "owner": "Research",
+                    "artifact_type": "StockMLFoldProjection", "artifact_id": digest("long-fold"),
+                    "artifact_contract_version": "stock_ml_fold_projection_v1",
+                    "content_digest": digest("long-fold-content"),
+                    "root_id": "research", "relative_path": "long-fold.json"}
+        self.manifests[first_head["result_id"]]["artifacts"].append(fold_ref)
+        self.manifests[first_head["result_id"]]["folds"] = [
+            {"fold_ref": digest(str(number)), "status": "COMPLETE"}
+            for number in range(101)]
+        owner_calls_before = len(self.owner_calls)
+        richer = Path(self.refresh(open_id=first_head["result_id"])["output_file"]).read_text()
+        self.assertEqual(self.owner_calls[owner_calls_before:],
+                         [("evaluation", (self.engine / "eval.json").resolve())])
+        self.assertIn("账户原件未展开验证", richer)
+        self.assertIn("StockMLFoldProjection · NOT_OPENED", richer)
+        self.assertIn("账户 1", richer)
+        self.assertIn("Sharpe · 原评价", richer)
+        self.assertIn("沪深 300 CAGR · 价格指数", richer)
+        self.assertIn("CSI300：COMPLETE", richer)
+        self.assertIn("NASDAQ100：SOURCE_UNAVAILABLE", richer)
+        self.assertIn("OWNER_NATIVE_INPUT_NOT_SUPPLIED", richer)
+        self.assertIn("年度收益：该保存评价未提供", richer)
+        self.manifests[first_head["result_id"]]["folds"] = []
+        self.manifests[first_head["result_id"]]["artifacts"].remove(fold_ref)
+        self.eval_wire = original_eval
         self.eval_wire["market_ref"] = digest("other-market")
         mismatched = Path(self.refresh(open_id=first_head["result_id"])["output_file"]).read_text()
         self.assertIn("CONTEXT_MISMATCH", mismatched)
@@ -299,7 +342,9 @@ class CatalogTest(TestCase):
                            artifact_contract_version="stock_prediction_input_refs_v2",
                            relative_path="bindings.json")
             binding_summary = _artifact_summary(binding, roots)
-            head = self.add("derived", "q1", "v1", artifacts=[first, missing],
+            fold = dict(first, artifact_key="fold", artifact_type="StockMLFoldProjection",
+                        relative_path="unopened-fold.json")
+            head = self.add("derived", "q1", "v1", artifacts=[first, missing, fold],
                 signals=[{"signal_run_ref": first_id, "status": "COMPLETE",
                           "prediction_artifact_key": "first", "evaluation_artifact_keys": []},
                          {"signal_run_ref": second_id, "status": "COMPLETE",
@@ -313,6 +358,7 @@ class CatalogTest(TestCase):
         self.assertIn("保存信号阶段", html)
         self.assertIn("StockDerivedSignal · VERIFIED", html)
         self.assertIn("StockDerivedSignal · UNAVAILABLE", html)
+        self.assertIn("StockMLFoldProjection · UNAVAILABLE", html)
         self.assertIn("信号保存件未提供：FileNotFoundError", html)
 
     def test_refresh_refuses_owner_root_or_foreign_output(self):
