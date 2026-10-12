@@ -36,6 +36,8 @@ def main() -> None:
     parser.add_argument("--data-batch", action="append", default=[], metavar="RUN_ID=PATH", help="explicit saved DataBatch public response; no Data query")
     parser.add_argument("--refresh-results", action="store_true", help="refresh the private Research v2 result catalog")
     parser.add_argument("--open-result", help="read one registered result detail after a list refresh")
+    parser.add_argument("--detail-mode", choices=("summary", "full"), default="summary",
+                        help="summary reads saved evaluations; full explicitly verifies all result artifacts")
     parser.add_argument("--serve-results", action="store_true", help="temporary loopback read-only result browser")
     parser.add_argument("--port", type=int, default=0, help="loopback port for --serve-results; default chooses a free port")
     parser.add_argument("--workspace-config", type=Path, help="private JSON with research_root and engine_root")
@@ -44,6 +46,7 @@ def main() -> None:
     args = parser.parse_args()
     if args.refresh_results or args.open_result is not None or args.serve_results:
         if sum((bool(args.refresh_results), args.open_result is not None, bool(args.serve_results))) != 1 or (
+                args.detail_mode == "full" and args.open_result is None) or (
                 args.workspace_config is not None and
                 (args.research_root is not None or args.engine_root is not None)) or (
                 args.workspace_config is None and
@@ -83,13 +86,14 @@ def main() -> None:
             else:
                 opened = open_result_detail(research_root=research_root, engine_root=engine_root,
                                             output_dir=args.output, result_id=args.open_result,
-                                            engine_limits=engine_limits)
+                                            engine_limits=engine_limits,
+                                            detail_mode=args.detail_mode)
                 result_path = opened["output_file"]
         except (OSError, ValueError, ImportError) as exc:
             parser.exit(2, f"Axiom results: {exc}\n")
         print(result_path)
         return
-    if args.research_root is not None or args.engine_root is not None or args.workspace_config is not None or args.port != 0:
+    if args.research_root is not None or args.engine_root is not None or args.workspace_config is not None or args.port != 0 or args.detail_mode != "summary":
         parser.error("trusted roots/port require a result catalog action")
     if args.output is None:
         parser.error("--output is required for report exports")

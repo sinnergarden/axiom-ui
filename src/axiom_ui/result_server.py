@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 from .result_catalog import LocalResultCatalog, ResultCatalogError, _page
 
 
-RESULT_ROUTE = re.compile(r"/result/([0-9a-f]{64})\Z")
+RESULT_ROUTE = re.compile(r"/result/([0-9a-f]{64})(/full)?\Z")
 
 
 def build_result_server(*, research_root, engine_root, engine_limits=None,
@@ -49,7 +49,8 @@ def build_result_server(*, research_root, engine_root, engine_limits=None,
             if match:
                 try:
                     result_id = "sha256:" + match.group(1)
-                    self._send(200, catalog.detail_html(result_id))
+                    self._send(200, catalog.detail_html(
+                        result_id, detail_mode="full" if match.group(2) else "summary"))
                 except (ResultCatalogError, KeyError, TypeError, ValueError):
                     self._send(404, _page("结果不可用", "<p>结果未在当前索引中，或保存引用无效。</p>"))
                 return
