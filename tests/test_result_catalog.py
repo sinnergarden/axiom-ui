@@ -13,7 +13,8 @@ from urllib.request import Request, urlopen
 
 from axiom_ui.result_catalog import (STOCK_LIMITS, ResultCatalogError, _engine_limits,
                                      _artifact_summary, _detail, _engine_nested_artifact,
-                                     _relative_file, open_result_detail, refresh_result_catalog)
+                                     _relative_file, _strategy_label, open_result_detail,
+                                     refresh_result_catalog)
 from axiom_ui.__main__ import main
 from axiom_ui.result_server import build_result_server
 
@@ -23,6 +24,23 @@ def digest(seed):
 
 
 class CatalogTest(TestCase):
+    def test_strategy_label_uses_saved_market_gate(self):
+        ref = digest("strategy")
+        base = {"contract_version": "stock_strategy_spec_v1",
+                "selection": "rank_buffer", "top_k": 5,
+                "rank_buffer": {"keep_rank": 10}, "exit_overlay": None}
+        original = "Top 5 · 排名缓冲 · 保留前 10"
+        self.assertEqual(_strategy_label(base, ref), original)
+        gated = {**base, "market_gate": {
+            "check": "rebalance_sessions_only", "rule": "close_above_sma",
+            "security_id": "000300.SH", "window_sessions": 120}}
+        self.assertEqual(_strategy_label(gated, ref),
+                         original + " + CSI300 SMA120 周频风控")
+        self.assertEqual(_strategy_label({**base, "market_gate": {"rule": "unknown"}}, ref),
+                         "引用 " + ref[7:19])
+        self.assertEqual(_strategy_label({**gated, "contract_version": "unknown"}, ref),
+                         "引用 " + ref[7:19])
+
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

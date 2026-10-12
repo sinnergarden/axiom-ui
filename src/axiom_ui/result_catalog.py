@@ -120,6 +120,21 @@ def _metrics(rows: list[tuple[str, str]]) -> str:
 def _strategy_label(spec: Any, strategy_ref: Any) -> str:
     if type(spec) is not dict:
         return "引用 " + _short(strategy_ref)
+    gate = spec.get("market_gate")
+    if gate is not None and not (
+            spec.get("contract_version") == "stock_strategy_spec_v1" and
+            spec.get("selection") == "rank_buffer" and
+            type(spec.get("top_k")) is int and
+            type(spec.get("rank_buffer")) is dict and
+            type(spec["rank_buffer"].get("keep_rank")) is int and
+            type(gate) is dict and set(gate) ==
+            {"check", "rule", "security_id", "window_sessions"} and
+            gate["check"] == "rebalance_sessions_only" and
+            gate["rule"] == "close_above_sma" and
+            gate["security_id"] == "000300.SH" and
+            type(gate["window_sessions"]) is int and
+            gate["window_sessions"] == 120):
+        return "引用 " + _short(strategy_ref)
     selection = spec.get("selection")
     parts = (["Top " + str(spec["top_k"])] if type(spec.get("top_k")) is int
              else [str(selection or "策略")])
@@ -134,7 +149,8 @@ def _strategy_label(spec: Any, strategy_ref: Any) -> str:
         parts.append(str(selection))
     if spec.get("exit_overlay") is not None:
         parts.append("含退出规则")
-    return " · ".join(parts)
+    label = " · ".join(parts)
+    return label + " + CSI300 SMA120 周频风控" if gate is not None else label
 
 
 def _signal_stat(value: Any, valid_count: Any) -> str:
