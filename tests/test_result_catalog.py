@@ -101,7 +101,7 @@ class CatalogTest(TestCase):
         self.heads.append(head)
         return head
 
-    def refresh(self, open_id=None, action=None):
+    def refresh(self, open_id=None, action=None, mode="full"):
         outer = self
 
         class Reader:
@@ -160,7 +160,8 @@ class CatalogTest(TestCase):
                 return action()
             if open_id is not None:
                 return open_result_detail(research_root=self.research, engine_root=self.engine,
-                                          output_dir=self.output, result_id=open_id)
+                                          output_dir=self.output, result_id=open_id,
+                                          detail_mode=mode)
             return refresh_result_catalog(research_root=self.research, engine_root=self.engine,
                                           output_dir=self.output, generated_at="2026-10-11T00:00:00Z")
 
@@ -214,8 +215,8 @@ class CatalogTest(TestCase):
         self.assertEqual(len(self.signal_calls), 1)
         self.assertEqual(self.signal_calls[0][1], self.research.resolve())
         detail = Path(opened["output_file"]).read_text()
-        self.assertIn("策略：top_k · Top 5", detail)
-        self.assertIn("策略：rank_buffer · Top 5 · keep_rank 10", detail)
+        self.assertIn("策略：Top 5 · top_k", detail)
+        self.assertIn("策略：Top 5 · 排名缓冲 · 保留前 10", detail)
         self.assertGreaterEqual(detail.count(self.shared_signal), 3)
         self.assertIn("累计收益 · 原回测", detail)
         self.assertIn("10%", detail)
@@ -241,21 +242,7 @@ class CatalogTest(TestCase):
                               "unavailable_reason": "OWNER_NATIVE_INPUT_NOT_SUPPLIED"}},
             "monthly_returns": [{"month": "2019-01", "return": "0.02",
                                  "status": "COMPLETE", "reason": None}]}
-        fold_ref = {"artifact_key": "long-fold", "owner": "Research",
-                    "artifact_type": "StockMLFoldProjection", "artifact_id": digest("long-fold"),
-                    "artifact_contract_version": "stock_ml_fold_projection_v1",
-                    "content_digest": digest("long-fold-content"),
-                    "root_id": "research", "relative_path": "long-fold.json"}
-        self.manifests[first_head["result_id"]]["artifacts"].append(fold_ref)
-        self.manifests[first_head["result_id"]]["folds"] = [
-            {"fold_ref": digest(str(number)), "status": "COMPLETE"}
-            for number in range(101)]
-        owner_calls_before = len(self.owner_calls)
         richer = Path(self.refresh(open_id=first_head["result_id"])["output_file"]).read_text()
-        self.assertEqual(self.owner_calls[owner_calls_before:],
-                         [("evaluation", (self.engine / "eval.json").resolve())])
-        self.assertIn("账户原件未展开验证", richer)
-        self.assertIn("StockMLFoldProjection · NOT_OPENED", richer)
         self.assertIn("账户 1", richer)
         self.assertIn("Sharpe · 原评价", richer)
         self.assertIn("沪深 300 CAGR · 价格指数", richer)
@@ -263,8 +250,6 @@ class CatalogTest(TestCase):
         self.assertIn("NASDAQ100：SOURCE_UNAVAILABLE", richer)
         self.assertIn("OWNER_NATIVE_INPUT_NOT_SUPPLIED", richer)
         self.assertIn("年度收益：该保存评价未提供", richer)
-        self.manifests[first_head["result_id"]]["folds"] = []
-        self.manifests[first_head["result_id"]]["artifacts"].remove(fold_ref)
         self.eval_wire = original_eval
         self.eval_wire["market_ref"] = digest("other-market")
         mismatched = Path(self.refresh(open_id=first_head["result_id"])["output_file"]).read_text()
@@ -349,7 +334,8 @@ class CatalogTest(TestCase):
                           "prediction_artifact_key": "first", "evaluation_artifact_keys": []},
                          {"signal_run_ref": second_id, "status": "COMPLETE",
                           "prediction_artifact_key": "missing", "evaluation_artifact_keys": []}])
-            html, run_ids = _detail(head, self.manifests[head["result_id"]], roots, None)
+            html, run_ids = _detail(head, self.manifests[head["result_id"]], roots, None,
+                                    detail_mode="full")
         self.assertEqual(binding_summary["availability"], "VERIFIED")
         self.assertEqual(calls, [((self.research / "bindings.json").resolve(), self.research.resolve()),
                                  ((self.research / "one.json").resolve(), self.research.resolve())])
@@ -360,6 +346,73 @@ class CatalogTest(TestCase):
         self.assertIn("StockDerivedSignal · UNAVAILABLE", html)
         self.assertIn("StockMLFoldProjection · UNAVAILABLE", html)
         self.assertIn("信号保存件未提供：FileNotFoundError", html)
+
+    def test_summary_uses_verified_run_metadata_at_any_fold_count(self):
+        def seal(value):
+            return "sha256:" + sha256(json.dumps(value, ensure_ascii=False,
+                sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+        strategy = {"contract_version": "stock_strategy_spec_v1",
+                    "selection": "rank_buffer", "top_k": 5,
+                    "rank_buffer": {"keep_rank": 10}, "exit_overlay": None}
+        policy = {"portfolio_policy": "saved", "strategy_spec": strategy}
+        run_id, evaluation_id = digest("metadata-run"), digest("metadata-evaluation")
+        request_ref, signal_ref = digest("metadata-request"), digest("metadata-signal")
+        market_ref, profile_ref = digest("metadata-market"), digest("metadata-profile")
+        wire = {"contract_version": "backtest_run_v8", "run_id": run_id,
+                "request_manifest": {"request_ref": request_ref, "portfolio_policy": policy},
+                "request_ref": request_ref, "committed_sequence": 8,
+                "signal_ref": signal_ref, "market_ref": market_ref,
+                "profile_ref": profile_ref}
+        run_content = seal(wire)
+        wire["content_digest"] = run_content
+        (self.engine / "metadata-run.json").write_text(json.dumps(wire))
+        run_artifact = {"artifact_key": "run", "owner": "Engine", "artifact_type": "BacktestRun",
+                        "artifact_id": run_id, "artifact_contract_version": "backtest_run_v8",
+                        "content_digest": run_content, "root_id": "engine",
+                        "relative_path": "metadata-run.json"}
+        evaluation = self.artifact("evaluation", "BacktestEvaluation", evaluation_id,
+                                   digest("evaluation-content"), "metadata-evaluation.json",
+                                   "evaluation_report_v3")
+        run_ref = {"run_id": run_id, "content_digest": run_content,
+                   "committed_sequence": 8}
+        account = {"strategy_ref": seal(policy), "signal_run_ref": signal_ref,
+                   "status": "COMPLETE", "reason": None,
+                   "backtest_ref": {"artifact_key": "run", **run_ref},
+                   "evaluation_refs": [{"artifact_key": "evaluation",
+                                        "evaluation_ref": evaluation_id,
+                                        "input_run_ref": run_ref}]}
+        head = self.add("summary", "q1", "v1", accounts=[account],
+                        artifacts=[run_artifact, evaluation])
+        evaluation_wire = {"contract_version": "evaluation_report_v3",
+                           "evaluation_ref": evaluation_id,
+                           "content_digest": evaluation["content_digest"],
+                           "input_run_ref": run_ref, "status": "PARTIAL",
+                           "signal_ref": signal_ref, "market_ref": market_ref,
+                           "profile_ref": profile_ref,
+                           "period_metrics": {"account": {"cagr": "0.1"}}}
+        runtime = ModuleType("axiom_engine.runtime")
+        runtime.load_backtest_evaluation = lambda path: evaluation_wire
+        roots = {"research": self.research.resolve(), "engine": self.engine.resolve()}
+        with patch.dict(sys.modules, {"axiom_engine.runtime": runtime}):
+            for count in (0, 101):
+                self.manifests[head["result_id"]]["folds"] = [
+                    {"fold_ref": digest(str(number)), "status": "COMPLETE"}
+                    for number in range(count)]
+                html, runs = _detail(head, self.manifests[head["result_id"]], roots, None)
+                self.assertIn("策略：Top 5 · 排名缓冲 · 保留前 10", html)
+                self.assertIn("BacktestRun · METADATA_VERIFIED", html)
+                self.assertIn("账户 CAGR · 原评价", html)
+                self.assertEqual(runs, set())
+            account["strategy_ref"] = digest("wrong-strategy")
+            html, _ = _detail(head, self.manifests[head["result_id"]], roots, None)
+            self.assertIn("CONTEXT_MISMATCH", html)
+            self.assertIn("保存账户或评价不可用，指标暂不展示", html)
+            account["strategy_ref"] = seal(policy)
+            wire["request_manifest"]["portfolio_policy"]["strategy_spec"]["top_k"] = 4
+            (self.engine / "metadata-run.json").write_text(json.dumps(wire))
+            html, _ = _detail(head, self.manifests[head["result_id"]], roots, None)
+            self.assertIn("BacktestRun · UNAVAILABLE", html)
+            self.assertIn("保存账户或评价不可用，指标暂不展示", html)
 
     def test_refresh_refuses_owner_root_or_foreign_output(self):
         self.add("r1", "q1", "v1")
@@ -405,6 +458,15 @@ class CatalogTest(TestCase):
             main()
         self.assertEqual(opened.call_args.kwargs["result_id"], digest("r1"))
         self.assertEqual(opened.call_args.kwargs["engine_limits"], STOCK_LIMITS)
+        self.assertEqual(opened.call_args.kwargs["detail_mode"], "summary")
+        with patch.object(sys, "argv", ["axiom-ui", "--open-result", digest("r1"),
+                                        "--detail-mode", "full", "--workspace-config",
+                                        str(config), "--output", str(self.output)]), \
+             patch("axiom_ui.result_catalog.open_result_detail",
+                   return_value={"output_file": str(self.output / "one.html")}) as full, \
+             patch("builtins.print"):
+            main()
+        self.assertEqual(full.call_args.kwargs["detail_mode"], "full")
         with patch.object(sys, "argv", ["axiom-ui", "--serve-results", "--workspace-config",
                                         str(config)]), \
              patch("axiom_ui.result_server.serve_result_catalog") as serve:
@@ -426,8 +488,10 @@ class CatalogTest(TestCase):
                     self.assertIn(first["result_id"][7:], index)
                     self.assertEqual(self.result_calls, [])
                     self.assertEqual(self.owner_calls, [])
-                    urlopen(base + "/result/" + first["result_id"][7:], timeout=3).read()
+                    summary = urlopen(base + "/result/" + first["result_id"][7:], timeout=3).read().decode()
+                    self.assertIn("显式验证全部保存原件", summary)
                     self.assertEqual(self.result_calls, [first["result_id"]])
+                    urlopen(base + "/result/" + first["result_id"][7:] + "/full", timeout=3).read()
                     self.add("r2", "q2", "v3", status="BLOCKED", reason="事实缺失")
                     self.assertNotIn("事实缺失", urlopen(base + "/", timeout=3).read().decode())
                     urlopen(Request(base + "/refresh", data=b"", method="POST"), timeout=3)

@@ -38,7 +38,7 @@ RESEARCH_READERS = {
     "StockPredictionRun": "load_stock_prediction_projection",
     "StockDerivedSignal": "load_stock_derived_signal",
 }
-LONG_RESULT_FOLD_THRESHOLD = 100
+RUN_METADATA_MAX_BYTES = 32 * 1024 * 1024
 
 
 class ResultCatalogError(ValueError):
@@ -120,12 +120,18 @@ def _metrics(rows: list[tuple[str, str]]) -> str:
 def _strategy_label(spec: Any, strategy_ref: Any) -> str:
     if type(spec) is not dict:
         return "策略 " + _short(strategy_ref)
-    parts = [str(spec.get("selection") or "策略")]
-    if type(spec.get("top_k")) is int:
-        parts.append("Top " + str(spec["top_k"]))
+    selection = spec.get("selection")
+    parts = (["Top " + str(spec["top_k"])] if type(spec.get("top_k")) is int
+             else [str(selection or "策略")])
     buffer = spec.get("rank_buffer")
-    if type(buffer) is dict and type(buffer.get("keep_rank")) is int:
-        parts.append("keep_rank " + str(buffer["keep_rank"]))
+    if (spec.get("contract_version") == "stock_strategy_spec_v1" and
+            selection == "top_k"):
+        parts.append("等权")
+    elif selection == "rank_buffer" and type(buffer) is dict and \
+            type(buffer.get("keep_rank")) is int:
+        parts.append("排名缓冲 · 保留前 " + str(buffer["keep_rank"]))
+    elif selection:
+        parts.append(str(selection))
     if spec.get("exit_overlay") is not None:
         parts.append("含退出规则")
     return " · ".join(parts)
@@ -189,6 +195,66 @@ def _engine_nested_artifact(ref: dict, root: Path) -> Path:
     _require(resolved.is_relative_to(root) and resolved.is_file(),
              "Engine nested artifact escapes trusted root")
     return resolved
+
+
+def _unique_json_pairs(pairs):
+    value = {}
+    for key, item in pairs:
+        _require(key not in value, "duplicate saved run metadata key")
+        value[key] = item
+    return value
+
+
+def _run_metadata_summary(ref: dict, roots: Mapping[str, Path]) -> dict:
+    """Verify the registered run document and policy identity without opening result parts."""
+    kind = "BacktestRun"
+    try:
+        path = _relative_file(ref, roots)
+        before = path.stat()
+        if before.st_size > RUN_METADATA_MAX_BYTES:
+            return {"availability": "NOT_OPENED", "artifact_type": kind,
+                    "artifact_id": ref["artifact_id"], "reason": "METADATA_BUDGET"}
+        _require(before.st_size > 0, "empty run metadata")
+        with path.open("rb") as stream:
+            payload = stream.read(RUN_METADATA_MAX_BYTES + 1)
+        _require(len(payload) == before.st_size and
+                 len(payload) <= RUN_METADATA_MAX_BYTES,
+                 "run metadata changed or exceeded summary budget")
+        wire = json.loads(payload, object_pairs_hook=_unique_json_pairs,
+                          parse_constant=lambda value: (_ for _ in ()).throw(
+                              ResultCatalogError("nonfinite run metadata")))
+        after = path.stat()
+        _require((before.st_ino, before.st_size, before.st_mtime_ns) ==
+                 (after.st_ino, after.st_size, after.st_mtime_ns),
+                 "run metadata changed during read")
+        _require(type(wire) is dict and wire.get("contract_version") ==
+                 ref["artifact_contract_version"] and wire.get("run_id") ==
+                 ref["artifact_id"] and wire.get("content_digest") ==
+                 ref["content_digest"], "registered run metadata identity mismatch")
+        unsigned = {key: value for key, value in wire.items() if key != "content_digest"}
+        canonical = json.dumps(unsigned, ensure_ascii=False, sort_keys=True,
+                               separators=(",", ":"), allow_nan=False).encode("utf-8")
+        _require("sha256:" + sha256(canonical).hexdigest() == ref["content_digest"],
+                 "run metadata content digest mismatch")
+        request = wire["request_manifest"]
+        policy = request["portfolio_policy"]
+        policy_digest = "sha256:" + sha256(json.dumps(
+            policy, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+            allow_nan=False).encode("utf-8")).hexdigest()
+        _require(wire["request_ref"] == request["request_ref"] and
+                 type(policy.get("strategy_spec")) is dict and
+                 type(wire["committed_sequence"]) is int,
+                 "run request metadata mismatch")
+        return {"availability": "METADATA_VERIFIED", "artifact_type": kind,
+                "artifact_id": wire["run_id"], "content_digest": wire["content_digest"],
+                "committed_sequence": wire["committed_sequence"],
+                "strategy_ref": policy_digest, "strategy_spec": policy["strategy_spec"],
+                **{field: wire.get(field) for field in
+                   ("signal_ref", "market_ref", "profile_ref")}}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, UnicodeError,
+            RecursionError, OverflowError) as exc:
+        return {"availability": "UNAVAILABLE", "artifact_type": kind,
+                "artifact_id": ref.get("artifact_id"), "reason": type(exc).__name__}
 
 
 def _artifact_summary(ref: dict, roots: Mapping[str, Path], *, engine_limits: dict | None = None) -> dict:
@@ -315,12 +381,15 @@ def _account_bindings(manifest: dict, summaries: Mapping[str, dict]) -> set[int]
             continue
         try:
             report = summaries.get(backtest.get("artifact_key")) or {}
-            run_verified = report.get("availability") == "VERIFIED"
+            run_verified = report.get("availability") in {"VERIFIED", "METADATA_VERIFIED"}
             if run_verified:
                 _require(all(report.get(field) == backtest.get(reference) for field, reference in
                              (("artifact_id", "run_id"), ("content_digest", "content_digest"),
                               ("committed_sequence", "committed_sequence"))),
                          "account BacktestRun identity mismatch")
+                if report.get("strategy_ref") is not None:
+                    _require(report["strategy_ref"] == account.get("strategy_ref"),
+                             "account strategy metadata mismatch")
             expected = {field: backtest.get(field) for field in
                         ("run_id", "content_digest", "committed_sequence")}
             for evaluation in account.get("evaluation_refs") or []:
@@ -361,7 +430,9 @@ def _page(title: str, body: str, *, local_form: bool = False) -> str:
 
 
 def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error: str | None,
-            *, engine_limits: dict | None = None) -> tuple[str, set[str]]:
+            *, engine_limits: dict | None = None, detail_mode: str = "summary",
+            full_href: str | None = None) -> tuple[str, set[str]]:
+    _require(detail_mode in {"summary", "full"}, "invalid detail mode")
     title = "实验结果 · " + head["result_id"][7:19]
     pieces = ['<p><a href="index.html">← 返回实验列表</a></p><h1>' + _text(title) + '</h1>',
               '<section><p>登记状态：' + _text(head["status"]) +
@@ -372,19 +443,26 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
                       '。保留索引记录，不展示账户或统计。</section>')
         return _page(title, ''.join(pieces)), set()
     refs = {ref["artifact_key"]: ref for ref in manifest["artifacts"]}
-    # A long result can declare hundreds of Fold and raw prediction files.
-    # Keep refs visible; read the compact saved evaluations for the first view.
-    long_result = len(manifest.get("folds") or []) > LONG_RESULT_FOLD_THRESHOLD
-    summaries = {key: (_artifact_summary(ref, roots, engine_limits=engine_limits)
-                       if not long_result or
-                       ref["artifact_type"] == "BacktestEvaluation" else
-                       {"availability": "NOT_OPENED", "artifact_type": ref["artifact_type"],
-                        "artifact_id": ref["artifact_id"]})
-                 for key, ref in refs.items()}
+    if detail_mode == "summary":
+        pieces.append('<p>快速摘要：已验证保存评价与登记的账户元数据。训练、信号评价和账户结果分片未展开。</p>' +
+                      ('<p><a href="' + _text(full_href) +
+                       '">显式验证全部保存原件（可能较慢）</a></p>' if full_href else
+                       '<p>完整原件验证可使用 --detail-mode full 显式执行。</p>'))
+    summaries = {}
+    for key, ref in refs.items():
+        if detail_mode == "full" or ref["artifact_type"] == "BacktestEvaluation":
+            summaries[key] = _artifact_summary(ref, roots, engine_limits=engine_limits)
+        elif ref["artifact_type"] == "BacktestRun" and ref["artifact_contract_version"] in {
+                "backtest_run_v7", "backtest_run_v8"}:
+            summaries[key] = _run_metadata_summary(ref, roots)
+        else:
+            summaries[key] = {"availability": "NOT_OPENED",
+                              "artifact_type": ref["artifact_type"],
+                              "artifact_id": ref["artifact_id"]}
     invalid_accounts = _account_bindings(manifest, summaries)
     folds = manifest.get("folds") or []
     pieces.append('<details><summary>训练折（' + str(len(folds)) +
-                  '）· 登记引用，未展开验证</summary>' +
+                  '）· 展开查看</summary>' +
                   ('<ul>' + ''.join('<li>Fold <code>' + _text(_short(row.get("fold_ref"))) +
                    '</code> · ' + _value(row.get("status")) +
                    (' · ' + _text(row["reason"]) if row.get("reason") else '') + '</li>'
@@ -449,12 +527,12 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
             ("期末净资产", _money(run.get("final_nav_minor"))),
         ]) if run.get("availability") == "VERIFIED" else (
             '<p>账户原件未展开验证；以下数值只取已验证的 Owner 评价及其保存的账户引用。</p>'
-            if run.get("availability") == "NOT_OPENED" else
+            if run.get("availability") in {"NOT_OPENED", "METADATA_VERIFIED"} else
             '<p>账户保存件未提供：' + _text(run.get("reason") or "Owner 未验证") + '</p>')
         evaluations = []
         for item in account.get("evaluation_refs") or []:
             report = summaries.get(item.get("artifact_key")) or {}
-            if run.get("availability") not in {"VERIFIED", "NOT_OPENED"} or \
+            if run.get("availability") not in {"VERIFIED", "NOT_OPENED", "METADATA_VERIFIED"} or \
                     report.get("availability") != "VERIFIED":
                 evaluations.append('<p>评价 ' + _text(_short(item.get("evaluation_ref"))) +
                                    ' · 保存账户或评价不可用，指标暂不展示</p>')
@@ -654,7 +732,8 @@ def refresh_result_catalog(*, research_root: str | Path, engine_root: str | Path
 
 def open_result_detail(*, research_root: str | Path, engine_root: str | Path,
                        output_dir: str | Path, result_id: str,
-                       engine_limits: dict | None = None) -> dict:
+                       engine_limits: dict | None = None,
+                       detail_mode: str = "summary") -> dict:
     """Read one registered manifest and its fixed owner types into one local page."""
     result_id = _hash(result_id, "result_id")
     roots = _root_map(research_root, engine_root)
@@ -697,7 +776,8 @@ def open_result_detail(*, research_root: str | Path, engine_root: str | Path,
                  "Research head/manifest mismatch")
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         manifest, error = None, type(exc).__name__
-    html, run_ids = _detail(head, manifest, roots, error, engine_limits=limits)
+    html, run_ids = _detail(head, manifest, roots, error, engine_limits=limits,
+                            detail_mode=detail_mode)
     _atomic_html(target, html)
     return {"contract_version": "ui_result_detail_v1", "result_id": result_id,
             "verified_saved_backtest_count": len(run_ids), "availability":
@@ -766,7 +846,7 @@ class LocalResultCatalog:
         run_ids = set().union(*self.opened_runs.values()) if self.opened_runs else set()
         body = ('<h1>研究实验结果</h1><p>本机只读 · 仅打开所选详情</p>'
                 '<form method="post" action="/refresh"><button type="submit">刷新保存索引</button></form>'
-                '<p>结果 ' + str(len(self.heads)) + ' · 本次已打开并验证的保存回测 ' +
+                '<p>结果 ' + str(len(self.heads)) + ' · 本次已完整验证的账户原件 ' +
                 str(len(run_ids)) + ' · 登记修订 ' +
                 str(sum(h["revision"] + 1 for h in self.heads.values())) + '</p>'
                 '<small>生成时间：' + _text(self.generated_at) + ' · 索引修订：' +
@@ -775,7 +855,7 @@ class LocalResultCatalog:
                 (''.join(cards) if cards else '<section>暂无登记结果。</section>'))
         return _page("Axiom · 研究实验结果", body, local_form=True)
 
-    def detail_html(self, result_id: str) -> str:
+    def detail_html(self, result_id: str, *, detail_mode: str = "summary") -> str:
         _hash(result_id, "result_id")
         _require(result_id in self.heads, "result_id is not in the current index")
         head = self.heads[result_id]
@@ -793,6 +873,9 @@ class LocalResultCatalog:
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
             manifest, error = None, type(exc).__name__
         html, run_ids = _detail(head, manifest, self.roots, error,
-                                engine_limits=self.engine_limits)
+                                engine_limits=self.engine_limits,
+                                detail_mode=detail_mode,
+                                full_href="/result/" + result_id[7:] + "/full"
+                                if detail_mode == "summary" else None)
         self.opened_runs[result_id] = run_ids
         return html.replace('href="index.html"', 'href="/"', 1)
