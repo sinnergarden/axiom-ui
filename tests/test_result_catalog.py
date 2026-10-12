@@ -403,12 +403,32 @@ class CatalogTest(TestCase):
                 self.assertIn("BacktestRun · METADATA_VERIFIED", html)
                 self.assertIn("账户 CAGR · 原评价", html)
                 self.assertEqual(runs, set())
+            old_policy = {"eligibility_id": "pit_a_share_v1", "top_k": 5,
+                          "rebalance": "weekly_first_trading_session",
+                          "budget_basis": "available_cash_plus_previous_close_positions_excluding_receivables",
+                          "candidate_policy": "member_valid_finite_v1",
+                          "stock_execution_rules_ref": digest("saved-rules")}
+            wire["contract_version"] = "backtest_run_v7"
+            run_artifact["artifact_contract_version"] = "backtest_run_v7"
+            wire["request_manifest"]["portfolio_policy"] = old_policy
+            wire.pop("content_digest")
+            old_content = seal(wire)
+            wire["content_digest"] = old_content
+            (self.engine / "metadata-run.json").write_text(json.dumps(wire))
+            run_artifact["content_digest"] = old_content
+            run_ref["content_digest"] = old_content
+            account["backtest_ref"]["content_digest"] = old_content
+            account["strategy_ref"] = seal(old_policy)
+            html, _ = _detail(head, self.manifests[head["result_id"]], roots, None)
+            self.assertIn("策略：引用 " + account["strategy_ref"][7:19], html)
+            self.assertIn("BacktestRun · METADATA_VERIFIED", html)
+            self.assertIn("账户 CAGR · 原评价", html)
             account["strategy_ref"] = digest("wrong-strategy")
             html, _ = _detail(head, self.manifests[head["result_id"]], roots, None)
             self.assertIn("CONTEXT_MISMATCH", html)
             self.assertIn("保存账户或评价不可用，指标暂不展示", html)
-            account["strategy_ref"] = seal(policy)
-            wire["request_manifest"]["portfolio_policy"]["strategy_spec"]["top_k"] = 4
+            account["strategy_ref"] = seal(old_policy)
+            wire["request_manifest"]["portfolio_policy"]["top_k"] = 4
             (self.engine / "metadata-run.json").write_text(json.dumps(wire))
             html, _ = _detail(head, self.manifests[head["result_id"]], roots, None)
             self.assertIn("BacktestRun · UNAVAILABLE", html)

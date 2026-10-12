@@ -119,7 +119,7 @@ def _metrics(rows: list[tuple[str, str]]) -> str:
 
 def _strategy_label(spec: Any, strategy_ref: Any) -> str:
     if type(spec) is not dict:
-        return "策略 " + _short(strategy_ref)
+        return "引用 " + _short(strategy_ref)
     selection = spec.get("selection")
     parts = (["Top " + str(spec["top_k"])] if type(spec.get("top_k")) is int
              else [str(selection or "策略")])
@@ -238,17 +238,21 @@ def _run_metadata_summary(ref: dict, roots: Mapping[str, Path]) -> dict:
                  "run metadata content digest mismatch")
         request = wire["request_manifest"]
         policy = request["portfolio_policy"]
+        _require(type(policy) is dict and
+                 ("strategy_spec" not in policy or
+                  type(policy["strategy_spec"]) is dict),
+                 "invalid run strategy metadata")
         policy_digest = "sha256:" + sha256(json.dumps(
             policy, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
             allow_nan=False).encode("utf-8")).hexdigest()
         _require(wire["request_ref"] == request["request_ref"] and
-                 type(policy.get("strategy_spec")) is dict and
                  type(wire["committed_sequence"]) is int,
                  "run request metadata mismatch")
         return {"availability": "METADATA_VERIFIED", "artifact_type": kind,
                 "artifact_id": wire["run_id"], "content_digest": wire["content_digest"],
                 "committed_sequence": wire["committed_sequence"],
-                "strategy_ref": policy_digest, "strategy_spec": policy["strategy_spec"],
+                "strategy_ref": policy_digest,
+                "strategy_spec": policy.get("strategy_spec"),
                 **{field: wire.get(field) for field in
                    ("signal_ref", "market_ref", "profile_ref")}}
     except (OSError, ValueError, KeyError, TypeError, AttributeError, UnicodeError,
@@ -444,7 +448,7 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
         return _page(title, ''.join(pieces)), set()
     refs = {ref["artifact_key"]: ref for ref in manifest["artifacts"]}
     if detail_mode == "summary":
-        pieces.append('<p>快速摘要：已验证保存评价与登记的账户元数据。训练、信号评价和账户结果分片未展开。</p>' +
+        pieces.append('<p>快速摘要：逐项读取保存评价与登记的账户元数据；失败或未展开的保存件单独标注。训练、信号评价和账户结果分片未展开。</p>' +
                       ('<p><a href="' + _text(full_href) +
                        '">显式验证全部保存原件（可能较慢）</a></p>' if full_href else
                        '<p>完整原件验证可使用 --detail-mode full 显式执行。</p>'))
