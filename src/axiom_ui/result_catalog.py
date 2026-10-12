@@ -36,6 +36,7 @@ RESEARCH_READERS = {
     "StockPredictionBindings": "load_stock_prediction_bindings",
     "StockMLFoldProjection": "load_stock_fold_projection",
     "StockPredictionRun": "load_stock_prediction_projection",
+    "StockDerivedSignal": "load_stock_derived_signal",
 }
 
 
@@ -187,7 +188,8 @@ def _artifact_summary(ref: dict, roots: Mapping[str, Path], *, engine_limits: di
             loader = getattr(axiom_research, RESEARCH_READERS[kind])
             saved = (loader(path, research_root=roots["research"])
                      if kind in {"StockSequentialResult", "StockMLFoldProjection",
-                                 "StockPredictionRun"}
+                                 "StockPredictionRun", "StockPredictionBindings",
+                                 "StockDerivedSignal"}
                      else loader(path))
             wire = _wire(saved)
             _require(saved.identity == ref["artifact_id"] and
@@ -198,6 +200,9 @@ def _artifact_summary(ref: dict, roots: Mapping[str, Path], *, engine_limits: di
                     "artifact_id": saved.identity, "contract_version": wire["contract_version"],
                     "status": wire.get("status"), "configuration_ref":
                     wire.get("configuration_ref"), "batch_ref": wire.get("batch_ref"),
+                    "signal_stage": wire.get("signal_stage"),
+                    "score_semantics": wire.get("score_semantics"),
+                    "parent_signal_refs": wire.get("parent_signal_refs"),
                     "fold_count": len(wire["folds"]) if type(wire.get("folds")) is list else None,
                     "signal_count": (len(wire["frames"]) if type(wire.get("frames")) is list
                                      else len(wire["prediction_input"]["frames"])
@@ -346,6 +351,18 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
     signal_cards = []
     for signal in signals:
         rows = []
+        prediction = summaries.get(signal.get("prediction_artifact_key")) or {}
+        if (prediction.get("availability") == "VERIFIED" and
+                prediction.get("artifact_type") == "StockDerivedSignal"):
+            rows.append(_metrics([
+                ("保存信号阶段", _value(prediction.get("signal_stage"))),
+                ("保存分数语义", _value(prediction.get("score_semantics"))),
+                ("原始父 Signal", _text(json.dumps(
+                    prediction.get("parent_signal_refs"), ensure_ascii=False, sort_keys=True))),
+            ]))
+        elif signal.get("prediction_artifact_key") and prediction.get("availability") != "VERIFIED":
+            rows.append('<p>信号保存件未提供：' +
+                        _text(prediction.get("reason") or "Owner 未验证") + '</p>')
         for key in signal.get("evaluation_artifact_keys") or []:
             saved = summaries.get(key) or {}
             if saved.get("availability") != "VERIFIED":

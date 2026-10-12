@@ -12,7 +12,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from axiom_ui.result_catalog import (STOCK_LIMITS, ResultCatalogError, _engine_limits,
-                                     _engine_nested_artifact,
+                                     _artifact_summary, _detail, _engine_nested_artifact,
                                      _relative_file, open_result_detail, refresh_result_catalog)
 from axiom_ui.__main__ import main
 from axiom_ui.result_server import build_result_server
@@ -263,6 +263,57 @@ class CatalogTest(TestCase):
         outside.write_text("{}")
         with self.assertRaises(ResultCatalogError):
             _engine_nested_artifact({"manifest_uri": str(outside)}, self.engine)
+
+    def test_derived_signal_reader_and_missing_leaf_stay_separate(self):
+        first_id, second_id = digest("derived-one"), digest("derived-two")
+        content = digest("derived-content")
+        (self.research / "one.json").write_text("{}")
+        roots = {"research": self.research.resolve(), "engine": self.engine.resolve()}
+        def ref(key, identity, filename):
+            return {"artifact_key": key, "owner": "Research",
+                    "artifact_type": "StockDerivedSignal", "artifact_id": identity,
+                    "artifact_contract_version": "derived_signal_run_v1",
+                    "content_digest": content, "root_id": "research",
+                    "relative_path": filename}
+        first, missing = ref("first", first_id, "one.json"), ref("missing", second_id, "missing.json")
+        calls = []
+        def load(path, *, research_root):
+            calls.append((path, research_root))
+            return SimpleNamespace(identity=first_id, content_digest=content,
+                to_dict=lambda: {"contract_version": "derived_signal_run_v1",
+                    "signal_stage": "final", "score_semantics": "static-combined",
+                    "parent_signal_refs": {"a": digest("parent-a"), "b": digest("parent-b")}})
+        research = ModuleType("axiom_research")
+        research.load_stock_derived_signal = load
+        (self.research / "bindings.json").write_text("{}")
+        binding_id, binding_content = digest("bindings"), digest("bindings-content")
+        def load_bindings(path, *, research_root):
+            calls.append((path, research_root))
+            return SimpleNamespace(identity=binding_id, content_digest=binding_content,
+                to_dict=lambda: {"contract_version": "stock_prediction_input_refs_v2",
+                                 "frames": []})
+        research.load_stock_prediction_bindings = load_bindings
+        with patch.dict(sys.modules, {"axiom_research": research}):
+            binding = dict(first, artifact_type="StockPredictionBindings",
+                           artifact_id=binding_id, content_digest=binding_content,
+                           artifact_contract_version="stock_prediction_input_refs_v2",
+                           relative_path="bindings.json")
+            binding_summary = _artifact_summary(binding, roots)
+            head = self.add("derived", "q1", "v1", artifacts=[first, missing],
+                signals=[{"signal_run_ref": first_id, "status": "COMPLETE",
+                          "prediction_artifact_key": "first", "evaluation_artifact_keys": []},
+                         {"signal_run_ref": second_id, "status": "COMPLETE",
+                          "prediction_artifact_key": "missing", "evaluation_artifact_keys": []}])
+            html, run_ids = _detail(head, self.manifests[head["result_id"]], roots, None)
+        self.assertEqual(binding_summary["availability"], "VERIFIED")
+        self.assertEqual(calls, [((self.research / "bindings.json").resolve(), self.research.resolve()),
+                                 ((self.research / "one.json").resolve(), self.research.resolve())])
+        self.assertEqual(run_ids, set())
+        self.assertIn("static-combined", html)
+        self.assertIn("保存信号阶段", html)
+        self.assertIn("StockDerivedSignal · VERIFIED", html)
+        self.assertIn("StockDerivedSignal · UNAVAILABLE", html)
+        self.assertIn("信号保存件未提供：FileNotFoundError", html)
 
     def test_refresh_refuses_owner_root_or_foreign_output(self):
         self.add("r1", "q1", "v1")

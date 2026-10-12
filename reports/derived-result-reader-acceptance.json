@@ -1,0 +1,36 @@
+{
+  "contract_version": "ui_derived_result_reader_acceptance_v1",
+  "status": "PASS",
+  "scope": "Derived combination signals in the saved Research result catalog",
+  "research_source_head": "8b5cce142e0ee267328552e9f3f8ccbe74b2dec6",
+  "fixture_kind": "Static saved-output and parent-header fixture; no trained-model or numerical acceptance",
+  "fixed_owner_read": {
+    "registered_results": 1,
+    "verified_derived_signals": 2,
+    "verified_saved_backtests": 0,
+    "saved_fields_displayed": [
+      "signal_stage",
+      "score_semantics",
+      "parent_signal_refs"
+    ],
+    "owner_json_hash_mtime_size_unchanged": 19
+  },
+  "separate_temporary_registration": {
+    "initial_verified_derived_signals": 2,
+    "after_one_temporary_signal_file_removed": {
+      "verified_derived_signals": 1,
+      "unavailable_derived_signals": 1,
+      "verified_saved_backtests": 0
+    },
+    "original_owner_fixture_untouched": true,
+    "fit_signal_math_account_calls": 0
+  },
+  "targeted_ui_catalog_tests": {
+    "passed": 8,
+    "failed": 0
+  },
+  "limitations": [
+    "The static fixture verifies registration, saved identity, trusted-root loading and UI availability only.",
+    "It does not validate model quality, signal arithmetic, account returns or live trading."
+  ]
+}
