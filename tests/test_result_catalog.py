@@ -11,7 +11,7 @@ import sys
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from axiom_ui.result_catalog import (STOCK_LIMITS, ResultCatalogError, _engine_limits,
+from axiom_ui.result_catalog import (LocalResultCatalog, STOCK_LIMITS, ResultCatalogError, _engine_limits,
                                      _artifact_summary, _detail, _engine_nested_artifact,
                                      _relative_file, _strategy_label, open_result_detail,
                                      refresh_result_catalog)
@@ -546,3 +546,144 @@ class CatalogTest(TestCase):
                     worker.join(timeout=3)
 
         self.refresh(action=run)
+
+
+    def test_pagination_is_bounded_and_does_not_open_results(self):
+        for number in range(5):
+            self.add("page-" + str(number), "q1", "v1")
+
+        def action():
+            catalog = LocalResultCatalog(research_root=self.research, engine_root=self.engine)
+            first = catalog.index_html(page=1, page_size=2)
+            second = catalog.index_html(page=2, page_size=2)
+            last = catalog.index_html(page=3, page_size=2)
+            self.assertEqual(first.count("打开保存结果"), 2)
+            self.assertEqual(second.count("打开保存结果"), 2)
+            self.assertEqual(last.count("打开保存结果"), 1)
+            self.assertIn("仍完整读取", first)
+            self.assertEqual(self.result_calls, [])
+            self.assertEqual(self.owner_calls, [])
+            for options in ({"page_size": 101}, {"page_size": 0}, {"page": 0},
+                            {"page": True}, {"page": 4, "page_size": 2}):
+                with self.assertRaises(ResultCatalogError):
+                    catalog.index_html(**options)
+        self.refresh(action=action)
+
+    def test_one_signal_summary_checks_identity_binding_and_never_full_loads(self):
+        path = self.research / "evidence.json"
+        path.write_text("{}")
+        ref = {"artifact_key": "evidence", "owner": "Research", "artifact_type": "StockSignalEvaluation",
+               "artifact_id": self.signal_eval_id, "content_digest": self.signal_eval_digest,
+               "artifact_contract_version": "stock_signal_evidence_v8", "root_id": "research",
+               "relative_path": path.name}
+        head = self.add("signal-page", "q1", "v1", artifacts=[ref], signals=[{
+            "signal_run_ref": self.shared_signal, "evaluation_artifact_keys": ["evidence"]}])
+        evidence = {**self.signal_eval_wire, "input_signal_refs": [self.shared_signal],
+                    "label_ref": digest("label"), "label_spec": {"horizon_sessions": 5},
+                    "audit_scope": "report_and_bindings", "ancestors_audited": False,
+                    "coverage": {"valid_pair_count": 7, "excluded_counts": {"SIGNAL_MISSING": 2},
+                                 "by_session": ["DO_NOT_RENDER_DAILY"]}}
+
+        def action():
+            catalog = LocalResultCatalog(research_root=self.research, engine_root=self.engine)
+            self.assertIn("摘要不可用", catalog.signal_html(head["result_id"], 0, 0))
+            with patch.object(sys.modules["axiom_research"], "load_stock_signal_evaluation_summary",
+                              return_value=evidence, create=True) as owner:
+                html = catalog.signal_html(head["result_id"], 0, 0)
+                self.assertIn(digest("label"), html)
+                self.assertIn("SIGNAL_MISSING", html)
+                visible = html.split('<details><summary>原合同摘要与完整引用')[0]
+                self.assertNotIn("<pre>", visible)
+                self.assertIn("Label horizon（交易日）</th><td>5", visible)
+                self.assertIn("平均 IC</th><td>0.03", visible)
+                self.assertIn("有效配对数</th><td>7", visible)
+                self.assertIn("信号自身覆盖（native）", visible)
+                self.assertIn("未提供", visible)
+                self.assertIn("祖先未审", html)
+                self.assertNotIn("DO_NOT_RENDER_DAILY", html)
+                owner.assert_called_once_with(path.resolve(), research_root=self.research.resolve())
+                for field, wrong in (("evidence_ref", digest("wrong")),
+                                     ("content_digest", digest("wrong")),
+                                     ("input_signal_refs", [digest("wrong")]),
+                                     ("ancestors_audited", True)):
+                    owner.return_value = {**evidence, field: wrong}
+                    html = catalog.signal_html(head["result_id"], 0, 0)
+                    self.assertIn("摘要不可用", html)
+                    self.assertNotIn("SIGNAL_MISSING", html)
+            self.assertEqual(self.signal_calls, [])
+            self.assertEqual(self.owner_calls, [])
+            with self.assertRaises(ResultCatalogError):
+                catalog.signal_html(head["result_id"], 0, 1)
+        self.refresh(action=action)
+
+    def test_account_curve_selects_one_owner_and_checks_bindings(self):
+        ref = self.artifact("run", "BacktestRun", self.run_id, self.run_digest,
+                            "run.json", "backtest_run_v8")
+        policy = self.run_wire["request_manifest"]["portfolio_policy"]
+        strategy = "sha256:" + sha256(json.dumps(policy, ensure_ascii=False, sort_keys=True,
+                                                separators=(",", ":")).encode()).hexdigest()
+        account = {"strategy_ref": strategy, "backtest_ref": {**self.run_ref, "artifact_key": "run"},
+                   "evaluation_refs": []}
+        head = self.add("curve", "q1", "v1", artifacts=[ref], accounts=[account])
+        nav = [{"session": "2026-01-02", "nav_minor": 10000},
+               {"session": "2026-01-05", "nav_minor": 11000}]
+
+        def action():
+            catalog = LocalResultCatalog(research_root=self.research, engine_root=self.engine)
+            with patch.object(sys.modules["axiom_engine.runtime"], "load_stock_backtest_projection",
+                              return_value=SimpleNamespace(wire=self.run_wire, rows={"nav": nav})) as owner:
+                html = catalog.account_html(head["result_id"], 0, start="2026-01-05")
+                self.assertIn("区间原始点数 1 / 全账户 2", html)
+                self.assertIn("2026-01-05", html)
+                self.assertNotIn("2026-01-02", html)
+                self.assertIn("<svg", html)
+                self.assertEqual(owner.call_count, 1)
+                self.assertEqual(catalog.opened_runs[head["result_id"]], {self.run_id})
+                self.assertEqual(owner.call_args.args[0], (self.engine / "run.json").resolve())
+                account["backtest_ref"]["committed_sequence"] = 999
+                with self.assertRaises(ResultCatalogError):
+                    catalog.account_html(head["result_id"], 0)
+                account["backtest_ref"]["committed_sequence"] = 7
+                from datetime import date, timedelta
+                long_nav = [{"session": (date(2019, 1, 1) + timedelta(days=i)).isoformat(),
+                             "nav_minor": 10000 + i} for i in range(1699)]
+                owner.return_value = SimpleNamespace(wire=self.run_wire, rows={"nav": long_nav})
+                html = catalog.account_html(head["result_id"], 0)
+                ranged = catalog.account_html(head["result_id"], 0,
+                    start=long_nav[0]["session"], end=long_nav[-1]["session"])
+                for result in (html, ranged):
+                    self.assertIn("SVG 展示点数 600 / 区间原始点数 1699", result)
+                    self.assertIn("最后 50 / 1699 行", result)
+                    self.assertIn(long_nav[0]["session"], result)
+                    self.assertIn(long_nav[-1]["session"], result)
+                    points = result.split('points="')[1].split('"')[0].split()
+                    self.assertEqual(len(points), 600)
+                    self.assertEqual(points[0], "0.0,180.0")
+                    self.assertEqual(points[-1], "900.0,20.0")
+                    self.assertEqual(result.count('<tr>'), 50)
+                self.assertEqual(html.split('points="')[1].split('"')[0],
+                                 ranged.split('points="')[1].split('"')[0])
+                with self.assertRaises(ValueError):
+                    catalog.account_html(head["result_id"], 0, start="../../etc")
+            self.assertEqual(self.signal_calls, [])
+        self.refresh(action=action)
+
+    def test_loopback_query_validation(self):
+        self.add("query", "q1", "v1")
+        def action():
+            with build_result_server(research_root=self.research, engine_root=self.engine) as server:
+                worker = Thread(target=server.serve_forever, daemon=True)
+                worker.start()
+                base = f"http://127.0.0.1:{server.server_port}"
+                try:
+                    self.assertIn("每页 1", urlopen(base + "/?page_size=1", timeout=3).read().decode())
+                    for query in ("page_size=101", "page=1&page=2", "file=../../etc", "page=-1"):
+                        with self.assertRaises(HTTPError) as error:
+                            urlopen(base + "/?" + query, timeout=3)
+                        self.assertEqual(error.exception.code, 404)
+                    self.assertEqual(self.owner_calls, [])
+                    self.assertEqual(self.result_calls, [])
+                finally:
+                    server.shutdown()
+                    worker.join(timeout=3)
+        self.refresh(action=action)
