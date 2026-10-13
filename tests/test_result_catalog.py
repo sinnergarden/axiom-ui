@@ -579,7 +579,7 @@ class CatalogTest(TestCase):
         head = self.add("signal-page", "q1", "v1", artifacts=[ref], signals=[{
             "signal_run_ref": self.shared_signal, "evaluation_artifact_keys": ["evidence"]}])
         evidence = {**self.signal_eval_wire, "input_signal_refs": [self.shared_signal],
-                    "label_ref": digest("label"), "label_spec": {"horizon": 5},
+                    "label_ref": digest("label"), "label_spec": {"horizon_sessions": 5},
                     "audit_scope": "report_and_bindings", "ancestors_audited": False,
                     "coverage": {"valid_pair_count": 7, "excluded_counts": {"SIGNAL_MISSING": 2},
                                  "by_session": ["DO_NOT_RENDER_DAILY"]}}
@@ -592,6 +592,13 @@ class CatalogTest(TestCase):
                 html = catalog.signal_html(head["result_id"], 0, 0)
                 self.assertIn(digest("label"), html)
                 self.assertIn("SIGNAL_MISSING", html)
+                visible = html.split('<details><summary>原合同摘要与完整引用')[0]
+                self.assertNotIn("<pre>", visible)
+                self.assertIn("Label horizon（交易日）</th><td>5", visible)
+                self.assertIn("平均 IC</th><td>0.03", visible)
+                self.assertIn("有效配对数</th><td>7", visible)
+                self.assertIn("信号自身覆盖（native）", visible)
+                self.assertIn("未提供", visible)
                 self.assertIn("祖先未审", html)
                 self.assertNotIn("DO_NOT_RENDER_DAILY", html)
                 owner.assert_called_once_with(path.resolve(), research_root=self.research.resolve())
@@ -626,7 +633,7 @@ class CatalogTest(TestCase):
             with patch.object(sys.modules["axiom_engine.runtime"], "load_stock_backtest_projection",
                               return_value=SimpleNamespace(wire=self.run_wire, rows={"nav": nav})) as owner:
                 html = catalog.account_html(head["result_id"], 0, start="2026-01-05")
-                self.assertIn("展示 1 / 2 行", html)
+                self.assertIn("区间原始点数 1 / 全账户 2", html)
                 self.assertIn("2026-01-05", html)
                 self.assertNotIn("2026-01-02", html)
                 self.assertIn("<svg", html)
@@ -637,9 +644,25 @@ class CatalogTest(TestCase):
                 with self.assertRaises(ResultCatalogError):
                     catalog.account_html(head["result_id"], 0)
                 account["backtest_ref"]["committed_sequence"] = 7
-                owner.return_value = SimpleNamespace(wire=self.run_wire, rows={"nav": nav * 501})
-                with self.assertRaises(ResultCatalogError):
-                    catalog.account_html(head["result_id"], 0, start="2026-01-01")
+                from datetime import date, timedelta
+                long_nav = [{"session": (date(2019, 1, 1) + timedelta(days=i)).isoformat(),
+                             "nav_minor": 10000 + i} for i in range(1699)]
+                owner.return_value = SimpleNamespace(wire=self.run_wire, rows={"nav": long_nav})
+                html = catalog.account_html(head["result_id"], 0)
+                ranged = catalog.account_html(head["result_id"], 0,
+                    start=long_nav[0]["session"], end=long_nav[-1]["session"])
+                for result in (html, ranged):
+                    self.assertIn("SVG 展示点数 600 / 区间原始点数 1699", result)
+                    self.assertIn("最后 50 / 1699 行", result)
+                    self.assertIn(long_nav[0]["session"], result)
+                    self.assertIn(long_nav[-1]["session"], result)
+                    points = result.split('points="')[1].split('"')[0].split()
+                    self.assertEqual(len(points), 600)
+                    self.assertEqual(points[0], "0.0,180.0")
+                    self.assertEqual(points[-1], "900.0,20.0")
+                    self.assertEqual(result.count('<tr>'), 50)
+                self.assertEqual(html.split('points="')[1].split('"')[0],
+                                 ranged.split('points="')[1].split('"')[0])
                 with self.assertRaises(ValueError):
                     catalog.account_html(head["result_id"], 0, start="../../etc")
             self.assertEqual(self.signal_calls, [])

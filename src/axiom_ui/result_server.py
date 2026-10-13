@@ -78,7 +78,7 @@ def build_result_server(*, research_root, engine_root, engine_limits=None,
                         result_id, detail_mode="full" if match.group(2) else "summary"))
                     return
             except (OSError, ImportError, ResultCatalogError, KeyError, TypeError, ValueError):
-                self._send(404, _page("结果不可用", "<p>请求参数、登记引用或保存内容无效。曲线区间最多 1000 行，请缩小日期范围。</p>"))
+                self._send(404, _page("结果不可用", "<p>请求参数、登记引用或保存内容无效。</p>"))
                 return
             self._send(404, _page("未找到", "<p>没有此页面。</p>"))
 

@@ -963,12 +963,47 @@ class LocalResultCatalog:
             native = coverage.get("native")
             if type(native) is dict:
                 projected["coverage"]["native"] = {field: native.get(field) for field in fields}
-            for label, field in (("Label 身份", "label_ref"), ("Label 定义", "label_spec"),
-                                 ("共同样本身份", "sample_mask_ref"), ("统计身份", "statistics_ref"),
-                                 ("统计与缺失原因", "summary"), ("共同样本、覆盖与排除原因", "coverage"),
-                                 ("状态", "status"), ("限制", "limitations")):
-                body += '<section><h2>' + label + '</h2><pre>' + _text(json.dumps(
-                    projected.get(field), ensure_ascii=False, indent=2)) + '</pre></section>'
+            metrics = wire.get("summary") or {}
+            label_spec = wire.get("label_spec") or {}
+            body += '<section><h2>Label 与统计</h2>' + _metrics([
+                ("Label 身份", _value(wire.get("label_ref"))),
+                ("Label horizon（交易日）", _value(label_spec.get("horizon_sessions"))),
+                ("Label 公式", _value(label_spec.get("formula"))),
+                ("状态", _value(wire.get("status"))),
+                ("平均 IC", _value(metrics.get("mean_ic"))),
+                ("IC 有效天数", _value(metrics.get("valid_ic_session_count"))),
+                ("平均 RankIC", _value(metrics.get("mean_rank_ic"))),
+                ("RankIC 有效天数", _value(metrics.get("valid_rank_ic_session_count"))),
+                ("ICIR 缺失原因", _value(metrics.get("icir_reason"))),
+                ("RankICIR 缺失原因", _value(metrics.get("rank_icir_reason"))),
+                ("共同样本身份", _value(wire.get("sample_mask_ref"))),
+            ]) + '</section>'
+            coverage_labels = (("样本格点数", "scope_key_count"),
+                               ("参考成员格点数", "reference_key_count"),
+                               ("成熟有效 Label 数", "mature_valid_label_count"),
+                               ("有效预测数", "prediction_valid_count"),
+                               ("有效配对数", "valid_pair_count"))
+            for title, counts in (("共同样本覆盖（common）", coverage),
+                                  ("信号自身覆盖（native）", native if type(native) is dict else {})):
+                body += '<section><h2>' + title + '</h2>' + _metrics([
+                    (label, _value(counts.get(field))) for label, field in coverage_labels])
+                exclusions = counts.get("excluded_counts")
+                body += '<h3>排除原因与数量（保存口径）</h3>'
+                body += (_metrics([(reason, _value(count)) for reason, count in exclusions.items()])
+                         if type(exclusions) is dict and exclusions else '<p>未提供排除原因记录。</p>')
+                body += '</section>'
+            body += ('<p>比较口径：' + _value(coverage.get("comparison_mode")) +
+                     '。缺失字段均标为未提供；不补算比例或统计。</p>')
+            limitations = wire.get("limitations")
+            body += '<section><h2>保存限制</h2>' + (
+                '<ul>' + ''.join('<li>' + _text(item) + '</li>' for item in limitations) + '</ul>'
+                if type(limitations) is list and limitations else '<p>未提供</p>') + '</section>'
+            details = {field: projected.get(field) for field in (
+                "contract_version", "evidence_ref", "content_digest", "input_signal_refs", "label_ref",
+                "label_spec", "sample_mask_ref", "statistics_ref", "summary", "coverage")}
+            body += '<details><summary>原合同摘要与完整引用</summary><pre>' + _text(json.dumps(
+                details, ensure_ascii=False, indent=2)) + '</pre></details>'
+
         except (ImportError, OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
             body += '<p role="status">此项摘要不可用：' + _text(type(exc).__name__) + \
                     '。需要 Research 只读摘要 owner；未调用完整祖先 loader。</p>'
@@ -1006,24 +1041,27 @@ class LocalResultCatalog:
                  "account binding mismatch")
         rows = [row for row in nav if (start is None or row["session"] >= start) and
                 (end is None or row["session"] <= end)]
-        if start is None and end is None:
-            rows = rows[-250:]
-        _require(len(rows) <= 1000, "display range exceeds 1000 sessions; narrow the dates")
         body = '<p><a href="/result/' + result_id[7:] + '">返回结果</a></p><h1>单账户曲线</h1>'
-        body += '<p>仅此账户通过 Engine 原件验证。日期裁剪仅减少展示，owner 仍读取此账户所需分片。默认最近 250 行，每次最多 1000 行。</p>'
+        body += '<p>仅此账户通过 Engine 原件验证。日期裁剪仅减少展示，owner 仍读取此账户所需分片。默认完整保存区间；SVG 最多 600 点，明细仅显示所选区间最后 50 行。</p>'
         body += '<form method="get"><label>开始 <input type="date" name="start" value="' + _text(start or '') + '\"></label> <label>结束 <input type="date" name="end" value="' + _text(end or '') + '\"></label><button>查看区间</button></form>'
-        body += '<p>账户：<code>' + _text(wire["run_id"]) + '</code> · 展示 ' + str(len(rows)) + ' / ' + str(len(nav)) + ' 行</p>'
+        body += '<p>账户：<code>' + _text(wire["run_id"]) + '</code> · 区间原始点数 ' + str(len(rows)) + ' / 全账户 ' + str(len(nav)) + '</p>'
         if rows:
             values = [Decimal(str(row["nav_minor"])) for row in rows]
             _require(all(value.is_finite() for value in values), "invalid NAV")
             low, high = min(values), max(values)
             span = high - low or Decimal(1)
+            indices = (list(range(len(rows))) if len(rows) <= 600 else
+                       [i * (len(rows) - 1) // 599 for i in range(600)])
             points = ' '.join(str(round(i * 900 / max(1, len(values) - 1), 2)) + ',' +
                               str(round(180 - float((value - low) / span) * 160, 2))
-                              for i, value in enumerate(values))
+                              for i in indices for value in (values[i],))
             body += '<svg viewBox="0 0 900 200" role="img" aria-label="保存账户净值，纵轴按所选区间缩放"><polyline fill="none" stroke="#416e99" stroke-width="2" points="' + points + '"/></svg>'
             body += '<p>纵轴范围：' + _money(int(low)) + ' 至 ' + _money(int(high)) + '；横轴按保存交易行排序。</p>'
-            body += _metrics([(row["session"], _money(row["nav_minor"])) for row in rows])
+            body += ('<p>SVG 展示点数 ' + str(len(indices)) + ' / 区间原始点数 ' + str(len(rows)) +
+                     '；按原始行号等距确定性抽样，保留首尾，可能省略区间内波动。未用展示点重算收益或其他指标。</p>')
+            body += '<p>区间首尾：' + _text(rows[0]["session"]) + ' 至 ' + _text(rows[-1]["session"]) + '</p>'
+            body += '<h2>保存净值明细（最后 ' + str(min(50, len(rows))) + ' / ' + str(len(rows)) + ' 行）</h2>'
+            body += _metrics([(row["session"], _money(row["nav_minor"])) for row in rows[-50:]])
         else:
             body += '<p>所选区间没有保存的净值行。</p>'
         self.opened_runs.setdefault(result_id, set()).add(wire["run_id"])
