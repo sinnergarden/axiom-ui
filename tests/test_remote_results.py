@@ -1,6 +1,9 @@
 import secrets
-from threading import Thread
+import socket
+from concurrent.futures import ThreadPoolExecutor
+from threading import Condition, Event, Thread
 from unittest import TestCase
+from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -55,6 +58,110 @@ class RemoteTests(TestCase):
                         'Access-Control-Request-Headers': 'authorization'})[0], 204)
                 finally:
                     server.shutdown(); worker.join(3)
+        run_fixture(f, action)
+
+    def test_idle_connection_does_not_block_requests_and_expires(self):
+        f = fixture()
+        self.addCleanup(f.doCleanups)
+        token = secrets.token_urlsafe(32)
+
+        def action():
+            with build_remote_server(research_root=f.research, engine_root=f.engine,
+                                     token=token, origins=['https://example.com']) as server:
+                # Keep the production bound long enough to prove responses do
+                # not depend on timeout; shorten only the separate expiry check.
+                accepted = Event()
+                original = server.get_request
+                def accept():
+                    result = original()
+                    accepted.set()
+                    return result
+                server.get_request = accept
+                worker = Thread(target=server.serve_forever, daemon=True)
+                worker.start()
+                try:
+                    with socket.create_connection(server.server_address, timeout=2) as idle:
+                        self.assertTrue(accepted.wait(2))
+                        base = f'http://127.0.0.1:{server.server_port}'
+                        with self.assertRaises(HTTPError) as error:
+                            urlopen(base + '/', timeout=2)
+                        self.assertEqual(error.exception.code, 401)
+                        error.exception.close()
+                        with urlopen(Request(base + '/', headers={'Authorization': 'Bearer ' + token}),
+                                     timeout=2) as response:
+                            self.assertEqual(response.status, 200)
+                            self.assertIn('合成验收', response.read().decode())
+                    server.request_timeout = 0.2
+                    accepted.clear()
+                    with socket.create_connection(server.server_address, timeout=2) as idle:
+                        self.assertTrue(accepted.wait(2))
+                        self.assertEqual(idle.recv(1), b'')
+                finally:
+                    server.shutdown()
+                    worker.join(3)
+        run_fixture(f, action)
+
+    def test_refresh_and_all_read_routes_share_one_catalog_transaction(self):
+        from axiom_ui.result_catalog import LocalResultCatalog
+        f = fixture()
+        self.addCleanup(f.doCleanups)
+        token = secrets.token_urlsafe(32)
+
+        def action():
+            with build_remote_server(research_root=f.research, engine_root=f.engine,
+                                     token=token, origins=['https://example.com']) as server:
+                refreshed, release, read_entered = Event(), Event(), Event()
+                authorized = Condition()
+                count = 0
+                original_auth = server.RequestHandlerClass._authorize
+                def authorize(handler):
+                    nonlocal count
+                    result = original_auth(handler)
+                    with authorized:
+                        count += 1
+                        authorized.notify_all()
+                    return result
+                original_refresh = LocalResultCatalog.refresh
+                def refresh(catalog):
+                    original_refresh(catalog)
+                    refreshed.set()
+                    if not release.wait(5):
+                        raise AssertionError('test did not release refresh')
+                def observed(method):
+                    def render(catalog, *args, **kwargs):
+                        read_entered.set()
+                        return method(catalog, *args, **kwargs)
+                    return render
+                base = f'http://127.0.0.1:{server.server_port}'
+                result = '/result/' + f.first['result_id'][7:]
+                def request(path, method='GET'):
+                    with urlopen(Request(base + path, method=method,
+                            headers={'Authorization': 'Bearer ' + token}), timeout=5) as response:
+                        return response.status, response.read().decode()
+                from contextlib import ExitStack
+                with ExitStack() as patches, ThreadPoolExecutor(max_workers=6) as pool:
+                    patches.enter_context(patch.object(server.RequestHandlerClass, '_authorize', authorize))
+                    patches.enter_context(patch.object(LocalResultCatalog, 'refresh', refresh))
+                    for name in ('index_html', 'detail_html', 'signal_html', 'account_html'):
+                        patches.enter_context(patch.object(LocalResultCatalog, name,
+                            observed(getattr(LocalResultCatalog, name))))
+                    worker = Thread(target=server.serve_forever, daemon=True)
+                    worker.start()
+                    try:
+                        first = pool.submit(request, '/refresh', 'POST')
+                        self.assertTrue(refreshed.wait(2))
+                        paths = ['/', result, result + '/signal/0/0', result + '/account/0']
+                        pending = [pool.submit(request, path) for path in paths]
+                        with authorized:
+                            self.assertTrue(authorized.wait_for(lambda: count == 5, timeout=2))
+                        self.assertFalse(read_entered.wait(0.1), 'read overlapped unfinished refresh')
+                        release.set()
+                        for future in [first, *pending]:
+                            self.assertEqual(future.result(timeout=5)[0], 200)
+                    finally:
+                        release.set()
+                        server.shutdown()
+                        worker.join(3)
         run_fixture(f, action)
 
     def test_no_active_markup_or_raw_json(self):
