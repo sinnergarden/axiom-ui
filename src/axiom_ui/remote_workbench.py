@@ -47,6 +47,7 @@ def _stream_view(saved):
     return dict(run=run, configuration=configuration,
                 comparison_conditions=_comparison_conditions(configuration),
                 market=dict(rows=[], data_batch=None, source_refs=[],
+                            snapshot_id=(request.get("market_input") or {}).get("execution_snapshot_id"),
                             missing_reason='当前尚未接入保存行情的显示读取接口；不从持仓或成交推算 K 线。'),
                 evidence_kind='saved_backtest_output', evaluation=None,
                 approximate=profile.get('approximation') == 'retrospective_daily_volume_proxy',
@@ -91,6 +92,8 @@ def _selected(catalog, manifest, account):
         view['evaluation'] = {key: value for key, value in evaluation.items()
                               if key not in {'base_evaluation', 'execution_trace', 'benchmark_inputs',
                                              'benchmark_input', 'dividend_scope'}}
+    if getattr(catalog, "saved_display", None) is not None:
+        catalog.saved_display.attach(view)
     # Market data is accepted only through already registered, bound Owner
     # inputs. No Data query, ancestral loader, or synthetic candle is issued.
     return view
@@ -225,3 +228,16 @@ def decision_evidence(catalog, *, selected, day, security):
                 signal_ref=decision['signal_ref'], score_semantics=wire['score_semantics'],
                 score_unit=wire['score_unit'], **{k: row.get(k) for k in
                 ('score', 'rank', 'valid', 'member', 'invalid_reason')})
+
+
+def market_display(catalog, *, selected, security):
+    match = SELECTION.fullmatch(selected)
+    _require(match is not None, 'invalid account selection')
+    _, manifest, _ = catalog._manifest('sha256:' + match[1])
+    _require(manifest is not None, 'result unavailable')
+    account = manifest['accounts'][int(match[2])]
+    key = (selected, manifest['content_digest'], account['backtest_ref']['content_digest'],
+           tuple(e['content_digest'] for e in account.get('evaluation_refs') or []))
+    view = getattr(catalog, '_workbench_views', {}).get(key)
+    _require(view is not None and getattr(catalog, 'saved_display', None) is not None, 'bound display unavailable')
+    return catalog.saved_display.read(view, security)

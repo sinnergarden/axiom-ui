@@ -109,6 +109,7 @@ class RemoteHTTPServer(ThreadingHTTPServer):
 
 
 def build_remote_server(*, research_root, engine_root, origins, token=None, password_record=None,
+                        display_index=None, display_digest=None,
                         port=0, public_host=None, engine_limits=None):
     if password_record is None and (not isinstance(token, str) or not TOKEN.fullmatch(token)):
         raise ValueError('use a random URL-safe token with at least 256 bits (43 characters)')
@@ -131,6 +132,9 @@ def build_remote_server(*, research_root, engine_root, origins, token=None, pass
                                  engine_limits=engine_limits)
     catalog_lock = Lock()
     from .remote_workbench import WorkbenchRead
+    if display_index is not None:
+        from .remote_display import SavedDisplay
+        catalog.saved_display = SavedDisplay(display_index, display_digest)
     workbench_read = WorkbenchRead(catalog, catalog_lock)
 
     class Handler(BaseHTTPRequestHandler):
@@ -191,6 +195,14 @@ def build_remote_server(*, research_root, engine_root, origins, token=None, pass
                                  max_num_fields=3)
                 if any(len(v) != 1 for v in query.values()):
                     raise ValueError('duplicate query')
+                if parsed.path == '/market-display':
+                    if set(query) != {'selected', 'security'}:
+                        raise ValueError('invalid display query')
+                    from .remote_workbench import market_display
+                    with catalog_lock:
+                        payload = market_display(catalog, **{k:v[0] for k,v in query.items()})
+                    self._send(200, json.dumps(payload), content_type='application/json; charset=utf-8')
+                    return
                 if parsed.path == '/decision-evidence':
                     if set(query) != {'selected', 'day', 'security'}:
                         raise ValueError('invalid evidence query')
@@ -291,11 +303,14 @@ def main():
     parser.add_argument('--public-host')
     parser.add_argument('--port', type=int, default=61024)
     parser.add_argument('--password-file', type=Path)
+    parser.add_argument('--display-index', type=Path)
+    parser.add_argument('--display-digest')
     args = parser.parse_args()
     token = os.environ.pop('AXIOM_RESULTS_TOKEN', '')
     try:
         with build_remote_server(research_root=args.research_root, engine_root=args.engine_root,
                 origins=args.origin, public_host=args.public_host, port=args.port,
+                display_index=args.display_index, display_digest=args.display_digest,
                 token=token or None, password_record=json.loads(args.password_file.read_text())
                 if args.password_file else None) as server:
             print(f'Authenticated results on http://127.0.0.1:{server.server_port}', flush=True)

@@ -1,0 +1,10 @@
+{
+  "fixture": "synthetic; isolated Chrome profile; no private results or credentials persisted",
+  "wrong_password": true,
+  "original_three_tabs_and_echarts": true,
+  "bound_market_channel": true,
+  "true_ohlcv_candles": true,
+  "observed_name_notice": true,
+  "native_default": true,
+  "runtime_errors": []
+}
