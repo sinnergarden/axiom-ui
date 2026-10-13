@@ -92,6 +92,7 @@ def check():
                 text = js("document.getElementById('results').textContent")
                 assert '1800 / 全账户 1800' in text and '600 / 区间原始点数 1800' in text, text
                 evidence['full_range_curve'] = True
+                js("document.getElementById('status').textContent='合成验收数据 · 已连接'")
                 (ROOT / 'reports' / 'remote-results-desktop.png').write_bytes(base64.b64decode(
                     call('Page.captureScreenshot', {'format':'png'})['data']))
                 js("document.querySelector('#results input[name=start]').value='2019-02-01';document.querySelector('#results input[name=end]').value='2019-02-10';document.querySelector('#results form').requestSubmit()")
