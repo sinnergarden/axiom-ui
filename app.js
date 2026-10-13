@@ -65,6 +65,18 @@
         .catch(error=>{if(active===generation)port.postMessage({error:error.message || '保存预测分数暂不可用，请重试。'});})
         .finally(()=>{clearTimeout(timeout);port.close();});
     }
+    if(message.type==='axiom-market'&&event.ports.length===1&&
+       [selected,compare].includes(message.selected)&&valid(message.selected)&&
+       typeof message.security==='string'&&message.security.length<100){
+      const port=event.ports[0],active=generation,requestController=new AbortController();
+      const timeout=setTimeout(()=>requestController.abort(),30000);
+      const url=new URL('/market-display',endpoint);
+      for(const key of ['selected','security'])url.searchParams.set(key,message[key]);
+      fetch(url,{headers:{Authorization:'Bearer '+token},signal:requestController.signal,cache:'no-store',credentials:'omit',redirect:'error',referrerPolicy:'no-referrer'})
+        .then(async response=>{if(!response.ok)throw new Error(response.status===422?'保存行情与账户绑定未通过校验。':'保存行情暂不可用，请重试。');const display=await response.json();if(active===generation)port.postMessage({display});})
+        .catch(error=>{if(active===generation)port.postMessage({error:error.message || '保存行情暂不可用，请重试。'});})
+        .finally(()=>{clearTimeout(timeout);port.close();});
+    }
     if(message.type==='axiom-ready'&&valid(message.selected)){selected=message.selected;compare=message.compare || '';}
     if(message.type==='axiom-selection'&&valid(message.selected)&&(!message.compare||valid(message.compare)))load(message.selected,message.compare);
     if(message.type==='axiom-baseline'&&(!message.selection||valid(message.selection))){
