@@ -459,7 +459,8 @@ def _page(title: str, body: str, *, local_form: bool = False) -> str:
 
 def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error: str | None,
             *, engine_limits: dict | None = None, detail_mode: str = "summary",
-            full_href: str | None = None, result_href: str | None = None) -> tuple[str, set[str]]:
+            full_href: str | None = None, result_href: str | None = None,
+            remote: bool = False) -> tuple[str, set[str]]:
     _require(detail_mode in {"summary", "full"}, "invalid detail mode")
     title = "实验结果 · " + head["result_id"][7:19]
     pieces = ['<p><a href="index.html">← 返回实验列表</a></p><h1>' + _text(title) + '</h1>',
@@ -632,23 +633,24 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
                              _value(account.get("status")) + ' · 原因：' +
                              _value(account.get("reason")) + '</p><p>关联 Signal：<code>' +
                              _value(account.get("signal_run_ref")) + '</code></p>' + values +
-                             ''.join(evaluations) + '<details><summary>策略与账户原始引用</summary><pre>' +
+                             ''.join(evaluations) + ('<details><summary>策略与账户原始引用</summary><pre>' +
                              _text(json.dumps({"strategy_ref": account.get("strategy_ref"),
                                                "backtest_ref": account.get("backtest_ref"),
                                                "evaluation_refs": account.get("evaluation_refs")},
                                               ensure_ascii=False, indent=2)) +
-                             '</pre></details></section>')
+                             '</pre></details>' if not remote else '') + '</section>')
     pieces.append('<h2>策略账户（' + str(len(accounts)) + '）</h2>' +
                   (''.join(account_cards) if account_cards else '<section>未登记</section>'))
     pieces.append(signal_section)
-    pieces.append('<section><h2>保存产物与完整引用</h2><ul>' + ''.join(
-        '<li><details><summary>' + _text(ref["artifact_type"]) + ' · ' +
-        _text(summaries[key]["availability"]) + '</summary><pre>' +
-        _text(json.dumps({"reference": ref, "owner_summary": {
-            name: value for name, value in summaries[key].items() if name not in
-            {"metrics", "period_metrics", "final_nav_minor"}}},
-                         ensure_ascii=False, indent=2)) + '</pre></details></li>'
-        for key, ref in refs.items()) + '</ul></section>')
+    if not remote:
+        pieces.append('<section><h2>保存产物与完整引用</h2><ul>' + ''.join(
+            '<li><details><summary>' + _text(ref["artifact_type"]) + ' · ' +
+            _text(summaries[key]["availability"]) + '</summary><pre>' +
+            _text(json.dumps({"reference": ref, "owner_summary": {
+                name: value for name, value in summaries[key].items() if name not in
+                {"metrics", "period_metrics", "final_nav_minor"}}},
+                             ensure_ascii=False, indent=2)) + '</pre></details></li>'
+            for key, ref in refs.items()) + '</ul></section>')
     verified_runs = {summaries[account["backtest_ref"]["artifact_key"]]["artifact_id"]
                      for index, account in enumerate(accounts) if index not in invalid_accounts and
                      type(account.get("backtest_ref")) is dict and
@@ -864,7 +866,7 @@ class LocalResultCatalog:
         self.generated_at = datetime.now(timezone.utc).isoformat()
         self.opened_runs: dict[str, set[str]] = {}
 
-    def index_html(self, *, page: int = 1, page_size: int = 25) -> str:
+    def index_html(self, *, page: int = 1, page_size: int = 25, remote: bool = False) -> str:
         _require(type(page) is int and 1 <= page <= 1000000000 and
                  type(page_size) is int and 1 <= page_size <= 100, "invalid pagination")
         ordered = sorted(self.heads.items(), key=lambda pair: (pair[1]["updated_at"], pair[0]),
@@ -886,9 +888,9 @@ class LocalResultCatalog:
         for target, label in ((page - 1, "上一页"), (page + 1, "下一页")):
             if 1 <= target <= pages:
                 navigation += '<a href="/?page=' + str(target) + '&amp;page_size=' + str(page_size) + '">' + label + '</a> '
-        body = ('<h1>研究实验结果</h1><p>本机只读 · 仅打开所选详情</p>'
-                '<p>分页仅减少页面内容；刷新仍完整读取并验证 Research 索引，不是数据库分页。</p>' + navigation +
-                '<form method="post" action="/refresh"><button type="submit">刷新保存索引</button></form>'
+        body = ('<h1>研究实验结果</h1><p>本机只读 · 仅打开所选详情</p>' +
+                ('' if remote else '<p>分页仅减少页面内容；刷新仍完整读取并验证 Research 索引，不是数据库分页。</p>') + navigation +
+                ('' if remote else '<form method="post" action="/refresh"><button type="submit">刷新保存索引</button></form>') +
                 '<p>结果 ' + str(len(self.heads)) + ' · 本次已完整验证的账户原件 ' +
                 str(len(run_ids)) + ' · 登记修订 ' +
                 str(sum(h["revision"] + 1 for h in self.heads.values())) + '</p>'
@@ -917,18 +919,18 @@ class LocalResultCatalog:
             manifest, error = None, type(exc).__name__
         return head, manifest, error
 
-    def detail_html(self, result_id: str, *, detail_mode: str = "summary") -> str:
+    def detail_html(self, result_id: str, *, detail_mode: str = "summary", remote: bool = False) -> str:
         head, manifest, error = self._manifest(result_id)
         html, run_ids = _detail(head, manifest, self.roots, error,
                                 engine_limits=self.engine_limits,
                                 detail_mode=detail_mode,
                                 full_href="/result/" + result_id[7:] + "/full"
-                                if detail_mode == "summary" else None,
-                                result_href="/result/" + result_id[7:])
+                                if detail_mode == "summary" and not remote else None,
+                                result_href="/result/" + result_id[7:], remote=remote)
         self.opened_runs.setdefault(result_id, set()).update(run_ids)
         return html.replace('href="index.html"', 'href="/"', 1)
 
-    def signal_html(self, result_id: str, signal_index: int, evaluation_index: int) -> str:
+    def signal_html(self, result_id: str, signal_index: int, evaluation_index: int, *, remote: bool = False) -> str:
         """Read exactly one evidence report through the Research summary owner."""
         _, manifest, error = self._manifest(result_id)
         _require(manifest is not None, "manifest unavailable: " + str(error))
@@ -1001,8 +1003,9 @@ class LocalResultCatalog:
             details = {field: projected.get(field) for field in (
                 "contract_version", "evidence_ref", "content_digest", "input_signal_refs", "label_ref",
                 "label_spec", "sample_mask_ref", "statistics_ref", "summary", "coverage")}
-            body += '<details><summary>原合同摘要与完整引用</summary><pre>' + _text(json.dumps(
-                details, ensure_ascii=False, indent=2)) + '</pre></details>'
+            if not remote:
+                body += '<details><summary>原合同摘要与完整引用</summary><pre>' + _text(json.dumps(
+                    details, ensure_ascii=False, indent=2)) + '</pre></details>'
 
         except (ImportError, OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
             body += '<p role="status">此项摘要不可用：' + _text(type(exc).__name__) + \
@@ -1010,7 +1013,7 @@ class LocalResultCatalog:
         return _page("单项信号评价", body)
 
     def account_html(self, result_id: str, account_index: int, *, start: str | None = None,
-                     end: str | None = None) -> str:
+                     end: str | None = None, remote: bool = False) -> str:
         """Load one registered account via Engine; date filtering is display-only."""
         from datetime import date
         for value in (start, end):
@@ -1028,21 +1031,53 @@ class LocalResultCatalog:
         refs = {ref["artifact_key"]: ref for ref in manifest["artifacts"]}
         ref = refs[binding["artifact_key"]]
         _require(ref["owner"] == "Engine" and ref["artifact_type"] == "BacktestRun", "not an Engine account")
-        wire, nav = _load_account(ref, self.roots, self.engine_limits)
-        summary = {"availability": "VERIFIED", "artifact_id": wire["run_id"],
-                   **{field: wire.get(field) for field in ("content_digest", "committed_sequence",
-                                                          "signal_ref", "market_ref", "profile_ref")}}
-        policy = wire.get("request_manifest", {}).get("portfolio_policy")
-        if policy is not None:
-            summary["strategy_ref"] = "sha256:" + sha256(json.dumps(
-                policy, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
-            ).encode("utf-8")).hexdigest()
-        _require(not _account_bindings({"accounts": [account]}, {binding["artifact_key"]: summary}),
-                 "account binding mismatch")
+        if remote:
+            # Registered evaluation leaf only: no account parts or training ancestry.
+            from axiom_engine.runtime import load_backtest_evaluation
+            evaluations = account.get("evaluation_refs") or []
+            _require(bool(evaluations), "no registered evaluation curve")
+            evaluation = evaluations[0]
+            report_ref = refs[evaluation["artifact_key"]]
+            _require(report_ref["owner"] == "Engine" and
+                     report_ref["artifact_type"] == "BacktestEvaluation",
+                     "not an Engine evaluation")
+            path = _relative_file(report_ref, self.roots)
+            _require(0 < path.stat().st_size <= RUN_METADATA_MAX_BYTES,
+                     "evaluation curve metadata budget exceeded")
+            report = _wire(load_backtest_evaluation(path))
+            expected_run = {key: binding.get(key) for key in
+                            ("run_id", "content_digest", "committed_sequence")}
+            _require(report.get("contract_version") == report_ref["artifact_contract_version"] and
+                     report.get("evaluation_ref") == report_ref["artifact_id"] ==
+                     evaluation.get("evaluation_ref") and
+                     report.get("content_digest") == report_ref["content_digest"] ==
+                     evaluation.get("content_digest") and
+                     report.get("input_run_ref") == evaluation.get("input_run_ref") == expected_run and
+                     binding.get("run_id") == ref["artifact_id"] and
+                     binding.get("content_digest") == ref["content_digest"],
+                     "evaluation curve registered binding mismatch")
+            nav = report.get("series")
+            _require(type(nav) is list and bool(nav), "saved evaluation has no curve")
+            wire = {"run_id": expected_run["run_id"]}
+        else:
+            wire, nav = _load_account(ref, self.roots, self.engine_limits)
+            summary = {"availability": "VERIFIED", "artifact_id": wire["run_id"],
+                       **{field: wire.get(field) for field in ("content_digest", "committed_sequence",
+                                                              "signal_ref", "market_ref", "profile_ref")}}
+            policy = wire.get("request_manifest", {}).get("portfolio_policy")
+            if policy is not None:
+                summary["strategy_ref"] = "sha256:" + sha256(json.dumps(
+                    policy, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+                ).encode("utf-8")).hexdigest()
+            _require(not _account_bindings({"accounts": [account]}, {binding["artifact_key"]: summary}),
+                     "account binding mismatch")
         rows = [row for row in nav if (start is None or row["session"] >= start) and
                 (end is None or row["session"] <= end)]
         body = '<p><a href="/result/' + result_id[7:] + '">返回结果</a></p><h1>单账户曲线</h1>'
-        body += '<p>仅此账户通过 Engine 原件验证。日期裁剪仅减少展示，owner 仍读取此账户所需分片。默认完整保存区间；SVG 最多 600 点，明细仅显示所选区间最后 50 行。</p>'
+        body += ('<p>评价报告保存净值；已校验登记绑定，未重读账户原件。日期裁剪仅减少展示。默认完整保存区间；SVG 最多 600 点，明细仅显示所选区间最后 50 行。</p>' if remote else
+                 '<p>仅此账户通过 Engine 原件验证。日期裁剪仅减少展示，owner 仍读取此账户所需分片。默认完整保存区间；SVG 最多 600 点，明细仅显示所选区间最后 50 行。</p>')
+        if remote:
+            body += '<p>曲线来源：按登记顺序选择第一份评价 <code>' + _text(report["evaluation_ref"]) + '</code> · ' + _text(report["contract_version"]) + '；不推断为最新评价。缺少保存序列时标为不可用，不补算。</p>'
         body += '<form method="get"><label>开始 <input type="date" name="start" value="' + _text(start or '') + '\"></label> <label>结束 <input type="date" name="end" value="' + _text(end or '') + '\"></label><button>查看区间</button></form>'
         body += '<p>账户：<code>' + _text(wire["run_id"]) + '</code> · 区间原始点数 ' + str(len(rows)) + ' / 全账户 ' + str(len(nav)) + '</p>'
         if rows:
@@ -1064,5 +1099,6 @@ class LocalResultCatalog:
             body += _metrics([(row["session"], _money(row["nav_minor"])) for row in rows[-50:]])
         else:
             body += '<p>所选区间没有保存的净值行。</p>'
-        self.opened_runs.setdefault(result_id, set()).add(wire["run_id"])
+        if not remote:
+            self.opened_runs.setdefault(result_id, set()).add(wire["run_id"])
         return _page("单账户曲线", body, local_form=True)

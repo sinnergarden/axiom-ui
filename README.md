@@ -1,5 +1,60 @@
 # Axiom UI research workbench
 
+## Pages + private Mac results
+
+The current `site/` is a five-file public UI shell. It contains no saved results.
+Open the Pages home page, enter the approved HTTPS result-service address and
+access code, then select an experiment. **Refresh saved index** discovers newly
+registered results and revisions without exporting or uploading them. The code
+stays in page memory; reloading or disconnecting clears it. An operator may set
+only the nonsecret HTTPS origin in `site/config.js` after review.
+
+Start the Mac service with Python 3.11+ and compatible Research/Engine Readers:
+
+```sh
+# Enter an operator-issued random URL-safe access code (at least 43 characters).
+# Provisioning a new persistent code and enabling a tunnel require separate approval.
+read -s 'AXIOM_RESULTS_TOKEN?Access code: '
+export AXIOM_RESULTS_TOKEN
+PYTHONPATH=src:/path/to/research/src:/path/to/engine/src \
+  python3 -m axiom_ui.remote_results \
+  --research-root /private/formal-results \
+  --engine-root /private/engine-results \
+  --origin https://sinnergarden.github.io \
+  --public-host approved-service.example --port 61024
+unset AXIOM_RESULTS_TOKEN
+```
+
+The service binds only `127.0.0.1`; an independently approved HTTPS proxy must
+forward to it. No tunnel, certificate, tailnet policy, startup task or credential
+is created by this command. Stop with Ctrl-C; restart with a new access code to
+revoke the old one. Close the approved proxy separately. Mac sleep, shutdown or
+network loss makes the service unavailable. There is no automatic startup.
+
+“未授权” means the code is missing, wrong or revoked. “离线或不可达” means the Mac,
+HTTPS proxy or allowed-origin configuration needs attention; retry after fixing
+it. Failed requests clear the visible results. The public shell remains usable
+as a connection entry while the Mac is offline. Raw artifacts and local files
+have no download routes.
+
+Remote curves use the registered Engine evaluation's saved `series`, with the
+report identity and exact account binding checked. They retain the full saved
+range and existing 600-point display sampling. They do not read account result
+parts or count as original-account verification. Local `--serve-results` keeps
+its existing explicit original-account path. Signal tables require Research's
+`load_stock_signal_evaluation_summary` (available in merged Research commit
+`a1f320fba669a72b0d8aa17f0d72dbac923e9a89`); unavailable owner data is labeled.
+
+Check the shell with `python3 tools/check_remote_site.py site`. Submit source
+and shell together as a draft PR. Only after review and merge, publish the exact
+reviewed `site/` tree to `gh-pages` using the existing branch publishing process.
+Do not run the legacy selected-result exporter into this shell directory.
+Canonical design remains in [axiom-docs](https://github.com/sinnergarden/axiom-docs/blob/main/docs/design/06_axiom_ui.md).
+The corresponding UI read-contract/deployment sections need alignment for the
+public-shell/private-API split, evaluation-leaf curves, authentication, revocation
+and offline behavior; this change does not edit another repository.
+
+
 ## Private Research v2 result catalog
 
 Once Research has published an `experiment_index_v2` through its public
@@ -316,7 +371,7 @@ The existing explicit `run_ids` selection remains the software entry point.
 A private workbench page does not authorize publishing its raw `plan`, source
 evidence or DataBatch.
 
-## Publish the selected saved results
+## Legacy selected-result publication (separate export directory)
 
 The deployment target is [sinnergarden.github.io/axiom-ui](https://sinnergarden.github.io/axiom-ui/).
 This is an operating recipe; canonical UI and owner boundaries remain in

@@ -1,0 +1,14 @@
+{
+  "scope": "local Chrome cross-origin shell with formal read-only owner Readers; not deployed Pages",
+  "formal_result_count": 3,
+  "top10_keep20_visible": true,
+  "formal_curve_points": 1699,
+  "curve_reads_evaluation_leaf_only": true,
+  "formal_signal_metrics": true,
+  "formal_complete_account_counts": [
+    2,
+    5
+  ],
+  "no_persistent_browser_storage": true,
+  "disconnect_clears_results": true
+}
