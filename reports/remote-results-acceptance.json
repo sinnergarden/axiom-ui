@@ -1,0 +1,21 @@
+{
+  "source_base": "f29d21bef7d12541b1f1d47dfab2f23d6c7b3aad",
+  "research_reader_commit": "a1f320fba669a72b0d8aa17f0d72dbac923e9a89",
+  "engine_reader_commit": "2b7870ac197ebe4e045eb5ab51f2e538e87b61f7",
+  "targeted_tests_passed": 18,
+  "static_shell_allowlist_passed": true,
+  "javascript_syntax_passed": true,
+  "synthetic_browser_evidence": "remote-results-browser.json",
+  "formal_local_browser_evidence": "remote-results-formal-browser.json",
+  "screenshots_are_synthetic": true,
+  "public_pages_deployed": false,
+  "public_pages_origin_acceptance_complete": false,
+  "persistent_credentials_created": false,
+  "public_tunnel_enabled": false,
+  "remaining_gates": [
+    "Parent source review and merge before Pages deployment",
+    "Explicit approval for high-entropy API credential and public HTTPS forwarding",
+    "Check/approve HTTPS certificate and node-scoped Funnel eligibility without broadening all-member policy",
+    "Deploy exact reviewed shell and verify from actual Pages origin and outside network"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "fixture": "synthetic; no owner data, credentials or network configuration persisted",
+  "unauthorized": true,
+  "pagination": true,
+  "full_range_curve": true,
+  "signal_table": true,
+  "switch_experiment": true,
+  "new_registration_refresh": true,
+  "mobile_width": 390,
+  "offline_clears_results": true,
+  "no_persistent_browser_storage": true
+}
