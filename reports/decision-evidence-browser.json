@@ -1,0 +1,10 @@
+{
+  "fixture": "synthetic; isolated Chrome profile; no private results or credentials persisted",
+  "wrong_password": true,
+  "original_three_tabs_and_echarts": true,
+  "decision_evidence_authenticated_message_channel": true,
+  "scoped_keep_sell_chinese": true,
+  "stored_score": true,
+  "no_invented_rank": true,
+  "runtime_errors": []
+}

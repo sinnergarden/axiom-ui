@@ -273,7 +273,7 @@ window.createAxiomInteractions = function(env) {
     if(selected)renderPoint(v,selected,state.kind);else if(state.session)renderPoint(v);else{$('trade-point').replaceChildren(node('h3','保存点详情'),node('p','图内移动预览，点击日期或 B/S 锁定；从下方交易链查看保存目标、数量与原因。','small'));}
   }
   function detailRow(parent,label,value){const row=node('div',null,'chain-value');row.append(node('span',label),node('strong',saved(value)));parent.append(row);}
-  const reasonLabel=reason=>({RAW_TOP5:'按保存原始分数选择前 5',RAW_TOPK:'按保存原始分数选择前 K',UNKNOWN_MARKET_STATUS:'市场状态缺证',NO_DECISION:'没有新决策，保持原持仓',ANNOUNCED_SUSPENSION:'保存公告全天停牌',SAME_TARGET:'目标未变',ROTATE:'轮动目标变化',INSUFFICIENT_CASH:'现金不足'})[reason] || saved(reason);
+  const reasonLabel=reason=>({RAW_TOP5:'按保存原始分数选择前 5',RAW_TOPK:'按保存原始分数选择前 K',RAW_TOP_K:'按保存原始分数选择前 K',VALID_MEMBER_CANDIDATES:'按时点成员资格与有效分数筛选候选',RANK_BUFFER_KEEP:'持仓排名缓冲保留',STRATEGY_TARGET_BUDGET:'按策略可用预算确定目标',COMPOSED_STOCK_STRATEGY:'执行保存的组合策略',UNKNOWN_MARKET_STATUS:'市场状态缺证',NO_DECISION:'没有新决策，保持原持仓',ANNOUNCED_SUSPENSION:'保存公告全天停牌',SAME_TARGET:'目标未变',ROTATE:'轮动目标变化',INSUFFICIENT_CASH:'现金不足'})[reason] || saved(reason);
   function displayReason(decision){const rows=decision?.trace || [];const reasons=Array.isArray(rows)?rows.map(r=>r.reason).filter(Boolean):[];return reasons.length?reasons.map(reasonLabel).join('；'):decision?.reason?reasonLabel(decision.reason):'买卖原因未保存';}
   function openRaw(label,value){$('raw-title').textContent=label;$('raw-values').textContent=JSON.stringify(value,null,2);$('raw-dialog').showModal();}
   function renderItem(v,batch,item){
@@ -288,7 +288,35 @@ window.createAxiomInteractions = function(env) {
       detailRow(core,'信号日 / 决策日',saved(batch.decision?.feature_session)+' / '+saved(batch.day));
       detailRow(core,'状态',batch.decision?statusLabel(batch.decision.status):'决策关联未提供');
       detailRow(core,'保存目标（'+quantityUnit(v)+'）',batch.decision?.targets?.[id]);
-      detailRow(core,'买卖原因',displayReason(batch.decision));
+      const decision=batch.decision, trace=Array.isArray(decision?.trace)?decision.trace:[];
+      const scoped=trace.filter(r=>r.security_id===id || (Array.isArray(r.security_ids)&&r.security_ids.includes(id)));
+      const targets=decision?.strategy_targets;
+      if(targets){
+        detailRow(core,'策略选择',targets.selected_security_ids?.includes(id)?'仍在保存的目标证券中':targets.force_exit_security_ids?.includes(id)?'保存策略要求退出':'未列入保存的目标证券');
+        detailRow(core,'保存目标权重',targets.target_weights?.[id]);
+      }
+      detailRow(core,'此证券保存依据',scoped.length?scoped.map(r=>reasonLabel(r.reason)+(r.reason==='RANK_BUFFER_KEEP'?'（保留阈值：前 '+saved(r.keep_rank)+' 名；不代表精确排名）':'')).join('；'):'未保存逐证券原因；批次规则见上方');
+      const semantics=trace.find(r=>r.score_semantics)?.score_semantics;
+      if(semantics)detailRow(core,'模型分数含义',semantics==='forward_40_session_cs_zscore_prediction'?'未来 40 交易日横截面标准化预测分数（不是收益率）':semantics);
+      if(targets?.selected_security_ids?.includes(id)&&item.intent?.side==='SELL')core.append(node('p','该证券仍被选中；保存意图为减持至目标数量。不能据此解释为排名淘汰。','small'));
+      if(v.remote_selection&&decision){
+        const score=node('button','读取此证券保存的模型分数','text-button'),result=node('div');
+        score.addEventListener('click',()=>{
+          score.disabled=true;result.replaceChildren(node('p','正在读取对应预测记录…','small'));
+          const channel=new MessageChannel();
+          const timeout=setTimeout(()=>{channel.port1.close();score.disabled=false;result.replaceChildren(node('p','读取超时，可重试。','small'));},35000);
+          channel.port1.onmessage=event=>{
+            clearTimeout(timeout);channel.port1.close();score.disabled=false;result.replaceChildren();
+            const evidence=event.data?.evidence;
+            if(!evidence||evidence.security_id!==id||evidence.feature_session!==decision.feature_session||evidence.signal_ref!==decision.signal_ref){result.append(node('p',event.data?.error || '预测记录关联未通过校验。','small'));return;}
+            detailRow(result,'保存模型分数（'+saved(evidence.score_unit)+'）',evidence.score);
+            detailRow(result,'保存精确排名',evidence.rank ?? '该预测记录未保存精确排名');
+            detailRow(result,'分数有效 / 时点成员',String(evidence.valid)+' / '+String(evidence.member));
+            if(evidence.invalid_reason)detailRow(result,'无效原因',evidence.invalid_reason);
+          };
+          window.parent.postMessage({type:'axiom-evidence',selected:v.remote_selection,day:batch.day,security:id},'*',[channel.port2]);
+        });core.append(score,result);
+      }
       detailRow(core,'意图数量（'+quantityUnit(v)+'）',item.intent?.quantity);
       core.append(node('p','决策完成表示已产生意图，不代表委托已成交。','small'));detail.append(core);
       const runtime=node('div',null,'chain-stage');runtime.append(node('h3','2 · 委托 / 执行依据'));
