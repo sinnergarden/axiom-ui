@@ -1,0 +1,22 @@
+{
+  "base_commit": "f29d21bef7d12541b1f1d47dfab2f23d6c7b3aad",
+  "legacy_files_sha256": {
+    "etf-three-account.html": "911de1a6652fe6a39a53b86e564ff9d670a465df325ebe47bb0d4f0416cbfc16",
+    "echarts.LICENSE.txt": "634293835b43a6dd2094fa39182a3d9a6b9ca43b7fdb9ac354e8037af2a3093a",
+    "echarts.NOTICE.txt": "d491d358344f842685c1b1585970999db65fe30ecf7ef3867af8814f4016c016",
+    "echarts.vendor.json": "2f11f91cce4d25104c76415ddb5a8fecc83ed99aa4f58b1c3805f988eb641b0c",
+    "publication.json": "c8ccf61df86c4d8720017050ac810290be2ed49b294b63865fa1429d016ae23a"
+  },
+  "historical_files_restored_byte_identically": true,
+  "homepage_history_link": true,
+  "private_payload_check_scope": "new shell files only; historical approved files enforced by SHA256",
+  "screenshot_review": {
+    "method": "source inspection and visual inspection of both existing PNGs; no screenshots regenerated",
+    "desktop_label": "合成验收数据 · 已连接",
+    "mobile_label": "合成验收 · 问题一 · 修订",
+    "synthetic_generator": "tests/browser_remote_results.py with tests/remote_fixture.py",
+    "formal_browser_saves_no_screenshot_or_html": true,
+    "visible_private_research_values_credentials_endpoint_identity_or_local_paths": false
+  },
+  "network_or_credential_changes": false
+}

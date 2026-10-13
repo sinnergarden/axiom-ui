@@ -2,7 +2,10 @@
 
 ## Pages + private Mac results
 
-The current `site/` is a five-file public UI shell. It contains no saved results.
+The current `site/` contains a five-file dynamic UI shell plus the previously
+approved historical ETF report and its original publication/vendor files. The
+dynamic shell contains no private saved results. The home page links to **历史ETF报告**,
+which retains its original interactive charts and works without connecting to Mac.
 Open the Pages home page, enter the approved HTTPS result-service address and
 access code, then select an experiment. **Refresh saved index** discovers newly
 registered results and revisions without exporting or uploading them. The code
@@ -38,14 +41,16 @@ as a connection entry while the Mac is offline. Raw artifacts and local files
 have no download routes.
 
 Remote curves use the registered Engine evaluation's saved `series`, with the
-report identity and exact account binding checked. They retain the full saved
-range and existing 600-point display sampling. They do not read account result
+report identity and exact account binding checked. The dynamic SVG supports the full saved
+range, date-range filtering and 600-point display sampling. It is not equivalent
+to the historical ETF interactive chart; that report keeps its original functions. They do not read account result
 parts or count as original-account verification. Local `--serve-results` keeps
 its existing explicit original-account path. Signal tables require Research's
 `load_stock_signal_evaluation_summary` (available in merged Research commit
 `a1f320fba669a72b0d8aa17f0d72dbac923e9a89`); unavailable owner data is labeled.
 
-Check the shell with `python3 tools/check_remote_site.py site`. Submit source
+Check the shell and byte-identical historical files with
+`python3 tools/check_remote_site.py site`. Submit source
 and shell together as a draft PR. Only after review and merge, publish the exact
 reviewed `site/` tree to `gh-pages` using the existing branch publishing process.
 Do not run the legacy selected-result exporter into this shell directory.

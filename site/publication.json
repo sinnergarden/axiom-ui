@@ -1,0 +1,47 @@
+{
+  "contract_version": "public_static_site_v1",
+  "generated_at": "2026-10-06T00:00:00Z",
+  "authorization": "explicit_selected_public_results",
+  "selection_note": "Three explicitly authorized saved ETF simulations, each with CNY 500,000 initial capital: rotation at 0 bps and 5 bps, and 513100 buy-and-hold at 5 bps. No future result is auto-published.",
+  "results": [
+    {
+      "slug": "etf-three-account",
+      "title": "ETF 模拟回测 · 三组精选结果",
+      "file": "etf-three-account.html",
+      "source_projection_file_ref": "sha256:285b20e49ce110f4716a8c6d16fa7808704a14f472fc77669eb379af5db76ff5",
+      "public_projection": true,
+      "saved_owner_refs": [
+        {
+          "run_id": "sha256:1eddcb0931f72f2ed2636bd146c22419bf87d8407c31e03e5f3a0274aaf1a331",
+          "content_digest": "sha256:b43558e8541004884743e9d734d30fc96325cc5d58f7df80e927e7470dfae407",
+          "committed_sequence": "2284",
+          "implementation_ref": "sha256:186655784f09505711c6e3b662b976fc5deec211dff7e22ce70e893c1326e809",
+          "evaluation_ref": "sha256:d5b7c8896c1840ed14ce40324bdfae0ea7e37161d559fadb5bbbb06d15563741",
+          "evaluation_content_digest": "sha256:399d08c00fd04a7f6b359ef4302b0743d7b8b2df9ccb32a02613e43c5c2a14ed"
+        },
+        {
+          "run_id": "sha256:761a5cc0d7181c530459a82e7a9f67b743977cffe6fe809155a5d78d58b88af7",
+          "content_digest": "sha256:afe81896b13d3cb9a292a70bad729506e34969e933b1093f825492400e52e167",
+          "committed_sequence": "2274",
+          "implementation_ref": "sha256:186655784f09505711c6e3b662b976fc5deec211dff7e22ce70e893c1326e809",
+          "evaluation_ref": "sha256:f7a0fa1e3857ba317c085ddf731ccb83ce47b0a3a175daa043f04f81345e5acb",
+          "evaluation_content_digest": "sha256:f30643e7c50da3e302fdfb29a26f3b6c35e402e915b24aec918573cb7224c4dc"
+        },
+        {
+          "run_id": "sha256:0b941fe36fbf13312508df2c3476e16d11af3326da5a4ac2d7ac62e815ab278e",
+          "content_digest": "sha256:aced4a40c0b9fba94b8ef2a79d8720bf532df30654bb41ddaef38967cfad9c16",
+          "committed_sequence": "1812",
+          "implementation_ref": "sha256:186655784f09505711c6e3b662b976fc5deec211dff7e22ce70e893c1326e809",
+          "evaluation_ref": "sha256:365e62d81e74414b8c8b1df7b1983e566933a07241bbf365a261ec797a3a4d18",
+          "evaluation_content_digest": "sha256:e25c26cd9fa23584b3594e5b1437ce8b9a3335c999ea17805528441664a36e0e"
+        }
+      ]
+    }
+  ],
+  "performance_refs": {},
+  "performance_update": null,
+  "process_refs": null,
+  "owner_digest_note": "Saved owner content_digest identifies the original complete owner result, not public HTML.",
+  "future_results_auto_published": false,
+  "Data_roots_current_discovery": false
+}
