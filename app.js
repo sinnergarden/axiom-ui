@@ -53,6 +53,18 @@
   window.addEventListener('message',event=>{
     if(event.source!==frame.contentWindow||event.origin!=='null'||!token||!event.data)return;
     const message=event.data;
+    if(message.type==='axiom-evidence'&&event.ports.length===1&&
+       [selected,compare].includes(message.selected)&&valid(message.selected)&&
+       /^\d{4}-\d{2}-\d{2}$/.test(message.day)&&typeof message.security==='string'&&message.security.length<100){
+      const port=event.ports[0],active=generation,requestController=new AbortController();
+      const timeout=setTimeout(()=>requestController.abort(),30000);
+      const url=new URL('/decision-evidence',endpoint);
+      for(const key of ['selected','day','security'])url.searchParams.set(key,message[key]);
+      fetch(url,{headers:{Authorization:'Bearer '+token},signal:requestController.signal,cache:'no-store',credentials:'omit',redirect:'error',referrerPolicy:'no-referrer'})
+        .then(async response=>{if(!response.ok)throw new Error(response.status===422?'该决策的保存预测引用或绑定未通过校验；没有替换为其他模型。':'保存预测分数暂不可用，请重试。');const evidence=await response.json();if(active===generation)port.postMessage({evidence});})
+        .catch(error=>{if(active===generation)port.postMessage({error:error.message || '保存预测分数暂不可用，请重试。'});})
+        .finally(()=>{clearTimeout(timeout);port.close();});
+    }
     if(message.type==='axiom-ready'&&valid(message.selected)){selected=message.selected;compare=message.compare || '';}
     if(message.type==='axiom-selection'&&valid(message.selected)&&(!message.compare||valid(message.compare)))load(message.selected,message.compare);
     if(message.type==='axiom-baseline'&&(!message.selection||valid(message.selection))){
