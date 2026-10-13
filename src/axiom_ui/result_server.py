@@ -3,9 +3,12 @@ from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import re
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from .result_catalog import LocalResultCatalog, ResultCatalogError, _page
+
+
+ITEM_ROUTE = re.compile(r"/result/([0-9a-f]{64})/(?:signal/([0-9]{1,9})/([0-9]{1,9})|account/([0-9]{1,9}))\Z")
 
 
 RESULT_ROUTE = re.compile(r"/result/([0-9a-f]{64})(/full)?\Z")
@@ -39,20 +42,43 @@ def build_result_server(*, research_root, engine_root, engine_limits=None,
                 self._send(403, _page("请求已拒绝", "<p>主机地址不匹配。</p>"))
                 return
             parsed = urlsplit(self.path)
-            if parsed.query or parsed.fragment:
-                self._send(404, _page("未找到", "<p>没有此页面。</p>"))
-                return
-            if parsed.path in ("/", "/index.html"):
-                self._send(200, catalog.index_html())
-                return
-            match = RESULT_ROUTE.fullmatch(parsed.path)
-            if match:
-                try:
+            try:
+                if parsed.fragment or len(parsed.query) > 256:
+                    raise ValueError("invalid query")
+                query = parse_qs(parsed.query, keep_blank_values=True, strict_parsing=True,
+                                 max_num_fields=4)
+                if any(len(values) != 1 for values in query.values()):
+                    raise ValueError("duplicate query")
+                if parsed.path in ("/", "/index.html"):
+                    if set(query) - {"page", "page_size"}:
+                        raise ValueError("unknown pagination parameter")
+                    self._send(200, catalog.index_html(
+                        page=int(query.get("page", ["1"])[0]),
+                        page_size=int(query.get("page_size", ["25"])[0])))
+                    return
+                item = ITEM_ROUTE.fullmatch(parsed.path)
+                if item:
+                    result_id = "sha256:" + item.group(1)
+                    if item.group(4) is not None:
+                        if set(query) - {"start", "end"}:
+                            raise ValueError("unknown date parameter")
+                        self._send(200, catalog.account_html(result_id, int(item.group(4)),
+                            start=query.get("start", [None])[0] or None,
+                            end=query.get("end", [None])[0] or None))
+                    else:
+                        if query:
+                            raise ValueError("unexpected signal query")
+                        self._send(200, catalog.signal_html(
+                            result_id, int(item.group(2)), int(item.group(3))))
+                    return
+                match = RESULT_ROUTE.fullmatch(parsed.path)
+                if match and not query:
                     result_id = "sha256:" + match.group(1)
                     self._send(200, catalog.detail_html(
                         result_id, detail_mode="full" if match.group(2) else "summary"))
-                except (ResultCatalogError, KeyError, TypeError, ValueError):
-                    self._send(404, _page("结果不可用", "<p>结果未在当前索引中，或保存引用无效。</p>"))
+                    return
+            except (OSError, ImportError, ResultCatalogError, KeyError, TypeError, ValueError):
+                self._send(404, _page("结果不可用", "<p>请求参数、登记引用或保存内容无效。曲线区间最多 1000 行，请缩小日期范围。</p>"))
                 return
             self._send(404, _page("未找到", "<p>没有此页面。</p>"))
 

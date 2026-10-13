@@ -277,6 +277,31 @@ def _run_metadata_summary(ref: dict, roots: Mapping[str, Path]) -> dict:
                 "artifact_id": ref.get("artifact_id"), "reason": type(exc).__name__}
 
 
+def _load_account(ref: dict, roots: Mapping[str, Path], limits: dict) -> tuple[dict, list]:
+    """Reuse the fixed Engine owner for one account, including v7/v8 parts."""
+    path = _relative_file(ref, roots)
+    if ref["artifact_contract_version"] in {"backtest_run_v7", "backtest_run_v8"}:
+        from axiom_engine.runtime import load_stock_backtest_projection
+        saved = load_stock_backtest_projection(
+            path, artifact_reader=lambda nested: _engine_nested_artifact(
+                nested, roots["engine"]), limits=limits)
+        wire = saved.wire
+        nav = saved.rows["nav"]
+    else:
+        _require(ref["artifact_contract_version"] in
+                 {"backtest_run_v1", "backtest_run_v2", "backtest_run_v3",
+                  "backtest_run_v4", "backtest_run_v5", "backtest_run_v6"},
+                 "unsupported BacktestRun contract")
+        from axiom_engine.runtime import load_backtest_run
+        wire = _wire(load_backtest_run(path))
+        nav = wire.get("nav") or []
+    _require(wire.get("contract_version") == ref["artifact_contract_version"] and
+             wire.get("run_id") == ref["artifact_id"] and
+             wire.get("content_digest") == ref["content_digest"],
+             "BacktestRun identity mismatch")
+    return wire, nav
+
+
 def _artifact_summary(ref: dict, roots: Mapping[str, Path], *, engine_limits: dict | None = None) -> dict:
     """Only fixed owner readers may supply values beyond the manifest."""
     kind = ref["artifact_type"]
@@ -312,25 +337,7 @@ def _artifact_summary(ref: dict, roots: Mapping[str, Path], *, engine_limits: di
                                      if type(wire.get("prediction_input")) is dict and
                                      type(wire["prediction_input"].get("frames")) is list else None)}
         if kind == "BacktestRun":
-            if ref["artifact_contract_version"] in {"backtest_run_v7", "backtest_run_v8"}:
-                from axiom_engine.runtime import load_stock_backtest_projection
-                saved = load_stock_backtest_projection(
-                    path, artifact_reader=lambda nested: _engine_nested_artifact(
-                        nested, roots["engine"]), limits=engine_limits or STOCK_LIMITS)
-                wire = saved.wire
-                nav = saved.rows["nav"]
-            else:
-                _require(ref["artifact_contract_version"] in
-                         {"backtest_run_v1", "backtest_run_v2", "backtest_run_v3",
-                          "backtest_run_v4", "backtest_run_v5", "backtest_run_v6"},
-                         "unsupported BacktestRun contract")
-                from axiom_engine.runtime import load_backtest_run
-                wire = _wire(load_backtest_run(path))
-                nav = wire.get("nav") or []
-            _require(wire.get("contract_version") == ref["artifact_contract_version"] and
-                     wire.get("run_id") == ref["artifact_id"] and
-                     wire.get("content_digest") == ref["content_digest"],
-                     "BacktestRun identity mismatch")
+            wire, nav = _load_account(ref, roots, engine_limits or STOCK_LIMITS)
             return {"availability": "VERIFIED", "artifact_type": kind,
                     "artifact_id": wire["run_id"], "status": wire.get("status"),
                     "content_digest": wire["content_digest"],
@@ -441,6 +448,7 @@ def _page(title: str, body: str, *, local_form: bool = False) -> str:
             'margin:36px auto;padding:0 20px}section{background:#fff;border:1px solid #dce5ef;'
             'border-radius:12px;padding:20px;margin:14px 0}a{color:#416e99}small{color:#52677e}'
             'h1{font-size:29px}h2{font-size:21px}h3{font-size:17px}ul{padding-left:22px}'
+            'pre{white-space:pre-wrap;overflow-wrap:anywhere}svg{width:100%;height:auto}'
             'code{overflow-wrap:anywhere}.metrics{width:100%;border-collapse:collapse;margin:10px 0}'
             '.metrics th,.metrics td{padding:7px 10px;border-bottom:1px solid #dce5ef;text-align:left}'
             '.metrics th{width:38%;color:#52677e;font-weight:500}.metrics td{overflow-wrap:anywhere}'
@@ -451,7 +459,7 @@ def _page(title: str, body: str, *, local_form: bool = False) -> str:
 
 def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error: str | None,
             *, engine_limits: dict | None = None, detail_mode: str = "summary",
-            full_href: str | None = None) -> tuple[str, set[str]]:
+            full_href: str | None = None, result_href: str | None = None) -> tuple[str, set[str]]:
     _require(detail_mode in {"summary", "full"}, "invalid detail mode")
     title = "实验结果 · " + head["result_id"][7:19]
     pieces = ['<p><a href="index.html">← 返回实验列表</a></p><h1>' + _text(title) + '</h1>',
@@ -464,7 +472,7 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
         return _page(title, ''.join(pieces)), set()
     refs = {ref["artifact_key"]: ref for ref in manifest["artifacts"]}
     if detail_mode == "summary":
-        pieces.append('<p>快速摘要：逐项读取保存评价与登记的账户元数据；失败或未展开的保存件单独标注。训练、信号评价和账户结果分片未展开。</p>' +
+        pieces.append('<p>快速摘要：逐项读取保存评价与登记的账户元数据；失败或未展开的保存件单独标注。训练、信号评价和账户结果分片未展开；模型与 OOS 祖先未审。</p>' +
                       ('<p><a href="' + _text(full_href) +
                        '">显式验证全部保存原件（可能较慢）</a></p>' if full_href else
                        '<p>完整原件验证可使用 --detail-mode full 显式执行。</p>'))
@@ -489,7 +497,7 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
                    for row in folds) + '</ul>' if folds else '<p>未登记</p>') + '</details>')
     signals = manifest.get("signals") or []
     signal_cards = []
-    for signal in signals:
+    for signal_index, signal in enumerate(signals):
         rows = []
         prediction = summaries.get(signal.get("prediction_artifact_key")) or {}
         if (prediction.get("availability") == "VERIFIED" and
@@ -505,7 +513,10 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
                         ('未展开验证' if prediction.get("availability") == "NOT_OPENED"
                          else '未提供') + '：' +
                         _text(prediction.get("reason") or "Owner 未验证") + '</p>')
-        for key in signal.get("evaluation_artifact_keys") or []:
+        for evaluation_index, key in enumerate(signal.get("evaluation_artifact_keys") or []):
+            if result_href:
+                rows.append('<p><a href="' + result_href + "/signal/" + str(signal_index) + "/" +
+                            str(evaluation_index) + '">按需读取此项信号评价</a></p>')
             saved = summaries.get(key) or {}
             if saved.get("availability") != "VERIFIED":
                 rows.append('<p>信号评价' + ('未展开' if saved.get("availability") == "NOT_OPENED"
@@ -614,6 +625,8 @@ def _detail(head: dict, manifest: dict | None, roots: Mapping[str, Path], error:
                                 '<details><summary>保存月收益（' + str(len(monthly)) +
                                 '）</summary><ul>' + monthly_rows + '</ul></details>'
                                 if monthly else '') + '</div>')
+        if result_href and backtest:
+            values += '<p><a href="' + result_href + "/account/" + str(index) + '">按需查看此账户曲线</a></p>'
         account_cards.append('<section><h3>账户 ' + str(index + 1) + ' · 策略：' +
                              _text(label) + '</h3><p>状态：' +
                              _value(account.get("status")) + ' · 原因：' +
@@ -851,10 +864,15 @@ class LocalResultCatalog:
         self.generated_at = datetime.now(timezone.utc).isoformat()
         self.opened_runs: dict[str, set[str]] = {}
 
-    def index_html(self) -> str:
+    def index_html(self, *, page: int = 1, page_size: int = 25) -> str:
+        _require(type(page) is int and 1 <= page <= 1000000000 and
+                 type(page_size) is int and 1 <= page_size <= 100, "invalid pagination")
+        ordered = sorted(self.heads.items(), key=lambda pair: (pair[1]["updated_at"], pair[0]),
+                         reverse=True)
+        pages = max(1, (len(ordered) + page_size - 1) // page_size)
+        _require(page <= pages, "page out of range")
         cards = []
-        for result_id, head in sorted(self.heads.items(),
-                                      key=lambda pair: pair[1]["updated_at"], reverse=True):
+        for result_id, head in ordered[(page - 1) * page_size:page * page_size]:
             question, versions = self.questions[head["question_id"]]
             cards.append('<section><h2>' + _value(question.get("title")) + ' · ' +
                          _value(versions[head["version_ref"]].get("label")) + '</h2><p>' +
@@ -864,7 +882,12 @@ class LocalResultCatalog:
                          _value(head["reason"]) + '</p><p><a href="/result/' +
                          _text(result_id[7:]) + '">打开保存结果</a></p></section>')
         run_ids = set().union(*self.opened_runs.values()) if self.opened_runs else set()
+        navigation = '<p>第 ' + str(page) + ' / ' + str(pages) + ' 页 · 每页 ' + str(page_size) + '</p>'
+        for target, label in ((page - 1, "上一页"), (page + 1, "下一页")):
+            if 1 <= target <= pages:
+                navigation += '<a href="/?page=' + str(target) + '&amp;page_size=' + str(page_size) + '">' + label + '</a> '
         body = ('<h1>研究实验结果</h1><p>本机只读 · 仅打开所选详情</p>'
+                '<p>分页仅减少页面内容；刷新仍完整读取并验证 Research 索引，不是数据库分页。</p>' + navigation +
                 '<form method="post" action="/refresh"><button type="submit">刷新保存索引</button></form>'
                 '<p>结果 ' + str(len(self.heads)) + ' · 本次已完整验证的账户原件 ' +
                 str(len(run_ids)) + ' · 登记修订 ' +
@@ -875,7 +898,7 @@ class LocalResultCatalog:
                 (''.join(cards) if cards else '<section>暂无登记结果。</section>'))
         return _page("Axiom · 研究实验结果", body, local_form=True)
 
-    def detail_html(self, result_id: str, *, detail_mode: str = "summary") -> str:
+    def _manifest(self, result_id: str) -> tuple[dict, dict | None, str | None]:
         _hash(result_id, "result_id")
         _require(result_id in self.heads, "result_id is not in the current index")
         head = self.heads[result_id]
@@ -892,10 +915,116 @@ class LocalResultCatalog:
                      "Research head/manifest mismatch")
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
             manifest, error = None, type(exc).__name__
+        return head, manifest, error
+
+    def detail_html(self, result_id: str, *, detail_mode: str = "summary") -> str:
+        head, manifest, error = self._manifest(result_id)
         html, run_ids = _detail(head, manifest, self.roots, error,
                                 engine_limits=self.engine_limits,
                                 detail_mode=detail_mode,
                                 full_href="/result/" + result_id[7:] + "/full"
-                                if detail_mode == "summary" else None)
-        self.opened_runs[result_id] = run_ids
+                                if detail_mode == "summary" else None,
+                                result_href="/result/" + result_id[7:])
+        self.opened_runs.setdefault(result_id, set()).update(run_ids)
         return html.replace('href="index.html"', 'href="/"', 1)
+
+    def signal_html(self, result_id: str, signal_index: int, evaluation_index: int) -> str:
+        """Read exactly one evidence report through the Research summary owner."""
+        _, manifest, error = self._manifest(result_id)
+        _require(manifest is not None, "manifest unavailable: " + str(error))
+        signals = manifest.get("signals") or []
+        _require(type(signal_index) is int and 0 <= signal_index < len(signals), "unknown signal")
+        signal = signals[signal_index]
+        keys = signal.get("evaluation_artifact_keys") or []
+        _require(type(evaluation_index) is int and 0 <= evaluation_index < len(keys), "unknown evaluation")
+        refs = {ref["artifact_key"]: ref for ref in manifest["artifacts"]}
+        ref = refs[keys[evaluation_index]]
+        _require(ref["owner"] == "Research" and ref["artifact_type"] == "StockSignalEvaluation",
+                 "not a Research signal evaluation")
+        body = '<p><a href="/result/' + result_id[7:] + '">返回结果</a></p><h1>单项信号评价</h1>'
+        try:
+            from axiom_research import load_stock_signal_evaluation_summary
+            wire = _wire(load_stock_signal_evaluation_summary(
+                _relative_file(ref, self.roots), research_root=self.roots["research"]))
+            _require(wire.get("contract_version") == ref["artifact_contract_version"] and
+                     wire.get("evidence_ref") == ref["artifact_id"] and
+                     wire.get("content_digest") == ref["content_digest"], "signal report identity mismatch")
+            _require(type(wire.get("input_signal_refs")) is list and
+                     signal.get("signal_run_ref") in wire["input_signal_refs"], "signal binding mismatch")
+            _hash(wire.get("label_ref"), "Label identity")
+            _require(wire.get("audit_scope") == "report_and_bindings" and
+                     wire.get("ancestors_audited") is False, "unknown owner audit scope")
+            body += '<p>报告与必要 binding 已验证；模型、OOS 与其余祖先未审。统计不是账户收益。</p>'
+            coverage = wire.get("coverage") or {}
+            fields = ("scope_key_count", "reference_key_count", "mature_valid_label_count",
+                      "prediction_valid_count", "valid_pair_count", "excluded_counts",
+                      "comparison_mode", "common_statistics_ref", "native_statistics_ref")
+            projected = {**wire, "coverage": {field: coverage.get(field) for field in fields}}
+            native = coverage.get("native")
+            if type(native) is dict:
+                projected["coverage"]["native"] = {field: native.get(field) for field in fields}
+            for label, field in (("Label 身份", "label_ref"), ("Label 定义", "label_spec"),
+                                 ("共同样本身份", "sample_mask_ref"), ("统计身份", "statistics_ref"),
+                                 ("统计与缺失原因", "summary"), ("共同样本、覆盖与排除原因", "coverage"),
+                                 ("状态", "status"), ("限制", "limitations")):
+                body += '<section><h2>' + label + '</h2><pre>' + _text(json.dumps(
+                    projected.get(field), ensure_ascii=False, indent=2)) + '</pre></section>'
+        except (ImportError, OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+            body += '<p role="status">此项摘要不可用：' + _text(type(exc).__name__) + \
+                    '。需要 Research 只读摘要 owner；未调用完整祖先 loader。</p>'
+        return _page("单项信号评价", body)
+
+    def account_html(self, result_id: str, account_index: int, *, start: str | None = None,
+                     end: str | None = None) -> str:
+        """Load one registered account via Engine; date filtering is display-only."""
+        from datetime import date
+        for value in (start, end):
+            if value is not None:
+                _require(type(value) is str and date.fromisoformat(value).isoformat() == value,
+                         "invalid session date")
+        _require(start is None or end is None or start <= end, "reversed date range")
+        _, manifest, error = self._manifest(result_id)
+        _require(manifest is not None, "manifest unavailable: " + str(error))
+        accounts = manifest.get("accounts") or []
+        _require(type(account_index) is int and 0 <= account_index < len(accounts), "unknown account")
+        account = accounts[account_index]
+        binding = account.get("backtest_ref")
+        _require(type(binding) is dict, "no registered account")
+        refs = {ref["artifact_key"]: ref for ref in manifest["artifacts"]}
+        ref = refs[binding["artifact_key"]]
+        _require(ref["owner"] == "Engine" and ref["artifact_type"] == "BacktestRun", "not an Engine account")
+        wire, nav = _load_account(ref, self.roots, self.engine_limits)
+        summary = {"availability": "VERIFIED", "artifact_id": wire["run_id"],
+                   **{field: wire.get(field) for field in ("content_digest", "committed_sequence",
+                                                          "signal_ref", "market_ref", "profile_ref")}}
+        policy = wire.get("request_manifest", {}).get("portfolio_policy")
+        if policy is not None:
+            summary["strategy_ref"] = "sha256:" + sha256(json.dumps(
+                policy, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+            ).encode("utf-8")).hexdigest()
+        _require(not _account_bindings({"accounts": [account]}, {binding["artifact_key"]: summary}),
+                 "account binding mismatch")
+        rows = [row for row in nav if (start is None or row["session"] >= start) and
+                (end is None or row["session"] <= end)]
+        if start is None and end is None:
+            rows = rows[-250:]
+        _require(len(rows) <= 1000, "display range exceeds 1000 sessions; narrow the dates")
+        body = '<p><a href="/result/' + result_id[7:] + '">返回结果</a></p><h1>单账户曲线</h1>'
+        body += '<p>仅此账户通过 Engine 原件验证。日期裁剪仅减少展示，owner 仍读取此账户所需分片。默认最近 250 行，每次最多 1000 行。</p>'
+        body += '<form method="get"><label>开始 <input type="date" name="start" value="' + _text(start or '') + '\"></label> <label>结束 <input type="date" name="end" value="' + _text(end or '') + '\"></label><button>查看区间</button></form>'
+        body += '<p>账户：<code>' + _text(wire["run_id"]) + '</code> · 展示 ' + str(len(rows)) + ' / ' + str(len(nav)) + ' 行</p>'
+        if rows:
+            values = [Decimal(str(row["nav_minor"])) for row in rows]
+            _require(all(value.is_finite() for value in values), "invalid NAV")
+            low, high = min(values), max(values)
+            span = high - low or Decimal(1)
+            points = ' '.join(str(round(i * 900 / max(1, len(values) - 1), 2)) + ',' +
+                              str(round(180 - float((value - low) / span) * 160, 2))
+                              for i, value in enumerate(values))
+            body += '<svg viewBox="0 0 900 200" role="img" aria-label="保存账户净值，纵轴按所选区间缩放"><polyline fill="none" stroke="#416e99" stroke-width="2" points="' + points + '"/></svg>'
+            body += '<p>纵轴范围：' + _money(int(low)) + ' 至 ' + _money(int(high)) + '；横轴按保存交易行排序。</p>'
+            body += _metrics([(row["session"], _money(row["nav_minor"])) for row in rows])
+        else:
+            body += '<p>所选区间没有保存的净值行。</p>'
+        self.opened_runs.setdefault(result_id, set()).add(wire["run_id"])
+        return _page("单账户曲线", body, local_form=True)
