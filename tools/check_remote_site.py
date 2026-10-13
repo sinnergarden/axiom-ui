@@ -36,8 +36,11 @@ def check(root):
     links = Links()
     links.feed((root / 'index.html').read_text())
     assert 'etf-three-account.html' in links.links, 'missing historical report entry'
+    versioned_scripts = {name + '?v=20261014-1': name for name in ('config.js', 'app.js')}
+    assert set(versioned_scripts) <= set(links.links), 'missing versioned shell script'
     for link in links.links:
-        assert link in expected and (root / link).is_file(), ('invalid shell link', link)
+        filename = versioned_scripts.get(link, link)
+        assert filename in expected and (root / filename).is_file(), ('invalid shell link', link)
     config = (root / 'config.js').read_text()
     assert re.search(r"window.AXIOM_RESULTS_ENDPOINT = '(?:https://[a-zA-Z0-9.-]+(?::[0-9]+)?)?';", config), 'invalid public endpoint'
     print('Pages PASS: five clean shell files, valid home links, five byte-identical approved historical files.')
