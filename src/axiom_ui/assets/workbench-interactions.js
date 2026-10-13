@@ -9,7 +9,7 @@ window.createAxiomInteractions = function(env) {
   const compact=value=>{const text=saved(value),match=String(text).match(/^([+-]?\d+\.)(\d{7,})$/);return match?(/[1-9]/.test(match[2].slice(6))?'≈':'')+match[1]+match[2].slice(0,6):text;};
   const securityCode=id=>(String(id || '').match(/(?:^|\.)(\d{6})(?:\.|$)/) || [null,id])[1] || '未提供';
   const securityLabel=(v,id)=>v.market.security_labels?.[id] ? v.market.security_labels[id]+' · '+securityCode(id) : securityCode(id)+' · 名称未提供';
-  const benchmarkNames={CSI300:'沪深300',SSE_COMPOSITE:'上证综指'};
+  const benchmarkNames={CSI300:'沪深300',SSE_COMPOSITE:'上证综指',NASDAQ100:'纳斯达克100'};
   function syncBenchmarkSelect(v){
     const comparisons=v.evaluation?.benchmark_comparisons,keys=Object.keys(benchmarkNames).filter(key=>{
       const item=comparisons?.[key] || (key==='CSI300'?v.evaluation?.benchmark:null);
@@ -226,7 +226,7 @@ window.createAxiomInteractions = function(env) {
       !!(market.data_batch || market.native_chart);
   }
   function trade(v){
-    const index=indexed(v),ids=[...new Set([...index.securities.keys(),...index.displaySecurities.keys()])].sort(),select=$('security-select');
+    const index=indexed(v),ids=[...new Set([...index.securities.keys(),...index.displaySecurities.keys(),...(v.run.positions || []).map(p=>p.security_id),...(v.run.fills || []).map(f=>f.security_id)])].sort(),select=$('security-select');
     if(!ids.includes(state.security))state.security=ids[0] || '';
     select.replaceChildren();for(const id of ids){const option=node('option',securityLabel(v,id));option.value=id;select.append(option);}select.value=state.security;
     $('trade-security-title').textContent=securityLabel(v,state.security);
@@ -241,7 +241,7 @@ window.createAxiomInteractions = function(env) {
     const fills=(v.run.fills || []).filter(f=>f.security_id===state.security),fillByDay=new Map();
     for(const fill of fills){if(!fillByDay.has(fill.session))fillByDay.set(fill.session,[]);fillByDay.get(fill.session).push(fill);}
     const reviewEvents=(v.market.review_events || []).filter(r=>r.event.security_id===state.security).map(item=>({item,day:item.domain==='corporate_actions'?item.event.ex_date:item.event.effective_date,label:item.domain==='corporate_actions'?'除息':'份额折算'}));
-    if(!points.length){emptyChart('trade-chart','证券行情未提供，不构造 K 线。');renderChain(v);return;}
+    if(!points.length){emptyChart('trade-chart',v.market.missing_reason || '证券行情未提供，不构造 K 线。');$('candle-note').textContent=v.market.missing_reason || '未载入保存行情。';controls(v);renderPoint(v);renderChain(v);return;}
     const base=axes(ss,'价格（'+priceUnit(v)+'）','全天量（'+quantityUnit(v)+'）');
     base.yAxis[1].axisLabel.formatter=value=>Math.abs(value)>=100000000?(value/100000000).toFixed(1)+'亿':Math.abs(value)>=10000?(value/10000).toFixed(0)+'万':String(value);
     base.xAxis.forEach(axis=>axis.boundaryGap=true);

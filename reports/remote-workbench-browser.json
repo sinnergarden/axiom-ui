@@ -1,0 +1,12 @@
+{
+  "fixture": "synthetic; isolated Chrome profile; no private results or credentials persisted",
+  "wrong_password": true,
+  "original_three_tabs_and_echarts": true,
+  "trade_and_monthly_replay": true,
+  "chart_zoom_tooltip": true,
+  "cross_idea_explicit_baseline": true,
+  "baseline_survives_login": true,
+  "mobile_390_no_overflow": true,
+  "no_persistent_credentials": true,
+  "runtime_errors": []
+}
