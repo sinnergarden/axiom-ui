@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https: http://127.0.0.1:* http://localhost:*; base-uri 'none'; form-action 'none'; object-src 'none'">
-<meta name="referrer" content="no-referrer"><title>Axiom · 研究实验结果</title><link rel="stylesheet" href="app.css"><script src="config.js" defer></script><script src="app.js" defer></script></head>
+<meta name="referrer" content="no-referrer"><title>Axiom · 研究实验结果</title><link rel="stylesheet" href="app.css"><script src="config.js?v=20261014-1" defer></script><script src="app.js?v=20261014-1" defer></script></head>
 <body><header><strong>Axiom</strong><span>研究实验 · 只读结果</span><button id="disconnect" hidden>断开连接</button></header>
 <main><p><a href="etf-three-account.html">历史ETF报告</a> · 已公开的历史报告，保留原交互图表，无需连接 Mac。</p><section id="connection"><h1>连接研究结果</h1><p>连接你的 Mac 结果服务，查看正式登记实验、保存指标与账户曲线。Mac 需要保持在线。</p>
 <form id="connect" autocomplete="on"><label for="endpoint">结果服务 HTTPS 地址</label><input id="endpoint" name="username" type="url" placeholder="https://your-mac.example" required autocomplete="username" spellcheck="false"><label for="token">访问码</label><input id="token" name="password" type="password" required minlength="43" maxlength="128" autocomplete="current-password" spellcheck="false"><button type="submit">连接并查看实验</button></form><p class="hint">访问码只在当前页面内存中使用。可自行选择让浏览器密码管理器保存并自动填充；是否提示保存取决于浏览器。刷新页面或断开连接后需重新连接。</p></section>
