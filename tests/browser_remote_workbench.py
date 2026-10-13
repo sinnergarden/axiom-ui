@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 
 
-def check():
+def check(*, decision_only=False):
     sample = json.loads((ROOT / 'examples/synthetic_workbench.json').read_text())
     views = payload(render_sample_workbench(sample))['views']
     # _render serializes saved integers to strings; restore the original render
@@ -36,6 +36,13 @@ def check():
         view['research']['question_id'] = 'synthetic-idea-' + str(i)
         view['research']['title'] = '合成验收主题 ' + str(i + 1)
         view['account_title'] = '合成策略 ' + str(i + 1)
+    if decision_only:
+        d=views[0]['run']['decisions'][0]; sid=d['intents'][0]['security_id']
+        d.update(targets={sid:33800},signal_ref='synthetic-signal',strategy_targets={'selected_security_ids':[sid],'target_weights':{sid:'0.2'}},trace=[{'reason':'RANK_BUFFER_KEEP','security_ids':[sid],'keep_rank':10},{'reason':'COMPOSED_STOCK_STRATEGY','score_semantics':'forward_40_session_cs_zscore_prediction'}])
+        d['intents'][0].update(side='SELL',quantity=200)
+        def score(catalog,selected,day,security):
+            assert selected==views[0]['view_id'] and day==d['trade_session'] and security==sid
+            return dict(feature_session=d['feature_session'],security_id=sid,signal_ref=d['signal_ref'],score='0.375',score_unit='dimensionless',rank=None,valid=True,member=True)
     def render(catalog, selected=None, compare=None):
         selected = selected or views[0]['view_id']
         return _render(views, None, remote={'selected': selected, 'compare': compare or ''})
@@ -140,6 +147,20 @@ def check():
                 js("document.querySelector('[data-pane=trade]').click()",True)
                 wait("document.getElementById('trade').classList.contains('active')",True)
                 assert js("document.querySelectorAll('#event-list button').length",True)>0
+                if decision_only:
+                    for _ in range(4):
+                        js("document.querySelectorAll('#event-list details').forEach(e=>e.open=true)",True)
+                        time.sleep(.1)
+                    wait("document.querySelector('#event-list').innerText.includes('读取此证券保存的模型分数')",True)
+                    assert js("document.querySelector('#event-list').innerText.includes('保留阈值：前 10 名')",True)
+                    assert js("document.querySelector('#event-list').innerText.includes('仍被选中')",True)
+                    js("[...document.querySelectorAll('#event-list button')].find(e=>e.textContent==='读取此证券保存的模型分数').click()",True)
+                    wait("document.querySelector('#event-list').innerText.includes('0.375')",True)
+                    assert js("document.querySelector('#event-list').innerText.includes('未保存精确排名')",True)
+                    assert js('sessionStorage.length')==0
+                    assert not errors,errors
+                    evidence.update(decision_evidence_authenticated_message_channel=True,scoped_keep_sell_chinese=True,stored_score=True,no_invented_rank=True,runtime_errors=errors)
+                    return
                 js("document.querySelector('[data-pane=statistics]').click()",True)
                 wait("document.getElementById('statistics').classList.contains('active')",True)
                 assert js("document.getElementById('month-heatmap').children.length",True)>0
@@ -178,10 +199,15 @@ def check():
                 chrome.terminate();chrome.wait(timeout=10)
                 for server in (static,api):server.shutdown();server.server_close()
     try:
-        with patch('axiom_ui.remote_workbench.render_remote_workbench',render):run_fixture(f,action)
+        with patch('axiom_ui.remote_workbench.render_remote_workbench',render):
+            if decision_only:
+                with patch('axiom_ui.remote_workbench.decision_evidence',score):run_fixture(f,action)
+            else:run_fixture(f,action)
     finally:f.doCleanups()
-    (ROOT/'reports'/'remote-workbench-browser.json').write_text(json.dumps(evidence,ensure_ascii=False,indent=2)+'\n')
+    (ROOT/'reports'/('decision-evidence-browser.json' if decision_only else 'remote-workbench-browser.json')).write_text(json.dumps(evidence,ensure_ascii=False,indent=2)+'\n')
     print(json.dumps(evidence,ensure_ascii=False))
 
 
-if __name__=='__main__':check()
+if __name__=='__main__':
+    import sys
+    check(decision_only='--decision-only' in sys.argv)

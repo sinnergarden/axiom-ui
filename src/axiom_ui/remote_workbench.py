@@ -47,7 +47,7 @@ def _stream_view(saved):
     return dict(run=run, configuration=configuration,
                 comparison_conditions=_comparison_conditions(configuration),
                 market=dict(rows=[], data_batch=None, source_refs=[],
-                            missing_reason='账户登记未关联保存的 OHLCV 显示批次；持仓与成交来自已验证账户分片。'),
+                            missing_reason='当前尚未接入保存行情的显示读取接口；不从持仓或成交推算 K 线。'),
                 evidence_kind='saved_backtest_output', evaluation=None,
                 approximate=profile.get('approximation') == 'retrospective_daily_volume_proxy',
                 blocked=False, research=None,
@@ -186,3 +186,42 @@ class WorkbenchRead:
                     self.job.update(status=status, body=body, expires=monotonic() + 600)
             Thread(target=read, daemon=True).start()
             return 202, ident
+
+
+def decision_evidence(catalog, *, selected, day, security):
+    """Read one registered prediction leaf for one already admitted decision."""
+    match = SELECTION.fullmatch(selected)
+    _require(match is not None and re.fullmatch(r'\d{4}-\d{2}-\d{2}', day) is not None,
+             'invalid decision selection')
+    _, manifest, error = catalog._manifest('sha256:' + match[1])
+    _require(manifest is not None, 'result unavailable')
+    account = manifest['accounts'][int(match[2])]
+    key = (selected, manifest['content_digest'], account['backtest_ref']['content_digest'],
+           tuple(e['content_digest'] for e in account.get('evaluation_refs') or []))
+    view = getattr(catalog, '_workbench_views', {}).get(key)
+    _require(view is not None, 'reload the selected account')
+    decisions = [d for d in view['run']['decisions'] if d.get('trade_session') == day]
+    _require(len(decisions) == 1, 'ambiguous decision')
+    decision = decisions[0]
+    _require(security in decision.get('targets', {}) or
+             any(i.get('security_id') == security for i in decision.get('intents', [])),
+             'security not in decision')
+    refs = [r for r in manifest['artifacts'] if r['owner'] == 'Research' and
+            r['artifact_type'] == 'StockPredictionRun' and
+            r['artifact_id'] == decision.get('signal_ref')]
+    _require(len(refs) == 1, 'prediction leaf not registered')
+    ref = refs[0]
+    from axiom_research import load_stock_prediction_projection
+    saved = load_stock_prediction_projection(_relative_file(ref, catalog.roots), research_root=catalog.roots['research'])
+    wire = _wire(saved)
+    _require(saved.content_digest == ref['content_digest'] and
+             wire['signal_run_ref'] == decision['signal_ref'] and
+             wire['contract_version'] == ref['artifact_contract_version'], 'prediction binding mismatch')
+    rows = [r for r in wire['rows'] if r.get('session') == decision['feature_session'] and
+            r.get('security_id') == security]
+    _require(len(rows) == 1, 'prediction row unavailable')
+    row = rows[0]
+    return dict(feature_session=decision['feature_session'], security_id=security,
+                signal_ref=decision['signal_ref'], score_semantics=wire['score_semantics'],
+                score_unit=wire['score_unit'], **{k: row.get(k) for k in
+                ('score', 'rank', 'valid', 'member', 'invalid_reason')})

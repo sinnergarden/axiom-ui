@@ -188,9 +188,17 @@ def build_remote_server(*, research_root, engine_root, origins, token=None, pass
                 if len(self.path) > 512 or parsed.fragment:
                     raise ValueError('invalid request')
                 query = parse_qs(parsed.query, keep_blank_values=True, strict_parsing=True,
-                                 max_num_fields=2)
+                                 max_num_fields=3)
                 if any(len(v) != 1 for v in query.values()):
                     raise ValueError('duplicate query')
+                if parsed.path == '/decision-evidence':
+                    if set(query) != {'selected', 'day', 'security'}:
+                        raise ValueError('invalid evidence query')
+                    from .remote_workbench import decision_evidence
+                    with catalog_lock:
+                        evidence = decision_evidence(catalog, **{k: v[0] for k, v in query.items()})
+                    self._send(200, json.dumps(evidence), content_type='application/json; charset=utf-8')
+                    return
                 if parsed.path == '/workbench':
                     if set(query) - {'selected', 'compare', 'job'} or ('job' in query and len(query) != 1):
                         raise ValueError('unknown query')
@@ -226,7 +234,7 @@ def build_remote_server(*, research_root, engine_root, origins, token=None, pass
                         self._send(404, '未找到：此入口只提供登记结果的必要展示。')
                         return
                 self._send(200, project(html))
-            except (OSError, ImportError, ValueError, KeyError, TypeError, AttributeError):
+            except (OSError, ImportError, ValueError, KeyError, IndexError, TypeError, AttributeError):
                 self._send(422, '结果暂不可用：保存索引、引用或请求未通过校验。')
 
         def do_POST(self):
@@ -266,7 +274,7 @@ def build_remote_server(*, research_root, engine_root, origins, token=None, pass
                     catalog.refresh()
                     html = catalog.index_html(remote=True)
                 self._send(200, project(html))
-            except (OSError, ImportError, ValueError, KeyError, TypeError, AttributeError):
+            except (OSError, ImportError, ValueError, KeyError, IndexError, TypeError, AttributeError):
                 self._send(422, '刷新失败：保存索引未通过读取校验。')
 
         def log_message(self, *_args):
