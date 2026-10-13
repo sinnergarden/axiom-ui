@@ -10,9 +10,10 @@ from hashlib import sha256
 from hmac import compare_digest
 from html import escape
 from html.parser import HTMLParser
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
 import re
+from threading import Lock
 from urllib.parse import parse_qs, urlsplit
 
 from .result_catalog import LocalResultCatalog
@@ -93,6 +94,17 @@ def _origin(value):
     return value
 
 
+class RemoteHTTPServer(ThreadingHTTPServer):
+    # Bound idle/preconnect and partial-request socket waits independently of
+    # application work. Each accepted connection has its own daemon thread.
+    request_timeout = 10
+
+    def get_request(self):
+        connection, address = super().get_request()
+        connection.settimeout(self.request_timeout)
+        return connection, address
+
+
 def build_remote_server(*, research_root, engine_root, token, origins,
                         port=0, public_host=None, engine_limits=None):
     if not isinstance(token, str) or not TOKEN.fullmatch(token):
@@ -107,6 +119,7 @@ def build_remote_server(*, research_root, engine_root, token, origins,
     token_hash = sha256(token.encode()).digest()
     catalog = LocalResultCatalog(research_root=research_root, engine_root=engine_root,
                                  engine_limits=engine_limits)
+    catalog_lock = Lock()
 
     class Handler(BaseHTTPRequestHandler):
         def _send(self, status, body='', cors=True):
@@ -160,28 +173,31 @@ def build_remote_server(*, research_root, engine_root, token, origins,
                                  max_num_fields=2)
                 if any(len(v) != 1 for v in query.values()):
                     raise ValueError('duplicate query')
-                if parsed.path == '/':
-                    if set(query) - {'page', 'page_size'}:
-                        raise ValueError('unknown query')
-                    # Read the formal index for every list request; no copied snapshot.
-                    catalog.refresh()
-                    html = catalog.index_html(page=int(query.get('page', ['1'])[0]),
-                                              page_size=int(query.get('page_size', ['25'])[0]), remote=True)
-                elif RESULT.fullmatch(parsed.path) and not query:
-                    html = catalog.detail_html('sha256:' + RESULT.fullmatch(parsed.path)[1], remote=True)
-                elif (match := ITEM_ROUTE.fullmatch(parsed.path)):
-                    result_id = 'sha256:' + match[1]
-                    if match[4] is not None and not set(query) - {'start', 'end'}:
-                        html = catalog.account_html(result_id, int(match[4]),
-                            start=query.get('start', [None])[0] or None,
-                            end=query.get('end', [None])[0] or None, remote=True)
-                    elif match[4] is None and not query:
-                        html = catalog.signal_html(result_id, int(match[2]), int(match[3]), remote=True)
+                # Refresh and render are one transaction: the catalog and its
+                # owner reader contain mutable state shared by all requests.
+                with catalog_lock:
+                    if parsed.path == '/':
+                        if set(query) - {'page', 'page_size'}:
+                            raise ValueError('unknown query')
+                        # Read the formal index for every list request; no copied snapshot.
+                        catalog.refresh()
+                        html = catalog.index_html(page=int(query.get('page', ['1'])[0]),
+                                                  page_size=int(query.get('page_size', ['25'])[0]), remote=True)
+                    elif RESULT.fullmatch(parsed.path) and not query:
+                        html = catalog.detail_html('sha256:' + RESULT.fullmatch(parsed.path)[1], remote=True)
+                    elif (match := ITEM_ROUTE.fullmatch(parsed.path)):
+                        result_id = 'sha256:' + match[1]
+                        if match[4] is not None and not set(query) - {'start', 'end'}:
+                            html = catalog.account_html(result_id, int(match[4]),
+                                start=query.get('start', [None])[0] or None,
+                                end=query.get('end', [None])[0] or None, remote=True)
+                        elif match[4] is None and not query:
+                            html = catalog.signal_html(result_id, int(match[2]), int(match[3]), remote=True)
+                        else:
+                            raise ValueError('unknown query')
                     else:
-                        raise ValueError('unknown query')
-                else:
-                    self._send(404, '未找到：此入口只提供登记结果的必要展示。')
-                    return
+                        self._send(404, '未找到：此入口只提供登记结果的必要展示。')
+                        return
                 self._send(200, project(html))
             except (OSError, ImportError, ValueError, KeyError, TypeError, AttributeError):
                 self._send(422, '结果暂不可用：保存索引、引用或请求未通过校验。')
@@ -193,15 +209,17 @@ def build_remote_server(*, research_root, engine_root, token, origins,
                 self._send(400, '只允许无正文的索引刷新。')
                 return
             try:
-                catalog.refresh()
-                self._send(200, project(catalog.index_html(remote=True)))
+                with catalog_lock:
+                    catalog.refresh()
+                    html = catalog.index_html(remote=True)
+                self._send(200, project(html))
             except (OSError, ImportError, ValueError, KeyError, TypeError, AttributeError):
                 self._send(422, '刷新失败：保存索引未通过读取校验。')
 
         def log_message(self, *_args):
             pass
 
-    return HTTPServer(('127.0.0.1', port), Handler)
+    return RemoteHTTPServer(('127.0.0.1', port), Handler)
 
 
 def main():
