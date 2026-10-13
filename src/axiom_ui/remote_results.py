@@ -12,6 +12,9 @@ from html import escape
 from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
+import json
+import gzip
+from pathlib import Path
 import re
 from threading import Lock
 from urllib.parse import parse_qs, urlsplit
@@ -105,9 +108,9 @@ class RemoteHTTPServer(ThreadingHTTPServer):
         return connection, address
 
 
-def build_remote_server(*, research_root, engine_root, token, origins,
+def build_remote_server(*, research_root, engine_root, origins, token=None, password_record=None,
                         port=0, public_host=None, engine_limits=None):
-    if not isinstance(token, str) or not TOKEN.fullmatch(token):
+    if password_record is None and (not isinstance(token, str) or not TOKEN.fullmatch(token)):
         raise ValueError('use a random URL-safe token with at least 256 bits (43 characters)')
     if type(port) is not int or not 0 <= port <= 65535:
         raise ValueError('invalid loopback port')
@@ -116,27 +119,41 @@ def build_remote_server(*, research_root, engine_root, token, origins,
         raise ValueError('at least one exact allowed origin is required')
     if public_host is not None and not re.fullmatch(r'[a-zA-Z0-9.-]+(?::[0-9]{1,5})?', public_host):
         raise ValueError('public_host must be a hostname with optional port')
-    token_hash = sha256(token.encode()).digest()
+    if password_record is not None:
+        from .remote_password import PasswordLogin
+        if token:
+            raise ValueError('choose password login or legacy token')
+        login = PasswordLogin(password_record)
+    else:
+        login = None
+    token_hash = sha256((token or '').encode()).digest()
     catalog = LocalResultCatalog(research_root=research_root, engine_root=engine_root,
                                  engine_limits=engine_limits)
     catalog_lock = Lock()
+    from .remote_workbench import WorkbenchRead
+    workbench_read = WorkbenchRead(catalog, catalog_lock)
 
     class Handler(BaseHTTPRequestHandler):
-        def _send(self, status, body='', cors=True):
+        def _send(self, status, body='', cors=True, content_type='text/html; charset=utf-8'):
             data = body.encode('utf-8')
+            compressed = len(data) > 1024 and 'gzip' in self.headers.get('Accept-Encoding', '').split(', ')
+            if compressed:
+                data = gzip.compress(data, compresslevel=5)
             self.send_response(status)
-            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            if compressed:
+                self.send_header('Content-Encoding', 'gzip')
+            self.send_header('Content-Type', content_type)
             self.send_header('Content-Length', str(len(data)))
             self.send_header('Cache-Control', 'no-store')
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Referrer-Policy', 'no-referrer')
             self.send_header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'")
-            self.send_header('Vary', 'Origin')
+            self.send_header('Vary', 'Origin, Accept-Encoding')
             origin = self.headers.get('Origin')
             if cors and origin in origins:
                 self.send_header('Access-Control-Allow-Origin', origin)
                 self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-                self.send_header('Access-Control-Allow-Headers', 'Authorization')
+                self.send_header('Access-Control-Allow-Headers', 'Authorization, Content-Type')
             self.end_headers()
             self.wfile.write(data)
 
@@ -148,16 +165,17 @@ def build_remote_server(*, research_root, engine_root, token, origins,
                 self._send(403, '请求来源不允许。', cors=False)
                 return False
             auth = self.headers.get('Authorization', '')
-            if len(auth) > 136 or not auth.startswith('Bearer ') or not compare_digest(
-                    sha256(auth[7:].encode()).digest(), token_hash):
-                self._send(401, '未授权：访问码缺失、错误或已失效。')
+            if len(auth) > 136 or not auth.startswith('Bearer ') or not (
+                    login.authorized(auth[7:]) if login else compare_digest(
+                        sha256(auth[7:].encode()).digest(), token_hash)):
+                self._send(401, '登录已失效，请重新登录。')
                 return False
             return True
 
         def do_OPTIONS(self):
             if (not self._host() or self.headers.get('Origin') not in origins or
                     self.headers.get('Access-Control-Request-Method') not in {'GET', 'POST'} or
-                    self.headers.get('Access-Control-Request-Headers', '').lower() != 'authorization'):
+                    set(self.headers.get('Access-Control-Request-Headers', '').lower().replace(' ', '').split(',')) - {'authorization', 'content-type'}):
                 self._send(403, '请求来源不允许。', cors=False)
                 return
             self._send(204)
@@ -173,6 +191,15 @@ def build_remote_server(*, research_root, engine_root, token, origins,
                                  max_num_fields=2)
                 if any(len(v) != 1 for v in query.values()):
                     raise ValueError('duplicate query')
+                if parsed.path == '/workbench':
+                    if set(query) - {'selected', 'compare', 'job'} or ('job' in query and len(query) != 1):
+                        raise ValueError('unknown query')
+                    status, body = workbench_read.request(
+                        selected=query.get('selected', [None])[0] or None,
+                        compare=query.get('compare', [None])[0] or None,
+                        job_id=query.get('job', [None])[0])
+                    self._send(status, body)
+                    return
                 # Refresh and render are one transaction: the catalog and its
                 # owner reader contain mutable state shared by all requests.
                 with catalog_lock:
@@ -203,7 +230,33 @@ def build_remote_server(*, research_root, engine_root, token, origins,
                 self._send(422, '结果暂不可用：保存索引、引用或请求未通过校验。')
 
         def do_POST(self):
+            if self.path == '/login':
+                if not self._host() or self.headers.get('Origin') not in origins | {None}:
+                    self._send(403, '请求来源不允许。', cors=False)
+                    return
+                if login is None:
+                    self._send(409, '请先在 Mac 本地设置登录密码并启用密码登录。')
+                    return
+                try:
+                    length = int(self.headers.get('Content-Length', '0'))
+                    if not 0 < length <= 1024 or self.headers.get('Transfer-Encoding'):
+                        raise ValueError()
+                    payload = json.loads(self.rfile.read(length))
+                    if type(payload) is not dict or set(payload) != {'password'}:
+                        raise ValueError()
+                    status, session = login.login(payload['password'])
+                except (ValueError, TypeError, OSError):
+                    self._send(400, '登录请求无效。')
+                    return
+                self._send(status, json.dumps({'token': session} if session else
+                    {'error': '尝试过多，请一分钟后重试。' if status == 429 else '密码不正确。'}),
+                    content_type='application/json; charset=utf-8')
+                return
             if not self._authorize():
+                return
+            if self.path == '/logout' and login is not None:
+                login.logout(self.headers.get('Authorization', '')[7:])
+                self._send(204)
                 return
             if self.path != '/refresh' or self.headers.get('Content-Length', '0') != '0' or self.headers.get('Transfer-Encoding'):
                 self._send(400, '只允许无正文的索引刷新。')
@@ -229,11 +282,14 @@ def main():
     parser.add_argument('--origin', action='append', required=True)
     parser.add_argument('--public-host')
     parser.add_argument('--port', type=int, default=61024)
+    parser.add_argument('--password-file', type=Path)
     args = parser.parse_args()
     token = os.environ.pop('AXIOM_RESULTS_TOKEN', '')
     try:
         with build_remote_server(research_root=args.research_root, engine_root=args.engine_root,
-                origins=args.origin, public_host=args.public_host, port=args.port, token=token) as server:
+                origins=args.origin, public_host=args.public_host, port=args.port,
+                token=token or None, password_record=json.loads(args.password_file.read_text())
+                if args.password_file else None) as server:
             print(f'Authenticated results on http://127.0.0.1:{server.server_port}', flush=True)
             server.serve_forever()
     except KeyboardInterrupt:

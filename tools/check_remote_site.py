@@ -33,10 +33,14 @@ def check(root):
         text = path.read_text()
         assert not re.search(r'/Users/|/home/|\.artifacts/|sha256:[0-9a-f]{64}|github_pat_|ghp_', text), path.name
         assert 'workbench-data' not in text, 'embedded result payload'
+    from sync_remote_shell import trusted_hashes
+    shell_html = (root / 'index.html').read_text()
+    for digest in trusted_hashes():
+        assert "'sha256-" + digest + "'" in shell_html, 'stale workbench CSP hash'
     links = Links()
     links.feed((root / 'index.html').read_text())
     assert 'etf-three-account.html' in links.links, 'missing historical report entry'
-    versioned_scripts = {name + '?v=20261014-1': name for name in ('config.js', 'app.js')}
+    versioned_scripts = {name + '?v=20261014-2': name for name in ('config.js', 'app.js', 'app.css')}
     assert set(versioned_scripts) <= set(links.links), 'missing versioned shell script'
     for link in links.links:
         filename = versioned_scripts.get(link, link)

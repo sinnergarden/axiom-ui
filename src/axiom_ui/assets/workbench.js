@@ -10,8 +10,8 @@
     }
     return a.i-b.i;
   }
-  const initial=views.map((v,i)=>({v,i})).sort(recent)[0].v;
-  const state = {runId: initial.view_id, registration: '', pane: 'performance', compare: '', benchmark: true,
+  const initial=data.remote ? byId.get(data.remote.selected) : views.map((v,i)=>({v,i})).sort(recent)[0].v;
+  const state = {runId: initial.view_id, registration: '', pane: 'performance', compare: data.remote?.compare || '', benchmark: true,
     legendVisible: {account:true,comparison:true,benchmark:true}, topicOpen: new Map(), security: '', session: '', interval: null,
     tradeWindow: {mode:'all'}, fillId: '', eventId: '', kind: 'fills', status: '', tag: '', runOrganization: ''};
   let chartUI;
@@ -30,7 +30,7 @@
   };
   const present = v => v !== null && v !== undefined;
   const saved = v => present(v) ? String(v) : '未提供';
-  const stockAccount = v => ['backtest_run_v3','backtest_run_v4','backtest_run_v6'].includes(v.run.contract_version);
+  const stockAccount = v => ['backtest_run_v3','backtest_run_v4','backtest_run_v6','backtest_run_v7','backtest_run_v8'].includes(v.run.contract_version);
   const quantityUnit = v => stockAccount(v) ? '股' : '份';
   const priceUnit = v => stockAccount(v) ? '元/股' : '元/份';
   const slipCaption = v => {
@@ -50,7 +50,7 @@
     }
     return name+(name&&slip?' · '+slip:'');
   };
-  const runCaption = v => (savedEtfTitle(v) || (stockAccount(v)?(v.approximate?'股票日线近似':'股票严格对照'):
+  const runCaption = v => v.account_title || (savedEtfTitle(v) || (stockAccount(v)?(v.approximate?'股票日线近似':'股票严格对照'):
     v.configuration?.portfolio_policy?.contract_version==='etf_buy_and_hold_policy_v1'?'ETF 买入持有':
     v.approximate?'ETF 日线近似':'保存运行'))+' · '+saved(v.configuration.start_session || v.run.nav?.[0]?.session)+' — '+saved(v.configuration.end_session || v.run.nav?.at(-1)?.session)+(!savedEtfTitle(v)&&slipCaption(v)?' · '+slipCaption(v):'');
   const short = id => id ? id.replace(/^(sha256:|synthetic:)/, '').slice(0, 10) : '未提供';
@@ -100,7 +100,11 @@
   function missing(id, text) { clear(id).append(node('p', text, 'missing')); }
   function option(select, value, label) { const el = node('option', label); el.value = value; select.append(el); }
   const statusOf = v => v.research?.no_version ? '未登记版本' : v.research?.not_run ? '未运行' : v.research?.status || (v.blocked ? '阻断' : v.run.status);
+  function remoteChoice(selected, compare) {
+    window.parent.postMessage({type:'axiom-selection',selected,compare}, '*');
+  }
   function selectRun(id) {
+    if(data.remote){remoteChoice(id,state.compare===id?'':state.compare);return;}
     state.runId = id; state.registration = '';state.episodePage=0;state.chainSecurity='';$('chain-search').value='';$('chain-status').value='';state.security = ''; state.session = ''; state.interval = null;state.tradeWindow={mode:'all'}; state.fillId = ''; state.eventId = '';
     const selected=byId.get(id),topic=selected.research?.question_id || selected.research?.experiment_ref || 'unlinked';
     state.topicOpen.set(topic,true);state.legendVisible={account:true,comparison:true,benchmark:true};
@@ -161,7 +165,7 @@
     $('context-line').title = r.run_id || research?.run_record_ref || research?.version_id;
     $('evidence-badge').textContent = v.evidence_kind === 'research_record_only' ? '实验记录 · 账户结果未载入' : v.evidence_kind === 'synthetic_ui_fixture' ? '合成展示样例' : v.evidence_kind === 'synthetic_owner_output' ? '合成模拟回测' : '模拟回测';
     if(withoutAccount&&stock)$('evidence-badge').textContent='模型与信号 · '+(String(stock.experiment.account_status || '').startsWith('BLOCKED')?'账户未执行':'账户结果未载入');
-    $('run-title').textContent = research?.title || savedEtfTitle(v) || '模拟回测 · ' + short(r.run_id);
+    $('run-title').textContent = v.account_title || research?.title || savedEtfTitle(v) || '模拟回测 · ' + short(r.run_id);
     $('hypothesis').textContent = research?.hypothesis || '';
     $('hypothesis').hidden = !research?.hypothesis;
     const nav = r.nav || [];
@@ -513,7 +517,7 @@
   }
   document.querySelectorAll('[data-pane]').forEach(b=>b.addEventListener('click',()=>{state.pane=b.dataset.pane;render();}));
   $('status-filter').addEventListener('change',e=>{state.status=e.target.value;renderTree();});$('tag-filter').addEventListener('change',e=>{state.tag=e.target.value;renderTree();});$('run-organization-filter').addEventListener('change',e=>{state.runOrganization=e.target.value;renderTree();});
-  $('compare-run').addEventListener('change',e=>{state.compare=e.target.value;state.legendVisible.comparison=true;renderHeader(current());renderPerformance(current());});$('benchmark-toggle').addEventListener('change',e=>{state.benchmark=e.target.checked;if(state.benchmark)state.legendVisible.benchmark=true;renderPerformance(current());});
+  $('compare-run').addEventListener('change',e=>{if(data.remote){remoteChoice(state.runId,e.target.value);return;}state.compare=e.target.value;state.legendVisible.comparison=true;renderHeader(current());renderPerformance(current());});$('benchmark-toggle').addEventListener('change',e=>{state.benchmark=e.target.checked;if(state.benchmark)state.legendVisible.benchmark=true;renderPerformance(current());});
   $('registration-select').addEventListener('change',e=>{state.registration=e.target.value;state.session='';state.interval=null;state.tradeWindow={mode:'all'};state.fillId='';state.eventId='';render();});
   for(const id of ['episode-scope','episode-security','episode-status'])$(id).addEventListener('change',()=>{state.episodePage=0;renderEpisodeList(current());});
   $('security-select').addEventListener('change',e=>{state.security=e.target.value;state.chainSecurity=e.target.value;state.session='';state.fillId='';state.eventId='';renderTrade(current());renderHeader(current());});
@@ -529,4 +533,16 @@
   const openTradeDay=day=>{state.session=day;state.pane='trade';state.fillId='';state.eventId='';render();};
   chartUI=createAxiomInteractions({state,$,current,byId,node,saved,present,percent,money,priceUnit,quantityUnit,statusLabel,renderHeader,renderPoint,selectEvent,stockAccount,eventKey,selectEpisode,openTradeDay});
   chartUI.bind();initializeFilters();render();
+  if(data.remote){
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      if($('performance-chart').dataset.chartReady==='pending')renderPerformance(current());
+      chartUI.resize();
+    }));
+    window.parent.postMessage({type:'axiom-ready',selected:state.runId,compare:state.compare},'*');
+    const save=node('button','保存当前对照为基线'),clear=node('button','清除基线');
+    save.id='save-baseline';clear.id='clear-baseline';save.disabled=!state.compare;
+    save.addEventListener('click',()=>{window.parent.postMessage({type:'axiom-baseline',selection:state.compare},'*');$('toast').textContent='已保存此浏览器的对照基线偏好。';$('toast').style.display='block';});
+    clear.addEventListener('click',()=>window.parent.postMessage({type:'axiom-baseline',selection:''},'*'));
+    $('compare-run').parentElement.append(save,clear);
+  }
 })();

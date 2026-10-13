@@ -1,63 +1,82 @@
 # Axiom UI research workbench
 
-## Pages + private Mac results
+## Pages + private Mac workbench
 
-The current `site/` contains a five-file dynamic UI shell plus the previously
-approved historical ETF report and its original publication/vendor files. The
-dynamic shell contains no private saved results. The home page links to **历史ETF报告**,
-which retains its original interactive charts and works without connecting to Mac.
-Open the Pages home page, enter the approved HTTPS result-service address and
-access code, then select an experiment. **Refresh saved index** discovers newly
-registered results and revisions without exporting or uploading them. The code
-stays in page memory; reloading or disconnecting clears it. An operator may set
-only the nonsecret HTTPS origin in `site/config.js` after review.
+The public `site/` contains only the connection shell and the previously approved
+historical ETF report. Private results arrive after password login and are rendered
+in a sandboxed frame using the original ETF workbench template, stylesheet and
+ECharts bundle. The shell CSP pins the exact bundle/style hashes; run
+`python3 tools/sync_remote_shell.py` after changing workbench assets, then
+`python3 tools/check_remote_site.py site`. No private HTML is exported into `site/`.
 
-Start the Mac service with Python 3.11+ and compatible Research/Engine Readers:
+The sidebar groups registered strategy accounts by Research question/idea. The
+three original views cover performance/risk, trade replay, and monthly returns /
+position episodes. Choose a comparison across ideas and explicitly save it as a
+baseline preference. Only that nonsecret selection ID is saved in localStorage;
+it is not a Research favorite and no best-performing strategy is inferred.
+
+### One-time password setup on the Mac
+
+The user enters their own password twice in a local terminal. The agent must not
+choose, read, send, or enter it. With the reviewed UI package on PYTHONPATH:
 
 ```sh
-# Enter an operator-issued random URL-safe access code (at least 43 characters).
-# Provisioning a new persistent code and enabling a tunnel require separate approval.
-read -s 'AXIOM_RESULTS_TOKEN?Access code: '
-export AXIOM_RESULTS_TOKEN
-PYTHONPATH=src:/path/to/research/src:/path/to/engine/src \
-  python3 -m axiom_ui.remote_results \
-  --research-root /private/formal-results \
-  --engine-root /private/engine-results \
-  --origin https://sinnergarden.github.io \
-  --public-host approved-service.example --port 61024
-unset AXIOM_RESULTS_TOKEN
+mkdir -p "$HOME/.config/axiom"
+python3 -m axiom_ui.remote_password --output "$HOME/.config/axiom/results-password.json"
 ```
 
-The service binds only `127.0.0.1`; an independently approved HTTPS proxy must
-forward to it. No tunnel, certificate, tailnet policy, startup task or credential
-is created by this command. Stop with Ctrl-C; restart with a new access code to
-revoke the old one. Close the approved proxy separately. Mac sleep, shutdown or
-network loss makes the service unavailable. There is no automatic startup.
+The command exclusively creates a mode-0600 salted PBKDF2 verifier file, never
+prints the password, and refuses to overwrite an existing file. To change the
+password, create a new verifier at a different private path and restart the service
+with that file. Do not overwrite or expose the previous legacy access-code file.
 
-“未授权” means the code is missing, wrong or revoked. “离线或不可达” means the Mac,
-HTTPS proxy or allowed-origin configuration needs attention; retry after fixing
-it. Failed requests clear the visible results. The public shell remains usable
-as a connection entry while the Mac is offline. Raw artifacts and local files
-have no download routes.
+After review, start the loopback service with approved Research/Engine packages
+and trusted artifact roots:
 
-Remote curves use the registered Engine evaluation's saved `series`, with the
-report identity and exact account binding checked. The dynamic SVG supports the full saved
-range, date-range filtering and 600-point display sampling. It is not equivalent
-to the historical ETF interactive chart; that report keeps its original functions. They do not read account result
-parts or count as original-account verification. Local `--serve-results` keeps
-its existing explicit original-account path. Signal tables require Research's
-`load_stock_signal_evaluation_summary` (available in merged Research commit
-`a1f320fba669a72b0d8aa17f0d72dbac923e9a89`); unavailable owner data is labeled.
+```sh
+PYTHONPATH=src:/path/to/research/src:/path/to/engine/src \
+  python3 -m axiom_ui.remote_results \
+  --research-root /private/formal-results --engine-root /private/engine-results \
+  --origin https://sinnergarden.github.io --public-host approved-service.example \
+  --password-file "$HOME/.config/axiom/results-password.json" --port 61024
+```
 
-Check the shell and byte-identical historical files with
-`python3 tools/check_remote_site.py site`. Submit source
-and shell together as a draft PR. Only after review and merge, publish the exact
-reviewed `site/` tree to `gh-pages` using the existing branch publishing process.
-Do not run the legacy selected-result exporter into this shell directory.
-Canonical design remains in [axiom-docs](https://github.com/sinnergarden/axiom-docs/blob/main/docs/design/06_axiom_ui.md).
-The corresponding UI read-contract/deployment sections need alignment for the
-public-shell/private-API split, evaluation-leaf curves, authentication, revocation
-and offline behavior; this change does not edit another repository.
+Set only the nonsecret approved HTTPS origin in `site/config.js`. The service
+binds 127.0.0.1; tunnel setup, service restart and deployment remain separate
+operator actions. The legacy token-only startup remains available for existing
+consumers; the new login screen requires `--password-file`.
+
+Five incorrect logins within 60 seconds temporarily block further attempts. This
+is a service-wide limit, including behind a loopback reverse proxy, not a claim of
+per-device IP detection. Successful login issues a random, memory-only session
+lasting at most 12 hours. Logout invalidates it; restart invalidates all sessions.
+The browser may offer its own password manager. Reload requires login again, and
+no password/session is stored by the application or included in a URL.
+
+Navigation reads registered metadata. Selecting an account validates its exact
+Engine v7/v8 output parts plus small profile and registered evaluation leaf; it
+does not reopen training sources or execute a Data query. All saved NAV dates,
+positions, decisions, orders and fills remain available. Unused full-universe
+reference-price maps, duplicated evaluation ancestry and account ledger copies
+are omitted from the browser projection. Two verified account projections may be
+cached in memory, keyed by manifest digest, exact account digest and evaluation
+refs. A refresh reads the formal index again; changed manifests invalidate reuse.
+One in-flight read returns 202 and is polled by the logged-in page so initial
+Owner validation does not hold the public proxy connection open. There is no
+background schedule, persistent job store or unbounded queue.
+
+Metrics, drawdowns, monthly results and benchmarks are saved Owner values. No
+annual return, Calmar, trading price or candle is invented. When the registered
+account has no bound saved OHLCV display batch, the chart states that input is
+missing while saved positions and the decision/order/fill replay remain usable.
+HTML uses gzip when accepted. Responses are private/no-store and there is no file
+download or arbitrary filesystem route.
+
+Validation: focused remote/password/catalog tests, the isolated synthetic Chrome
+acceptance in `tests/browser_remote_workbench.py`, and the static bundle checker.
+Only after review and merge, publish the exact reviewed `site/` tree to `gh-pages`
+and separately restart the approved service. Do not export private results into
+the shell directory. Canonical design remains in axiom-docs.
 
 
 ## Private Research v2 result catalog

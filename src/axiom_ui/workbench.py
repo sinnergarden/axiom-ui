@@ -975,10 +975,12 @@ def render_sample_workbench(sample: Mapping[str, Any], *, generated_at: str | No
     return _render(views, generated_at)
 
 
-def _render(views: list[dict], generated_at: str | None) -> str:
+def _render(views: list[dict], generated_at: str | None, *, remote: dict | None = None) -> str:
     _require(bool(views), "no saved records to display")
     payload = {"contract_version": "ui_workbench_projection_v1", "views": views,
                "generated_at": _generated(generated_at)}
+    if remote is not None:
+        payload["remote"] = remote
     # Escaping '<' prevents owner strings from closing the inert JSON script.
     def browser_values(value):
         # Browser coordinates may use Number; saved integers must not silently
@@ -989,6 +991,9 @@ def _render(views: list[dict], generated_at: str | None) -> str:
             return [browser_values(v) for v in value]
         if type(value) is dict:
             return {k: browser_values(v) for k, v in value.items()}
+        if remote is not None and type(value) is str:
+            from .remote_results import LOCAL_PATH
+            return LOCAL_PATH.sub('[本地路径已隐藏]', value)
         return value
     data = json.dumps(browser_values(payload), ensure_ascii=False, separators=(",", ":"), allow_nan=False)
     data = data.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
