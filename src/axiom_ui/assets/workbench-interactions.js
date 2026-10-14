@@ -230,14 +230,37 @@ window.createAxiomInteractions = function(env) {
     if(!ids.includes(state.security))state.security=ids[0] || '';
     select.replaceChildren();for(const id of ids){const option=node('option',securityLabel(v,id));option.value=id;select.append(option);}select.value=state.security;
     $('trade-security-title').textContent=securityLabel(v,state.security);
+    if(v.market.display_available&&v.market.loaded_security!==state.security){
+      const id=state.security;
+      if(state.pane==='trade'&&v.market.loading_security!==id){
+        const request=v.market.request_sequence=(v.market.request_sequence || 0)+1;
+        const active=()=>v.market.request_sequence===request&&state.security===id&&current()===v;
+        v.market.loading_security=id;const channel=new MessageChannel();
+        const timer=setTimeout(()=>{channel.port1.close();if(!active())return;v.market.loading_security=null;v.market.missing_reason='保存行情读取超时；重新选择证券可重试。';emptyChart('trade-chart',v.market.missing_reason);},35000);
+        channel.port1.onmessage=event=>{
+          clearTimeout(timer);channel.port1.close();if(!active())return;v.market.loading_security=null;
+          const value=event.data?.display;
+          if(!value||value.security_id!==id||value.run_id!==v.run.run_id){v.market.missing_reason=event.data?.error || '行情关联未通过校验。';emptyChart('trade-chart',v.market.missing_reason);return;}
+          v.market.review_display={records:value.records,field_meta:value.field_meta,context:value.context,events_status:'not_requested'};
+          v.market.native_chart={records:value.records.map(r=>({...r,open:r.native_open,high:r.native_high,low:r.native_low,close:r.native_close})),context:value.context};
+          v.market.loaded_security=id;v.market.label_notice=value.label_notice;
+          if(value.name)(v.market.security_labels ||= {})[id]=value.name;
+          cache.delete(v);trade(v);
+        };
+        globalThis.parent.postMessage({type:'axiom-market',selected:v.remote_selection,security:id},'*',[channel.port2]);
+      }
+      emptyChart('trade-chart','正在读取该证券保存的 K 线…');controls(v);renderPoint(v);renderChain(v);return;
+    }
+
     $('session-select').value=state.session;
     const display=v.market.review_display,choice=$('price-basis-select');state.priceBasisByRun ||= {};
-    const adjusted=!!display&&(state.priceBasisByRun[v.run.run_id] || 'adjusted')==='adjusted';
+    const adjusted=!!display&&(state.priceBasisByRun[v.run.run_id] || (v.market.display_available?'unadjusted':'adjusted'))==='adjusted';
     const coordinates=new Map((v.market.fill_display?.coordinates || []).map(point=>[point.fill_id,point]));
     choice.closest('label').hidden=!display;choice.options[1].disabled=!display;choice.options[1].hidden=!display;choice.options[1].textContent='共同最终锚点调整价';choice.value=adjusted?'adjusted':'unadjusted';
     const displayPoints=index.displaySecurities.get(state.security),points=displayPoints?(adjusted?displayPoints:displayPoints.map(p=>({...p,open:p.native_open,high:p.native_high,low:p.native_low,close:p.native_close}))):index.securities.get(state.security) || [],ss=points.map(p=>p.session),window=windowFor(ss),pointByDay=new Map(points.map(p=>[p.session,p]));
     const candle=hasCandle(points,v.market,!!displayPoints),volume=env.stockAccount(v)?'volume_shares':'volume_units';
     $('candle-note').textContent=(candle?'':'当前只有保存的收盘价与全天量。')+(display?(adjusted?'调整后价格':'未复权原价')+' · 原量；'+(adjusted&&!coordinates.size?'B/S 坐标未提供，成交见交易链。':'B/S 标记为模拟成交。'):'未复权价格与原量；B/S 标记为模拟成交。');
+    if(v.market.label_notice)$('candle-note').textContent+=' · '+v.market.label_notice;
     const fills=(v.run.fills || []).filter(f=>f.security_id===state.security),fillByDay=new Map();
     for(const fill of fills){if(!fillByDay.has(fill.session))fillByDay.set(fill.session,[]);fillByDay.get(fill.session).push(fill);}
     const reviewEvents=(v.market.review_events || []).filter(r=>r.event.security_id===state.security).map(item=>({item,day:item.domain==='corporate_actions'?item.event.ex_date:item.event.effective_date,label:item.domain==='corporate_actions'?'除息':'份额折算'}));

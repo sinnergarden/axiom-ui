@@ -454,3 +454,25 @@ publishing mode; it needs no new token/workflow scope, credentials, custom domai
 or paid service. The current credential cannot upload a custom Actions workflow,
 so that approach was stopped without changing authentication. Pages settings
 remain unchanged until the parent has reviewed the concrete publication.
+
+
+### Private saved market display
+
+`tools/prepare_remote_display.py` prepares reusable Data `review_display_v1`
+packages from the securities in registered saved evaluation traces/episodes.
+Supply explicit Research/Engine/Data roots, the saved execution-axis path, an
+aware review cutoff and a new private destination. It reads no supplier and
+changes no account, Research registration or Data current pointer. The default
+block size is 16 securities; each block retains the full saved account period.
+`--without-names` explicitly permits price-only preparation when the fixed
+Snapshot does not declare name fields. It never invents historical names.
+
+The preparation prints the final `index.json` SHA-256. Add
+`--display-index /private/path/index.json --display-digest <printed-sha256>` to
+the existing remote server command. Keep the password configuration unchanged.
+Runtime needs Data's public `load_review_display`; preparation additionally
+needs the producer's explicit `reuse_snapshot` option. Files stay private.
+Each chart request is authenticated and bound to exact account run/digest/
+sequence, market reference, Snapshot and display digest. Only the selected
+security is sent to the browser; native prices are the default. Adjusted
+prices use Data's saved projection, without synthesizing adjusted fill marks.

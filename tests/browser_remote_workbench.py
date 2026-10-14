@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 
 
-def check(*, decision_only=False):
+def check(*, decision_only=False, market_only=False):
     sample = json.loads((ROOT / 'examples/synthetic_workbench.json').read_text())
     views = payload(render_sample_workbench(sample))['views']
     # _render serializes saved integers to strings; restore the original render
@@ -43,6 +43,15 @@ def check(*, decision_only=False):
         def score(catalog,selected,day,security):
             assert selected==views[0]['view_id'] and day==d['trade_session'] and security==sid
             return dict(feature_session=d['feature_session'],security_id=sid,signal_ref=d['signal_ref'],score='0.375',score_unit='dimensionless',rank=None,valid=True,member=True)
+    if market_only:
+        v=views[0];v['market']['display_available']=True
+        def market(catalog,selected,security):
+            assert selected==v['view_id']
+            sessions=[r['session'] for r in v['run']['nav']]
+            return dict(run_id=v['run']['run_id'],security_id=security,name='合成证券名称',label_notice='保存观察名称 · 历史名称有效期未知',context={'snapshot_id':'synthetic'},field_meta={},
+                records=[dict(security_id=security,session=day,open=10+i,high=12+i,low=9+i,close=11+i,
+                    native_open=10+i,native_high=12+i,native_low=9+i,native_close=11+i,
+                    volume_shares=1000,volume_units=1000,amount_cny=11000) for i,day in enumerate(sessions)])
     def render(catalog, selected=None, compare=None):
         selected = selected or views[0]['view_id']
         return _render(views, None, remote={'selected': selected, 'compare': compare or ''})
@@ -87,7 +96,7 @@ def check(*, decision_only=False):
                         if answer.get('method')=='Runtime.executionContextDestroyed':
                             contexts.pop(answer['params']['executionContextId'],None)
                         if answer.get('method')=='Log.entryAdded': print('browser log',answer['params']['entry']['text'][:350],flush=True)
-                        if answer.get('method')=='Runtime.exceptionThrown': errors.append(answer['params']['exceptionDetails'].get('text'))
+                        if answer.get('method')=='Runtime.exceptionThrown': errors.append(answer['params']['exceptionDetails'].get('exception',{}).get('description',answer['params']['exceptionDetails'].get('text')))
                         if answer.get('id')==sequence:
                             assert 'error' not in answer, answer
                             return answer.get('result',{})
@@ -147,6 +156,16 @@ def check(*, decision_only=False):
                 js("document.querySelector('[data-pane=trade]').click()",True)
                 wait("document.getElementById('trade').classList.contains('active')",True)
                 assert js("document.querySelectorAll('#event-list button').length",True)>0
+                if market_only:
+                    wait("document.getElementById('trade-security-title').innerText.includes('合成证券名称')",True)
+                    wait("!!echarts.getInstanceByDom(document.getElementById('trade-chart'))",True)
+                    assert js("echarts.getInstanceByDom(document.getElementById('trade-chart')).getOption().series[0].type",True)=='candlestick'
+                    assert js("echarts.getInstanceByDom(document.getElementById('trade-chart')).getOption().series[0].data.length",True)==len(views[0]['run']['nav'])
+                    assert js("document.getElementById('price-basis-select').value",True)=='unadjusted'
+                    js("echarts.getInstanceByDom(document.getElementById('trade-chart')).dispatchAction({type:'showTip',seriesIndex:0,dataIndex:1})",True)
+                    assert not errors,errors
+                    evidence.update(bound_market_channel=True,true_ohlcv_candles=True,observed_name_notice=True,native_default=True,runtime_errors=errors)
+                    return
                 if decision_only:
                     for _ in range(4):
                         js("document.querySelectorAll('#event-list details').forEach(e=>e.open=true)",True)
@@ -202,12 +221,14 @@ def check(*, decision_only=False):
         with patch('axiom_ui.remote_workbench.render_remote_workbench',render):
             if decision_only:
                 with patch('axiom_ui.remote_workbench.decision_evidence',score):run_fixture(f,action)
+            elif market_only:
+                with patch('axiom_ui.remote_workbench.market_display',market):run_fixture(f,action)
             else:run_fixture(f,action)
     finally:f.doCleanups()
-    (ROOT/'reports'/('decision-evidence-browser.json' if decision_only else 'remote-workbench-browser.json')).write_text(json.dumps(evidence,ensure_ascii=False,indent=2)+'\n')
+    (ROOT/'reports'/('market-display-browser.json' if market_only else 'decision-evidence-browser.json' if decision_only else 'remote-workbench-browser.json')).write_text(json.dumps(evidence,ensure_ascii=False,indent=2)+'\n')
     print(json.dumps(evidence,ensure_ascii=False))
 
 
 if __name__=='__main__':
     import sys
-    check(decision_only='--decision-only' in sys.argv)
+    check(decision_only='--decision-only' in sys.argv, market_only='--market-only' in sys.argv)

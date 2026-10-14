@@ -40,7 +40,7 @@ def check(root):
     links = Links()
     links.feed((root / 'index.html').read_text())
     assert 'etf-three-account.html' in links.links, 'missing historical report entry'
-    versioned_scripts = {name + '?v=20261014-decision-evidence': name for name in ('config.js', 'app.js', 'app.css')}
+    versioned_scripts = {name + '?v=20261014-market-display-r2': name for name in ('config.js', 'app.js', 'app.css')}
     assert set(versioned_scripts) <= set(links.links), 'missing versioned shell script'
     for link in links.links:
         filename = versioned_scripts.get(link, link)
