@@ -233,13 +233,14 @@ window.createAxiomInteractions = function(env) {
     if(v.market.display_available&&v.market.loaded_security!==state.security){
       const id=state.security;
       if(state.pane==='trade'&&v.market.loading_security!==id){
+        const request=v.market.request_sequence=(v.market.request_sequence || 0)+1;
+        const active=()=>v.market.request_sequence===request&&state.security===id&&current()===v;
         v.market.loading_security=id;const channel=new MessageChannel();
-        const timer=setTimeout(()=>{channel.port1.close();v.market.loading_security=null;v.market.missing_reason='保存行情读取超时；重新选择证券可重试。';emptyChart('trade-chart',v.market.missing_reason);},35000);
+        const timer=setTimeout(()=>{channel.port1.close();if(!active())return;v.market.loading_security=null;v.market.missing_reason='保存行情读取超时；重新选择证券可重试。';emptyChart('trade-chart',v.market.missing_reason);},35000);
         channel.port1.onmessage=event=>{
-          clearTimeout(timer);channel.port1.close();v.market.loading_security=null;
+          clearTimeout(timer);channel.port1.close();if(!active())return;v.market.loading_security=null;
           const value=event.data?.display;
           if(!value||value.security_id!==id||value.run_id!==v.run.run_id){v.market.missing_reason=event.data?.error || '行情关联未通过校验。';emptyChart('trade-chart',v.market.missing_reason);return;}
-          if(state.security!==id)return;
           v.market.review_display={records:value.records,field_meta:value.field_meta,context:value.context,events_status:'not_requested'};
           v.market.native_chart={records:value.records.map(r=>({...r,open:r.native_open,high:r.native_high,low:r.native_low,close:r.native_close})),context:value.context};
           v.market.loaded_security=id;v.market.label_notice=value.label_notice;
