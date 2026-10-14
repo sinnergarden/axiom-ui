@@ -15,6 +15,40 @@ class SavedDisplay:
         self.index = json.loads(raw)
         _require(self.index['contract_version'] == 'ui_saved_display_index_v1', 'invalid display index')
         self.digest = digest
+        self.labels = {}
+        binding = self.index.get('labels_binding')
+        if binding is not None:
+            from axiom_data import load_review_security_labels
+            _require(binding['accounts'] == [a['run_ref'] for a in self.index['accounts']],
+                     'label account bindings differ')
+            loaded = {}
+            for security, price in self.index['securities'].items():
+                ref = price.get('labels')
+                _require(ref is not None and re.fullmatch(r'labels-block-\d{4}', ref['directory']),
+                         'invalid label locator')
+                key = (ref['directory'], ref['manifest_sha256'])
+                if key not in loaded:
+                    directory = (self.path.parent / ref['directory']).resolve(strict=True)
+                    _require(directory.is_relative_to(self.path.parent), 'labels escaped configured root')
+                    loaded[key] = load_review_security_labels(directory, manifest_sha256=ref['manifest_sha256'])
+                saved = loaded[key]
+                manifest = saved['manifest']
+                _require(manifest['run_ref'] == binding and
+                         manifest['display_ref']['sha256'] == price['manifest_sha256'] and
+                         manifest['display_ref']['snapshot_id'] == self.index['snapshot_id'] and
+                         manifest['display_ref']['knowledge_cutoff'] == self.index['cutoff'] and
+                         manifest['display_ref']['anchor_session'] == self.index['anchor_session'] and
+                         security in manifest['security_ids'], 'label display binding mismatch')
+                batch = saved['securities']['batch']
+                rows = [r for r in batch['records'] if r['security_id'] == security]
+                _require(len(rows) <= 1, 'duplicate observed labels')
+                if rows and rows[0].get('name'):
+                    observed = [m['first_observed_at'] for m in batch['field_meta']['name']['by_key']
+                                if m['security_id'] == security]
+                    _require(len(observed) == 1, 'label observation unavailable')
+                    self.labels[security] = dict(name=rows[0]['name'], source_code=rows[0]['source_code'],
+                        observed_at=observed[0], source_snapshot_id=manifest['source_snapshot_id'],
+                        manifest_sha256=ref['manifest_sha256'])
 
     def binding(self, view):
         run = view['run']
@@ -35,7 +69,7 @@ class SavedDisplay:
         account = self.binding(view)
         view['market'].update(display_available=True,
             display_securities=[s for s in account['securities'] if s in self.index['securities']],
-            security_labels={},
+            security_labels={s:self.labels[s]['name'] for s in account['securities'] if s in self.labels},
             label_notice=self.index.get('label_notice', '名称显示输入尚未保存'))
 
     def read(self, view, security):
@@ -61,10 +95,14 @@ class SavedDisplay:
         names = (saved.get('securities') or {}).get('batch', {}).get('records', [])
         labels = [row for row in names if row.get('security_id') == security and row.get('name')]
         _require(len(labels) <= 1, 'ambiguous observed name')
-        notice = '保存观察名称；历史名称有效期未知' if labels else '该保存 Snapshot 未提供证券名称'
+        observed = self.labels.get(security)
+        if observed:
+            labels = [observed]
+        notice = ('Tushare 观察名称（'+observed['observed_at'][:10]+'）；历史名称有效期未知') if observed else (
+            '保存观察名称；历史名称有效期未知' if labels else '该保存 Snapshot 未提供证券名称')
         return dict(security_id=security, run_id=view['run']['run_id'], records=rows,
                     context=dict(snapshot_id=context['snapshot_id'], anchor_session=context['anchor_session'],
                         knowledge_cutoff=context['knowledge_cutoff'], native_price_basis='unadjusted',
                         manifest_sha256=ref['manifest_sha256'], usage='retrospective_review'),
                     field_meta={k:{f:v for f,v in item.items() if f != 'by_key'} for k,item in meta.items()},
-                    name=labels[0]['name'] if labels else None, label_notice=notice)
+                    name=labels[0]['name'] if labels else None, label_notice=notice, label_provenance=observed)

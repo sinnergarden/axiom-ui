@@ -476,3 +476,9 @@ Each chart request is authenticated and bound to exact account run/digest/
 sequence, market reference, Snapshot and display digest. Only the selected
 security is sent to the browser; native prices are the default. Adjusted
 prices use Data's saved projection, without synthesizing adjusted fill marks.
+
+### Independent observed stock names
+
+`tools/prepare_remote_labels.py --display-index <private-index.json> --display-digest <sha256> --identity <saved-stock-execution-identity-v2.json>` explicitly makes the six official Tushare `stock_basic` exchange/status requests with `name`, using the existing Tushare client credential configuration. Run only when source collection is authorized. Responses and receipt clocks are saved privately before validation; an interrupted run reuses its saved responses. Selected identities must match the saved listing date/exchange and the supplier's current catalogue.
+
+The tool creates an independent Data Snapshot and public `review_security_labels_v1` sidecars, bound to the existing price manifests and account run references. It writes a new `index-observed-names.json` and prints its digest; configure those through the existing `--display-index` / `--display-digest` flags after review. Original prices, account results and the old index remain unchanged. Names are observed labels dated at receipt, with unknown historical validity; they are never decision inputs. Keep all generated files private.
